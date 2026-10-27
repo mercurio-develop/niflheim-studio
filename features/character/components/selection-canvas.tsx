@@ -17,6 +17,7 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
   tool: "add" | "erase" | null; // null = look only
   size: number;
   onChange: (box: Box | null) => void;
+  onPaint?: () => void; // a stroke was painted (the selection is now the user's own)
 }>(function SelectionCanvas(props, ref) {
   const view = useRef<HTMLCanvasElement>(null);
   const mask = useRef<HTMLCanvasElement | null>(null);
@@ -117,7 +118,7 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
         if (!last.current) return;
         const p = at(e); paint(last.current, p); last.current = p;
       }}
-      onPointerUp={() => { if (last.current) { last.current = null; report(); } }}
+      onPointerUp={() => { if (last.current) { last.current = null; report(); props.onPaint?.(); } }}
     />
   );
 });
