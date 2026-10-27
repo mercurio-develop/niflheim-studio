@@ -34,13 +34,11 @@ export default function Home() {
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center gap-16 px-4 pt-24 pb-16">
         <section className="flex w-full flex-col items-center gap-6 text-center">
-          <span className="font-mono text-xs tracking-widest text-muted-foreground uppercase">Form condenses from fog</span>
           <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance sm:text-6xl">
             Direct a shot from a single idea.
           </h1>
           <p className="max-w-xl text-balance text-muted-foreground">
-            Design a character, give them a world, aim the camera and add the effects. LTX-2.5 shoots it on your own
-            GPU, and you can fly through the result as a Gaussian splat.
+            Design a character, give them a world, aim the camera and add the effects.
           </p>
           <div className="mt-4 flex w-full justify-center">
             <StartForm />
