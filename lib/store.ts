@@ -35,6 +35,17 @@ export type Asset = {
   views?: Partial<Record<AssetView, string>>;
 };
 
+// The set: paintings made from a prompt (or uploaded), the one picked, and the 3D stage MoGe
+// built from it (a textured depth mesh plus its depth map). stage.image says which painting it
+// was built from, so a new pick shows the stage is out of date.
+export type SetData = {
+  prompt: string;
+  style: string;
+  paintings: string[]; // every painting made or uploaded, oldest first
+  image?: string; // the chosen painting
+  stage?: { image: string; mesh: string; depth: string };
+};
+
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
 
@@ -60,6 +71,7 @@ export type Project = {
     views: Partial<Record<ViewId, ViewStack>>; // each view keeps its own versions, like the character
   };
   assets?: Asset[]; // objects hidden from the turnaround, kept to be made on their own later
+  set?: SetData;
   jobs: Record<string, Job>;
 };
 

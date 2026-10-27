@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { projectDir } from "@/lib/store";
 
-const TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".mp4": "video/mp4" };
+const TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".mp4": "video/mp4", ".glb": "model/gltf-binary" };
 
 export async function GET(_req: Request, ctx: RouteContext<"/api/files/[id]/[...path]">) {
   const { id, path: parts } = await ctx.params;
