@@ -24,7 +24,7 @@
   "class_type": "ModelSamplingAuraFlow",
   "inputs": {
    "model": [
-    "9",
+    "10",
     0
    ],
    "shift": 3.1
@@ -169,17 +169,6 @@
    ]
   }
  },
- "9": {
-  "class_type": "LoraLoaderModelOnly",
-  "inputs": {
-   "model": [
-    "10",
-    0
-   ],
-   "lora_name": "qwen-image-edit-2511-multiple-angles-lora.safetensors",
-   "strength_model": 1
-  }
- },
  "1": {
   "class_type": "LoadImage",
   "inputs": {
@@ -193,7 +182,7 @@
     "23",
     0
    ],
-   "filename_prefix": "nifl/angle"
+   "filename_prefix": "nifl/edit"
   }
  }
 }

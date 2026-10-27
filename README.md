@@ -8,17 +8,23 @@ Open weights only, one 16 GB GPU, built on the [Comfy SDK](https://docs.comfy.or
 
 ## The wizard
 
-Every step runs one small ComfyUI workflow; every result can be swapped, regenerated or replaced
-with your own upload, and re-running a step marks the later ones stale.
+Every step runs one small ComfyUI workflow through the Comfy SDK; every result is kept, can be
+compared, swapped or undone, and re-running a step marks the later ones stale.
 
-1. **Character**: concept art from a prompt (or upload); labelled parts you can swap one by one.
-2. **Turnaround**: front, 3/4, side and back views of the same character.
+1. **Character**: describe them, optionally **draw a sketch or upload an image** they should
+   follow, pick a style and how many concepts (1, 2, 4 or 6). Then edit the one you choose:
+   select a part by name (Florence-2 tags, SAM 2.1 masks) or paint a selection, and
+   **Change**, **Add object** or **Remove** inside it; **Restyle** the whole character;
+   undo/redo, compare any two versions, zoom in full screen.
+2. **Turnaround**: three-quarter, side and back views of the same character.
 3. **Set**: a concept painting becomes a 3D stage (MoGe depth); fog where nothing is known.
 4. **Style**: optional style image and LoRA.
 5. **Stage**: place the character, pick a camera move aimed at them.
 6. **VFX**: fog, embers, rain, snow, sparks, magic, placed in 3D.
 7. **Shot**: say what the character does; LTX-2.5 renders takes; build a sequence.
 8. **Export**: MP4, comp passes (depth, FX mask, camera) and a Gaussian splat of the shot.
+
+Steps 1 and 2 are built; 3 to 8 are in progress.
 
 ## Run it locally
 
@@ -36,8 +42,12 @@ npm run dev                           # http://localhost:4800
 Proof scripts (run a step end to end without the UI):
 
 ```bash
-node --env-file=.env scripts/try-character.ts
+node --env-file=.env scripts/try-character.ts   # concept, part mask, swap, side view
+node --env-file=.env scripts/try-brush.ts <image> <x> <y> <w> <h> "<thing>"
 ```
+
+Docker: `docker compose up -d` serves the app on :4800 and reaches the Comfy API proxy on the host
+at `host.docker.internal:8189` (start the proxy so it listens there).
 
 To use Comfy Cloud instead of a local ComfyUI, set `COMFY_BASE_URL=https://cloud.comfy.org`
 and `COMFY_API_KEY` in `.env`.
@@ -55,9 +65,9 @@ scripts/      proxy launcher, proofs, splat tools
 ## Models
 
 Open-weight models only, no partner nodes or closed APIs: Z-Image Turbo, Qwen-Image-Edit-2511
-(+ Lightning LoRA), GroundingDINO + SAM 2.1, MoGe, LTX-2.5 (LTX-2.x Community License) and its
-IC-LoRAs, Brush for splat training, Spark for viewing. Each model's license is its own; see
-`build/model-files.md`.
+(+ Lightning LoRA), Florence-2 PromptGen v2, GroundingDINO + SAM 2.1, and later MoGe and LTX-2.5
+(LTX-2.x Community License) with its IC-LoRAs. Files, folders and licences: `build/model-files.md`.
+Third-party assets: `THIRD_PARTY_NOTICES/`.
 
 ## License
 
