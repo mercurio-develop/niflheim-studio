@@ -9,8 +9,11 @@ export type SelectionHandle = {
 };
 
 // The selection, Photoshop-style: start from a found part (its SAM mask) and/or paint, then add
-// to it (brush +) or take away (brush −). Kept as an alpha canvas at the image's natural size;
-// shown as an accent tint. Only this area changes when the prompt bar acts on it.
+// to it (paint) or take away (erase). Two alpha canvases at the image's natural size:
+//   mask = everything selected (what the actions use)
+//   part = the share that came from a tag, minus erasing
+// Drawn so you can tell them apart: a part is animated cyan stripes, painted strokes are a
+// solid peach tint. Only this area changes when an action runs.
 export const SelectionCanvas = forwardRef<SelectionHandle, {
   src: string;
   baseMask?: string; // URL of a part mask (white on black) to start from
@@ -21,6 +24,11 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
 }>(function SelectionCanvas(props, ref) {
   const view = useRef<HTMLCanvasElement>(null);
   const mask = useRef<HTMLCanvasElement | null>(null);
+  const part = useRef<HTMLCanvasElement | null>(null);
+  const scratch = useRef<HTMLCanvasElement | null>(null);
+  const stripes = useRef<HTMLCanvasElement | null>(null);
+  const hasPart = useRef(false);
+  const raf = useRef(0);
   const last = useRef<[number, number] | null>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const { onChange } = props;
@@ -31,17 +39,62 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
     img.src = props.src;
   }, [props.src]);
 
-  const render = useCallback(() => {
-    const c = view.current, m = mask.current;
+  // One frame: peach where selected, then the part's moving stripes over the part's own area.
+  const render = useCallback((t = 0) => {
+    const c = view.current, m = mask.current, p = part.current;
     if (!c || !m) return;
+    const css = getComputedStyle(c);
+    const peach = css.getPropertyValue("--primary").trim() || "#f38d70";
+    const cyan = css.getPropertyValue("--tone-cyan").trim() || "#85dacc";
     const ctx = c.getContext("2d")!;
     ctx.globalCompositeOperation = "source-over";
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.drawImage(m, 0, 0);
     ctx.globalCompositeOperation = "source-in";
-    ctx.fillStyle = getComputedStyle(c).getPropertyValue("--primary").trim() || "#f38d70";
+    ctx.fillStyle = peach;
     ctx.fillRect(0, 0, c.width, c.height);
+    ctx.globalCompositeOperation = "source-over";
+    if (!p || !hasPart.current) return;
+
+    if (!stripes.current) {
+      // 28 px tile, one 45-degree cyan band per 14 px.
+      const s = (stripes.current = document.createElement("canvas"));
+      s.width = s.height = 28;
+      const g = s.getContext("2d")!;
+      g.fillStyle = cyan;
+      for (let i = -28; i <= 28; i += 14) {
+        g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 6, 0); g.lineTo(i + 34, 28); g.lineTo(i + 28, 28); g.closePath(); g.fill();
+      }
+    }
+    const layer = (scratch.current ??= document.createElement("canvas"));
+    if (layer.width !== c.width || layer.height !== c.height) { layer.width = c.width; layer.height = c.height; }
+    const l = layer.getContext("2d")!;
+    l.globalCompositeOperation = "source-over";
+    l.clearRect(0, 0, layer.width, layer.height);
+    l.globalAlpha = 0.4;
+    l.fillStyle = cyan;
+    l.fillRect(0, 0, layer.width, layer.height); // soft cyan wash under the stripes
+    l.globalAlpha = 1;
+    const pattern = l.createPattern(stripes.current, "repeat")!;
+    pattern.setTransform(new DOMMatrix().translate((t / 45) % 28, 0)); // the stripes crawl sideways
+    l.fillStyle = pattern;
+    l.fillRect(0, 0, layer.width, layer.height);
+    l.globalCompositeOperation = "destination-in";
+    l.drawImage(p, 0, 0);
+    ctx.drawImage(layer, 0, 0);
   }, []);
+
+  // Animate while a part is shown (unless reduced motion); one loop at a time.
+  const animate = useCallback(() => {
+    cancelAnimationFrame(raf.current);
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const tick = (t: number) => {
+      render(still ? 0 : t);
+      if (hasPart.current && !still) raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+  }, [render]);
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
   const report = useCallback(() => {
     const m = mask.current;
@@ -54,13 +107,14 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
     onChange(x1 < 0 ? null : { x: x0, y: y0, width: x1 - x0 + 2, height: y1 - y0 + 2 });
   }, [onChange]);
 
-  // (Re)start from the part's mask whenever it changes: luminance -> alpha.
+  // (Re)start from the part's mask whenever it changes: luminance -> alpha, into both layers.
   useEffect(() => {
     if (!natural) return;
     const m = (mask.current ??= document.createElement("canvas"));
-    m.width = natural.w; m.height = natural.h;
+    const p = (part.current ??= document.createElement("canvas"));
+    for (const c of [m, p]) { c.width = natural.w; c.height = natural.h; }
     const ctx = m.getContext("2d", { willReadFrequently: true })!;
-    ctx.clearRect(0, 0, m.width, m.height);
+    hasPart.current = false;
     if (!props.baseMask) { render(); report(); return; }
     const img = new Image();
     img.onload = () => {
@@ -68,13 +122,20 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
       const d = ctx.getImageData(0, 0, m.width, m.height);
       for (let i = 0; i < d.data.length; i += 4) { const a = d.data[i]; d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; d.data[i + 3] = a; }
       ctx.putImageData(d, 0, 0);
-      render(); report();
+      p.getContext("2d")!.drawImage(m, 0, 0);
+      hasPart.current = true;
+      report();
+      animate();
     };
     img.src = props.baseMask;
-  }, [natural, props.baseMask, render, report]);
+  }, [natural, props.baseMask, render, report, animate]);
 
   useImperativeHandle(ref, () => ({
-    clear: () => { const m = mask.current; if (m) m.getContext("2d")!.clearRect(0, 0, m.width, m.height); render(); report(); },
+    clear: () => {
+      for (const c of [mask.current, part.current]) c?.getContext("2d")!.clearRect(0, 0, c.width, c.height);
+      hasPart.current = false;
+      render(); report();
+    },
     exportMask: () =>
       new Promise((resolve) => {
         const m = mask.current;
@@ -92,13 +153,18 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
     const r = view.current!.getBoundingClientRect();
     return [((e.clientX - r.left) / r.width) * view.current!.width, ((e.clientY - r.top) / r.height) * view.current!.height];
   };
+  // Painting adds to the selection only; erasing takes from the selection and the part alike.
   const paint = (from: [number, number], to: [number, number]) => {
-    const ctx = mask.current!.getContext("2d")!;
-    ctx.globalCompositeOperation = props.tool === "erase" ? "destination-out" : "source-over";
-    ctx.strokeStyle = "#fff"; ctx.lineWidth = props.size; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.beginPath(); ctx.moveTo(...from); ctx.lineTo(...to); ctx.stroke();
-    ctx.globalCompositeOperation = "source-over";
-    render();
+    const layers = props.tool === "erase" ? [mask.current, part.current] : [mask.current];
+    for (const c of layers) {
+      if (!c) continue;
+      const ctx = c.getContext("2d")!;
+      ctx.globalCompositeOperation = props.tool === "erase" ? "destination-out" : "source-over";
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = props.size; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.beginPath(); ctx.moveTo(...from); ctx.lineTo(...to); ctx.stroke();
+      ctx.globalCompositeOperation = "source-over";
+    }
+    if (!hasPart.current) render(); // with a part shown, the animation loop redraws anyway
   };
 
   if (!natural) return null;
@@ -108,7 +174,7 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
       width={natural.w}
       height={natural.h}
       aria-label="Selection: paint to add, erase to remove"
-      className={`absolute inset-0 h-full w-full touch-none opacity-50 ${props.tool ? "cursor-crosshair" : "pointer-events-none"}`}
+      className={`absolute inset-0 h-full w-full touch-none opacity-55 ${props.tool ? "cursor-crosshair" : "pointer-events-none"}`}
       onPointerDown={(e) => {
         if (!props.tool) return;
         e.currentTarget.setPointerCapture(e.pointerId);
