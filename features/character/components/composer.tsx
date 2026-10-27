@@ -60,7 +60,7 @@ export function Composer(props: {
         }}
       />
       {props.examples && !prompt && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="-mt-1 flex flex-wrap gap-1.5">
           {props.examples.map((ex) => (
             <button key={ex} type="button" onClick={() => setPrompt(ex)} className={chip(false)}>
               {ex.length > 40 ? `${ex.slice(0, 40)}…` : ex}
@@ -69,52 +69,52 @@ export function Composer(props: {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 w-16 text-xs text-muted-foreground">Style</span>
-        {STYLES.map((s) => (
-          <button key={s.id} type="button" aria-pressed={style === s.id} onClick={() => setStyle(s.id)} className={chip(style === s.id)}>
-            {s.label}
-          </button>
-        ))}
-      </div>
+      {/* Options: one label column, one control column, the same rhythm on every row. */}
+      <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 pt-1">
+        <span className="text-xs text-muted-foreground">Reference</span>
+        <div className="flex min-h-8 flex-wrap items-center gap-2">
+          {props.reference && (
+            <span className="flex items-center gap-2 rounded-lg border bg-card/60 py-1 pr-2 pl-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={props.reference} alt="Your reference" className="h-10 w-[31px] rounded-md border bg-white object-cover" />
+              <span className="text-xs">Concepts follow this</span>
+              <button type="button" aria-label="Remove the reference" disabled={props.busy} onClick={props.onClearReference} className="rounded p-0.5 text-muted-foreground hover:text-foreground">
+                <X className="size-3.5" />
+              </button>
+            </span>
+          )}
+          <Button type="button" variant="outline" size="sm" disabled={props.busy} onClick={() => setSketching(true)}>
+            <PenLine data-icon="inline-start" />
+            {props.reference ? "New sketch" : "Draw a sketch"}
+          </Button>
+          <label className={cn("inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-card hover:text-foreground", props.busy && "pointer-events-none opacity-50")}>
+            <ImageUp className="size-3.5" />
+            Upload
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) props.onReference(f);
+              }}
+            />
+          </label>
+          {!props.reference && <span className="text-xs text-muted-foreground">optional: concepts follow its pose</span>}
+        </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-1 w-16 text-xs text-muted-foreground">Reference</span>
-        {props.reference ? (
-          <span className="flex items-center gap-2 rounded-lg border bg-card/60 p-1 pr-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={props.reference} alt="Your reference" className="h-12 w-[37px] rounded-md border bg-white object-cover" />
-            <span className="text-xs">Concepts follow this</span>
-            <button type="button" aria-label="Remove the reference" disabled={props.busy} onClick={props.onClearReference} className="rounded p-0.5 text-muted-foreground hover:text-foreground">
-              <X className="size-3.5" />
+        <span className="text-xs text-muted-foreground">Style</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {STYLES.map((s) => (
+            <button key={s.id} type="button" aria-pressed={style === s.id} onClick={() => setStyle(s.id)} className={chip(style === s.id)}>
+              {s.label}
             </button>
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">optional</span>
-        )}
-        <Button type="button" variant="outline" size="sm" disabled={props.busy} onClick={() => setSketching(true)}>
-          <PenLine data-icon="inline-start" />
-          {props.reference ? "New sketch" : "Draw a sketch"}
-        </Button>
-        <label className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-card hover:text-foreground", props.busy && "pointer-events-none opacity-50")}>
-          <ImageUp className="size-3.5" />
-          Upload
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="sr-only"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (f) props.onReference(f);
-            }}
-          />
-        </label>
-      </div>
+          ))}
+        </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1.5" role="radiogroup" aria-label="How many concepts">
-          <span className="mr-1 w-16 text-xs text-muted-foreground">How many</span>
+        <span className="text-xs text-muted-foreground">How many</span>
+        <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="How many concepts">
           {COUNTS.map((n) => (
             <button
               key={n}
@@ -127,8 +127,13 @@ export function Composer(props: {
               {n}
             </button>
           ))}
-          <span className="ml-1 font-mono text-[11px] text-muted-foreground">~{Math.max(1, Math.round((10 + count * perImage) / 10) * 10)} s</span>
         </div>
+      </div>
+
+      <div className="flex items-center gap-3 border-t pt-3">
+        <span className="font-mono text-[11px] text-muted-foreground">
+          ~{Math.max(1, Math.round((10 + count * perImage) / 10) * 10)} s · earlier sets are kept
+        </span>
         <Button type="submit" size="lg" className="ml-auto" disabled={props.busy || prompt.trim().length < 3}>
           {props.pending ? <LoadingDots /> : null}
           Generate
