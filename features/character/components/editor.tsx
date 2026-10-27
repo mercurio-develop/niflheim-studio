@@ -13,6 +13,8 @@ import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { brushEdit, cancel, maskPart, redo, removeSelection, repaintSelection, restyleCurrent, savePart, undo } from "../actions/character";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
+import { SectionTitle } from "./concept-section";
+import { KIND_DOT, versionKind } from "@/lib/versions";
 
 const FALLBACK = ["hair", "face", "coat", "pants", "boots"];
 type Tool = "part" | "add" | "erase" | "style";
@@ -131,6 +133,7 @@ export function Editor(props: {
 
   return (
     <section className="flex flex-col gap-3">
+      <SectionTitle n="2" tone="bg-primary" title="Edit" line="Select a part or paint, then change, add or remove. Restyle repaints it all." />
       {/* Top bar: history and compare */}
       <div className="flex flex-wrap items-center gap-1.5">
         <Button variant="ghost" size="sm" disabled={busy || props.moves.undo === null} onClick={() => act(() => undo(props.projectId))} title="Undo (Ctrl/⌘ Z)">
@@ -151,9 +154,12 @@ export function Editor(props: {
           title="Hold to see the version before"
         >
           <SplitSquareHorizontal data-icon="inline-start" />
-          {comparing ? "Before" : "Compare"}
+          {comparing ? "Showing before" : "Before / after"}
         </Button>
-        <span className="ml-auto max-w-[50%] truncate font-mono text-xs text-muted-foreground">{props.version.label}</span>
+        <span className="ml-auto flex max-w-[50%] items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
+          <span className={cn("size-2 shrink-0 rounded-full", KIND_DOT[versionKind(props.version)])} />
+          <span className="truncate">{props.version.label}</span>
+        </span>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[auto_minmax(0,1fr)_17rem]">
@@ -210,64 +216,6 @@ export function Editor(props: {
             )}
           </div>
 
-          {/* Prompt bar: acts on the selection */}
-          {tool !== "style" && (
-            <form
-              className="flex flex-col gap-1.5"
-              onSubmit={(e) => {
-                e.preventDefault();
-                submit();
-              }}
-            >
-              <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/70 p-1.5 focus-within:border-ring/60">
-                <div className="flex gap-0.5 rounded-lg bg-background/60 p-0.5">
-                  {(["change", "add", "remove"] as const).map((a) => (
-                    <button
-                      key={a}
-                      type="button"
-                      onClick={() => setAction(a)}
-                      className={cn(
-                        "rounded-md px-2.5 py-1 text-sm transition-colors",
-                        action === a ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {a === "change" ? "Change" : a === "add" ? "Add here" : "Remove"}
-                    </button>
-                  ))}
-                </div>
-                {action === "remove" ? (
-                  <span className="flex-1 px-1 text-sm text-foreground">
-                    {box ? `Paint out ${part && !edited ? `the ${part}` : "the tinted area"} and fill in what is behind it` : "Select what to remove first"}
-                  </span>
-                ) : (
-                  <input
-                    aria-label={action === "change" ? "What it should become" : "What to add"}
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder={
-                      action === "change"
-                        ? `${part && !edited ? `the ${part}` : "the selection"} becomes... a red leather coat`
-                        : "a black raven perched on the shoulder"
-                    }
-                    className="min-w-40 flex-1 bg-transparent px-1 text-base outline-none placeholder:text-muted-foreground"
-                  />
-                )}
-                <Button type="submit" size="lg" disabled={busy || !ready}>
-                  {pending && !running ? <LoadingDots /> : action === "remove" ? "Remove" : "Generate"}
-                  <ArrowRight data-icon="inline-end" />
-                </Button>
-              </div>
-              <p className="font-mono text-xs text-muted-foreground">
-                {!box
-                  ? "select a part or paint with Brush + to choose what changes"
-                  : action === "change"
-                    ? "only the tinted area changes, pixel for pixel"
-                    : action === "add"
-                      ? "the new thing is painted around the selection; nothing outside its box changes"
-                      : "only the tinted area changes; fix the tint with Brush + / − first"}
-              </p>
-            </form>
-          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           {(["swap", "brush", "restyle", "mask"] as const).map(
             (k) => props.jobs[k]?.status === "error" && <p key={k} className="text-sm text-destructive">{props.jobs[k]!.error}</p>,
@@ -279,8 +227,8 @@ export function Editor(props: {
           {tool === "style" ? (
             <>
               <div>
-                <h2 className="text-base font-semibold">Restyle this character</h2>
-                <p className="text-sm text-muted-foreground">Same design and pose, another look. It becomes a new version; Undo brings this one back.</p>
+                <h2 className="text-base font-semibold">Restyle</h2>
+                <p className="text-sm text-muted-foreground">Same design and pose, new look. Undo brings it back.</p>
               </div>
               <div className="grid grid-cols-2 gap-1.5">
                 {STYLES.map((s) => (
@@ -309,11 +257,11 @@ export function Editor(props: {
                       Naming the parts <LoadingDots className="text-primary" />
                     </span>
                   ) : tool === "part" ? (
-                    "Pick a part to select it. Use Brush + or − to fix the selection."
+                    "Pick a part, or paint with Brush +."
                   ) : tool === "add" ? (
-                    "Paint to add to the selection. Paint something new and name it below to keep it as a part."
+                    "Paint to select more. Name it below to keep it as a part."
                   ) : (
-                    "Paint to take away from the selection."
+                    "Paint to select less."
                   )}
                 </p>
               </div>
@@ -354,6 +302,62 @@ export function Editor(props: {
                   <Search />
                 </Button>
               </form>
+              {/* Action: acts on the selection (one column with the tools) */}
+              <form
+                  className="flex flex-col gap-1.5"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submit();
+                  }}
+                >
+                  <div className="flex flex-col gap-2 rounded-xl border bg-card/70 p-2 focus-within:border-ring/60">
+                    <div className="grid grid-cols-3 gap-0.5 rounded-lg bg-background/60 p-0.5">
+                      {(["change", "add", "remove"] as const).map((a) => (
+                        <button
+                          key={a}
+                          type="button"
+                          onClick={() => setAction(a)}
+                          className={cn(
+                            "rounded-md px-2.5 py-1 text-sm transition-colors",
+                            action === a ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {a === "change" ? "Change" : a === "add" ? "Add here" : "Remove"}
+                        </button>
+                      ))}
+                    </div>
+                    {action === "remove" ? (
+                      <span className="px-1 py-1 text-sm text-foreground">
+                        {box ? `Paint out ${part && !edited ? `the ${part}` : "the tinted area"} and fill in what is behind it` : "Select what to remove first"}
+                      </span>
+                    ) : (
+                      <input
+                        aria-label={action === "change" ? "What it should become" : "What to add"}
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        placeholder={
+                          action === "change"
+                            ? "e.g. a red leather coat"
+                            : "e.g. a black raven on the shoulder"
+                        }
+                        className="min-w-0 bg-transparent px-1 py-1 text-base outline-none placeholder:text-muted-foreground"
+                      />
+                    )}
+                    <Button type="submit" size="lg" className="w-full" disabled={busy || !ready}>
+                      {pending && !running ? <LoadingDots /> : action === "remove" ? "Remove" : "Generate"}
+                      <ArrowRight data-icon="inline-end" />
+                    </Button>
+                  </div>
+                  <p className="font-mono text-xs text-muted-foreground">
+                    {!box
+                      ? "select something first"
+                      : action === "change"
+                        ? "only the tinted area changes"
+                        : action === "add"
+                          ? "painted around the selection"
+                          : "the tinted area is painted out"}
+                  </p>
+                </form>
               {/* Brush as a tag: always visible while brushing, usable once something is painted. */}
               {(tool !== "part" || (box && (edited || !part))) && (
                 <form

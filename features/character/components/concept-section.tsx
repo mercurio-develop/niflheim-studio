@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
@@ -13,6 +13,23 @@ import { cn } from "@/lib/utils";
 import { cancel, generateConcepts, pickConcept } from "../actions/character";
 
 const label = (id: string) => STYLES.find((s) => s.id === id)?.label ?? id;
+
+// A numbered section heading with its colour dot and one short line.
+export function SectionTitle(props: { n: string; tone: string; title: string; line?: string }) {
+  return (
+    <div className="flex min-w-0 items-start gap-2.5">
+      {props.n ? (
+        <span className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-xs font-semibold text-background ${props.tone}`}>{props.n}</span>
+      ) : (
+        <span className={`mt-2 ml-2 size-2 shrink-0 rounded-full ${props.tone}`} />
+      )}
+      <div className="min-w-0">
+        <h2 className="text-base font-semibold leading-6">{props.title}</h2>
+        {props.line && <p className="truncate text-sm text-muted-foreground">{props.line}</p>}
+      </div>
+    </div>
+  );
+}
 
 // Generate: one composer (prompt + style), one primary button. Earlier sets stay browsable;
 // after a pick the section folds to a thumbnail strip with "New concepts".
@@ -60,8 +77,8 @@ export function ConceptSection(props: {
 
   if (!expanded) {
     return (
-      <section className="flex flex-wrap items-center gap-3 rounded-xl border bg-card/40 p-3">
-        <h2 className="text-sm font-medium">Concepts</h2>
+      <section className="flex flex-wrap items-center gap-3">
+        <SectionTitle n="1" tone="bg-tone-yellow" title="Concept" />
         <div className="flex items-center gap-1.5">
           {props.concepts.map((src, i) => (
             <FadeImage key={src} src={file(src)} alt={`Concept ${i + 1}`} className={cn("h-10 w-8 rounded-sm border object-cover", props.pickedImage === src ? "border-primary" : "opacity-40")} />
@@ -69,7 +86,7 @@ export function ConceptSection(props: {
         </div>
         <span className="hidden truncate text-xs text-muted-foreground sm:inline">{label(props.style)}</span>
         <Button variant="outline" size="sm" className="ml-auto" onClick={() => setOpen(true)}>
-          <Sparkles data-icon="inline-start" />
+          <RefreshCw data-icon="inline-start" />
           New concepts
         </Button>
       </section>
@@ -77,7 +94,16 @@ export function ConceptSection(props: {
   }
 
   return (
-    <section className="flex flex-col gap-4 rounded-xl border bg-card/40 p-4">
+    <section className="flex flex-col gap-5">
+      <div className="flex items-start justify-between gap-3">
+        <SectionTitle n="1" tone="bg-tone-yellow" title="Describe" line="Who are they, and what look? You get four concepts in about a minute." />
+        {props.hasVersion && !running && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} aria-label="Close and keep editing">
+            <X data-icon="inline-start" />
+            Close
+          </Button>
+        )}
+      </div>
       {/* Composer */}
       <form
         className="flex flex-col gap-3"
@@ -86,7 +112,7 @@ export function ConceptSection(props: {
           generate();
         }}
       >
-        <label htmlFor="concept-prompt" className="text-sm font-medium">
+        <label htmlFor="concept-prompt" className="sr-only">
           Describe your character
         </label>
         <Textarea
@@ -118,25 +144,17 @@ export function ConceptSection(props: {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="submit" size="lg" disabled={busy || prompt.trim().length < 3}>
-            {pending && !running ? <LoadingDots /> : <Sparkles data-icon="inline-start" />}
+            {pending && !running ? <LoadingDots /> : null}
             {changed ? "Generate 4 concepts" : "Generate 4 more"}
           </Button>
-          <span className="font-mono text-xs text-muted-foreground">~1 min · your current set is kept</span>
-          {props.hasVersion && !running && (
-            <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={() => setOpen(false)}>
-              Back to editing
-            </Button>
-          )}
+          <span className="text-xs text-muted-foreground">Earlier sets are kept.</span>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </form>
 
       {/* Results */}
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-medium">{shown.at === null ? "Latest set" : `Set ${shownIndex + 1}`}</h2>
-        <span className="truncate text-xs text-muted-foreground">
-          {label(shown.style)} · {shown.prompt}
-        </span>
+      <div className="flex items-end gap-3">
+        <SectionTitle n="" tone="bg-tone-yellow" title="Pick one" line={`${shown.at === null ? "Latest set" : `Set ${shownIndex + 1}`} · ${label(shown.style)}`} />
         {all.length > 1 && (
           <div className="ml-auto flex items-center gap-1">
             <Button variant="ghost" size="icon-sm" aria-label="Earlier set" disabled={shownIndex === 0} onClick={() => setViewing(shownIndex - 1)}>

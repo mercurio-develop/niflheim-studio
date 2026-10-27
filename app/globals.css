@@ -5,6 +5,12 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Ristretto's other colours, each with one meaning (see lib/versions.ts). */
+  --color-tone-yellow: var(--tone-yellow);
+  --color-tone-green: var(--tone-green);
+  --color-tone-pink: var(--tone-pink);
+  --color-tone-lilac: var(--tone-lilac);
+  --color-tone-cyan: var(--tone-cyan);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
@@ -53,6 +59,11 @@
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.705 0.015 286.067);
+  --tone-yellow: #b7791f;
+  --tone-green: #4d7c0f;
+  --tone-pink: #be185d;
+  --tone-lilac: #6d28d9;
+  --tone-cyan: #0f766e;
 }
 
 .dark {
@@ -76,6 +87,11 @@
   --input: rgb(230 217 219 / 14%);
   --ring: rgb(243 141 112 / 60%);
   --glow: rgb(243 141 112 / 9%);
+  --tone-yellow: #f9cc6c;
+  --tone-green: #adda78;
+  --tone-pink: #fd6883;
+  --tone-lilac: #a8a9eb;
+  --tone-cyan: #85dacc;
   --field: 249 226 210; /* magnet particles, rgb */
   --field-hot: 243 141 112;
 }

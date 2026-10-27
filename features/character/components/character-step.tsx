@@ -17,10 +17,10 @@ export function CharacterStep({ project }: { project: Project }) {
     <>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto]">
         <JobPoller running={anyRunning} />
-        <div className="flex min-w-0 flex-col gap-6">
-          <div className="nifl-enter flex flex-col gap-2">
+        <div className="flex min-w-0 flex-col gap-10">
+          <div className="nifl-enter flex flex-col gap-1">
             <span className="font-mono text-xs text-muted-foreground">01 · Character</span>
-            <h1 className="max-w-3xl text-2xl font-semibold tracking-tight text-balance">{c.prompt}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Make your character</h1>
           </div>
 
           <div className="nifl-enter" style={{ "--i": 1 } as React.CSSProperties}>
