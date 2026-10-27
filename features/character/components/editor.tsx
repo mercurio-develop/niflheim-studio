@@ -311,7 +311,7 @@ export function Editor(props: {
                   ) : tool === "part" ? (
                     "Pick a part to select it. Use Brush + or − to fix the selection."
                   ) : tool === "add" ? (
-                    "Paint to add to the selection."
+                    "Paint to add to the selection. Paint something new and name it below to keep it as a part."
                   ) : (
                     "Paint to take away from the selection."
                   )}
@@ -354,9 +354,10 @@ export function Editor(props: {
                   <Search />
                 </Button>
               </form>
-              {box && (edited || !part) && (
+              {/* Brush as a tag: always visible while brushing, usable once something is painted. */}
+              {(tool !== "part" || (box && (edited || !part))) && (
                 <form
-                  className="flex flex-col gap-1.5 rounded-lg border border-dashed p-2"
+                  className={cn("flex flex-col gap-1.5 rounded-lg border border-dashed p-2", !box && "opacity-60")}
                   onSubmit={(e) => {
                     e.preventDefault();
                     const name = partName.trim().toLowerCase();
@@ -373,11 +374,11 @@ export function Editor(props: {
                   }}
                 >
                   <label htmlFor="part-name" className="text-xs text-muted-foreground">
-                    Save this selection as a part
+                    {box ? "Save this selection as a part" : "Paint first, then save it as a part"}
                   </label>
                   <div className="flex gap-1.5">
-                    <Input id="part-name" value={partName} onChange={(e) => setPartName(e.target.value)} placeholder="e.g. scarf" />
-                    <Button type="submit" variant="outline" disabled={busy || partName.trim().length < 2}>
+                    <Input id="part-name" value={partName} disabled={!box} onChange={(e) => setPartName(e.target.value)} placeholder="e.g. scarf" />
+                    <Button type="submit" variant="outline" disabled={busy || !box || partName.trim().length < 2}>
                       Save
                     </Button>
                   </div>
