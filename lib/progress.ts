@@ -4,7 +4,7 @@ import type { StepSlug } from "./steps";
 // The turnaround's views. Front is made from the character with the chosen pose and hidden
 // objects; every other view is made from that front, so they all stay the same character.
 export const VIEWS: { id: ViewId; label: string; optional?: boolean; prompt: string }[] = [
-  { id: "front", label: "Front", prompt: "Rotate this character so the whole body faces the camera straight on: face, chest, hips and both feet point directly at the viewer, shoulders level and square, a symmetrical full-body front view for a character model sheet. Camera at chest height, the whole figure in frame." },
+  { id: "front", label: "Front", prompt: "Rotate this character so the whole body faces the camera straight on: face, chest, hips and both feet point directly at the viewer, shoulders level and square, a symmetrical full-body front view. Camera at chest height, the whole figure in frame." },
   { id: "threequarter", label: "Three-quarter", prompt: "Rotate the character 45 degrees to their left for a full-body three-quarter view: we see their front and their right side at an angle, the far shoulder partly hidden, the feet pointing diagonally." },
   { id: "side", label: "Side", prompt: "Turn the character to face left, showing a full-body left side profile view." },
   { id: "back", label: "Back", prompt: "Turn the character around to show a full-body back view, seen from behind." },
@@ -12,7 +12,8 @@ export const VIEWS: { id: ViewId; label: string; optional?: boolean; prompt: str
   { id: "bottom", label: "Bottom", optional: true, prompt: "Show the same character from directly below, a low worm's-eye view looking up at the whole figure." },
 ];
 
-const KEEP = "Same character, same face, same outfit, same colours, same proportions, same plain light grey background.";
+// "Model sheet" in a view prompt made Qwen draw callout lines and labels, so it is said here never to.
+const KEEP = "Same character, same face, same outfit, same colours, same proportions, same plain light grey background. No text, labels, arrows or lines.";
 
 const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
@@ -26,7 +27,7 @@ export function frontPrompt(o: TurnaroundOptions): string {
     o.pose === "tpose"
       ? "Make this character do a T-pose for a 3D model sheet: arms fully extended sideways in a straight horizontal line, forming a T shape with the body, legs together and straight."
       : "";
-  const view = o.pose === "tpose" ? "Front view, full body, facing the viewer." : VIEWS[0].prompt + " Keep the arm positions and the items carried.";
+  const view = o.pose === "tpose" ? "Front view, full body, facing the viewer." : VIEWS[0].prompt + " Keep the arm positions. Add nothing that is not in this picture.";
   return [pose, hide, view, KEEP].filter(Boolean).join(" ");
 }
 

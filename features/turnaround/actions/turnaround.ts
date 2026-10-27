@@ -47,18 +47,48 @@ async function makeView(id: string, view: ViewId, from: string, prompt: string, 
   return rel(id, image);
 }
 
+// Other words SAM may know an object by, tried when its own name finds nothing.
+const SYNONYMS: Record<string, string[]> = { bag: ["satchel", "backpack"], cape: ["cloak"], cloak: ["cape"], sword: ["blade"], hat: ["cap"], helmet: ["helm"], shield: ["buckler"], staff: ["stick", "pole"] };
+
+// The words and confidence thresholds to try, most exact first. SAM 3.1 missed "shoulder bag" at
+// 0.5 and found it at 0.3, and as "bag" (2026-10-27); each try is about half a second.
+function searches(name: string): [string, number][] {
+  const last = name.split(" ").at(-1)!;
+  const words = [...new Set([last, ...(SYNONYMS[last] ?? [])])].filter((w) => w !== name);
+  return [[name, 0.5], [name, 0.3], ...words.map((w): [string, number] => [w, 0.3])];
+}
+
 // A hidden object's mask on the character version, found with SAM (01_parts) if it has none yet.
 // It is saved as a part of that version, so the Character editor and Refine see the same mask.
+// An empty mask saved earlier counts as none, so it is searched for again.
 async function ensureMask(id: string, name: string, ctx: JobCtx) {
   const p = await getProject(id);
   const at = p?.character.current ?? -1;
   const version = p?.character.versions[at];
   if (!version) throw new Error("Finish the character first.");
-  if (Object.hasOwn(version.parts, name)) return version.parts[name];
-  const [m] = await runWorkflow({ workflow: "01_parts.api.json", onSubmit: ctx.track, set: [["2", "prompt", name]], images: [["1", abs(id, version.image)]], output: "4", outDir: abs(id, `character/masks/${stamp()}-${slug(name)}`) });
-  if (!(await ctx.alive())) return null;
+  const saved = version.parts[name];
+  if (saved && (await maskBox(abs(id, saved)))) return saved;
+  let m = "";
+  for (const [word, threshold] of searches(name)) {
+    [m] = await runWorkflow({ workflow: "01_parts.api.json", onSubmit: ctx.track, set: [["2", "prompt", word], ["2", "confidence_threshold", threshold]], images: [["1", abs(id, version.image)]], output: "4", outDir: abs(id, `character/masks/${stamp()}-${slug(name)}`) });
+    if (!(await ctx.alive())) return null;
+    if (await maskBox(m)) break;
+  }
   await updateProject(id, (q) => void (q.character.versions[at].parts[name] = rel(id, m)));
   return rel(id, m);
+}
+
+// Nothing found to mask: ask Qwen to paint it out of the whole picture instead.
+async function removeByWords(id: string, from: string, name: string, ctx: JobCtx) {
+  const [image] = await runWorkflow({
+    workflow: "01_edit.api.json",
+    onSubmit: ctx.track,
+    set: [["17", "prompt", removePrompt(name)], ["22", "seed", seed()]],
+    images: [["1", abs(id, from)]],
+    output: "28",
+    outDir: abs(id, `turnaround/clean/${stamp()}`),
+  });
+  return rel(id, image);
 }
 
 // Find the masks of the objects chosen in Hide, so the user sees (and can refine) them first.
@@ -151,10 +181,8 @@ export async function generateTurnaround(id: string, rawOptions: z.input<typeof 
           await ctx.progress(`Keeping the ${name} as an asset`);
           await keepAsset(id, name, source, mask, !!box, ctx);
         }
-        if (box) {
-          await ctx.progress(`Removing the ${name}`);
-          clean = await removeObject(id, clean, mask, box, ctx, name);
-        }
+        await ctx.progress(`Removing the ${name}`);
+        clean = box ? await removeObject(id, clean, mask, box, ctx, name) : await removeByWords(id, clean, name, ctx);
         if (!(await ctx.alive())) return;
       }
       await updateProject(id, (q) => void (q.turnaround && (q.turnaround.clean = clean)));
