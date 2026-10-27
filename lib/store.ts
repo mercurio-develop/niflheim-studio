@@ -18,7 +18,8 @@ export type Version = {
   edit?: Edit; // what made it, so the same change can be repeated on other views
 };
 // what: the part ("" = a painted selection); change: what it became, or what was added.
-export type Edit = { kind: "change" | "add" | "remove"; what: string; change?: string };
+// mask/box: the selection and strokes it used (project-relative), so Try again can run it again.
+export type Edit = { kind: "change" | "add" | "remove"; what: string; change?: string; mask?: string; box?: { x: number; y: number; width: number; height: number } };
 
 // hide: left out of every view; keep: the hidden ones also kept as assets.
 export type TurnaroundOptions = { pose: "designed" | "tpose"; hide: string[]; keep: string[]; extras: ("top" | "bottom")[] };

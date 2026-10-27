@@ -301,7 +301,7 @@ async function repeatEdit(id: string, view: ViewId, e: Edit, from: ViewId, ctx: 
   await updateProject(id, (q) => {
     const s = q.turnaround?.views[view];
     if (!s) return;
-    s.versions.push({ image: out, label: `${what} (as ${label(from).toLowerCase()})`, parts: {}, tags: version.tags, parent: s.current, edit: e });
+    s.versions.push({ image: out, label: `${what} (as ${label(from).toLowerCase()})`, parts: {}, tags: version.tags, parent: s.current, edit: { kind: e.kind, what: e.what, change: e.change } }); // no mask: that was the other view's
     s.current = s.versions.length - 1;
   });
 }

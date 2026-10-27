@@ -7,10 +7,10 @@ import { z } from "zod";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { redirect } from "next/navigation";
-import { cropBox, pngSize, removePrompt } from "@/lib/brush";
+import { cropBox, maskBox, pngSize, removePrompt, type Box } from "@/lib/brush";
 import { parentIn, stackMoves } from "@/lib/history";
 import { mergeParts, partsFromTags } from "@/lib/parts";
-import { getProject, projectDir, updateProject, type Project, type Version, type ViewId } from "@/lib/store";
+import { getProject, projectDir, updateProject, type Edit, type Project, type Version, type ViewId } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { Count, Index, Prompt, REFERENCE_TYPES, StyleId, referenceError } from "../schemas";
 
@@ -144,7 +144,11 @@ async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx, t
   const tags = partsFromTags(await readFile(file, "utf8"));
   await updateProject(id, (q) => {
     const v = stackOf(q, target).versions[at];
-    if (v) v.tags = mergeParts(tags, v.tags);
+    if (!v) return;
+    // Florence only names parts from a fixed list; what has a mask, or was just added, always stays.
+    const pinned = [...Object.keys(v.parts), ...(v.edit?.kind === "add" && v.tags?.length ? [v.tags.at(-1)!] : [])];
+    const merged = mergeParts(tags, v.tags);
+    v.tags = [...merged, ...pinned.filter((t) => !merged.includes(t))];
   });
 }
 
@@ -207,146 +211,160 @@ export async function maskPart(id: string, rawPart: string, rawTarget = "charact
   done(id);
 }
 
+const Strokes = z.object({ x: z.number().min(0), y: z.number().min(0), width: z.number().positive(), height: z.number().positive() });
 const BrushInput = z.object({
   mode: z.enum(["add", "remove"]),
   thing: z.string().trim().max(200), // optional for remove: the strokes already say what
-  // Bounding box of the strokes, in the image's own pixels.
-  strokes: z.object({ x: z.number().min(0), y: z.number().min(0), width: z.number().positive(), height: z.number().positive() }),
+  strokes: Strokes, // bounding box of the strokes, in the image's own pixels
 });
 
-// The crop is centred on the strokes, so "in the centre" points Qwen at what was painted.
-const brushPrompt = (mode: "add" | "remove", thing: string) =>
-  mode === "add"
-    ? `Add ${thing}. Keep everything else exactly the same, in the same art style and lighting.`
-    : `Remove ${thing || "the object in the centre of the image"} and fill the space with what would be behind it. Keep everything else exactly the same, in the same art style.`;
+// What was added, as a part name for the chips: "a small red bird perched on the shoulder" -> "small red bird".
+const POSE = /^(perched|sitting|standing|resting|hanging|flying|held|worn|attached|placed|tucked|strapped|tied)$/;
+const partName = (thing: string) => {
+  const words = thing.toLowerCase().split(/\s+(?:on|with|in|at|to|near|over|under|holding|by)\s+/)[0].replace(/[^a-z \-]/g, " ").split(/\s+/).filter((w) => w && !["a", "an", "the", "some", "two", "pair", "of"].includes(w));
+  while (words.length > 1 && POSE.test(words.at(-1)!)) words.pop();
+  const name = words.slice(-3).join(" ").slice(0, 40).trim();
+  return Part.safeParse(name).success ? name : null;
+};
 
-export async function brushEdit(id: string, input: z.input<typeof BrushInput>, rawTarget = "character") {
-  const { mode, thing, strokes } = BrushInput.parse(input);
-  const target = Target.parse(rawTarget);
-  if (mode === "add" && thing.length < 2) throw new Error("Say what to add.");
-  const stack = stackOf(await load(id), target);
-  const at = stack.current!;
-  const version = currentVersion(stack);
-  const source = abs(id, version.image);
-  const box = cropBox(strokes, await pngSize(source));
-  await startJob(
-    id,
-    keyOf(target, "brush"),
-    async (ctx) => {
-      const [image] = await runWorkflow({
-        workflow: "01_brush.api.json",
-        onSubmit: ctx.track,
-        set: [
-          ["17", "prompt", brushPrompt(mode, thing)],
-          ["22", "seed", newSeed()],
-          ["4", "x", box.x], ["4", "y", box.y], ["4", "width", box.width], ["4", "height", box.height],
-          ["27", "x", box.x], ["27", "y", box.y],
-        ],
-        images: [["1", source]],
-        output: "28",
-        outDir: abs(id, `${dirOf(target)}/brush/${stamp()}`),
-      });
-      if (!(await ctx.alive())) return; // cancelled after ComfyUI had already finished
-      let made = 0;
-      await updateProject(id, (q) => {
-        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `${mode === "add" ? "+" : "−"} ${thing || "selection"}`, parts: {}, tags: version.tags, parent: at, edit: mode === "add" ? { kind: "add", what: "", change: thing } : { kind: "remove", what: thing } });
-      });
-      await tagVersion(id, made, rel(id, [image])[0], ctx, target);
-    },
-    mode === "add" ? `Painting ${thing}` : `Removing ${thing || "the selection"}`,
-  );
-  done(id);
+// One edit run, from version `at` of a stack. Each runner makes the new version and records the
+// edit with its inputs, so Try again can run it once more from the same version with a new seed.
+type Run = { id: string; target: string; at: number; version: Version; ctx: JobCtx };
+
+async function finish(r: Run, image: string, v: Omit<Version, "image" | "parts" | "parent">, extra?: { name: string; ctx: JobCtx }) {
+  let made = 0;
+  await updateProject(r.id, (q) => {
+    made = pushVersion(q, r.target, { image, parts: {}, parent: r.at, ...v });
+  });
+  // An added thing becomes a part at once: SAM 3 finds it on the new image.
+  if (extra) {
+    const [m] = await runWorkflow({ onSubmit: r.ctx.track, workflow: "01_parts.api.json", set: [["2", "prompt", extra.name]], images: [["1", abs(r.id, image)]], output: "4", outDir: abs(r.id, `${dirOf(r.target)}/masks/${stamp()}-${extra.name.replace(/ /g, "-")}`) });
+    if (await maskBox(m)) await updateProject(r.id, (q) => void (stackOf(q, r.target).versions[made].parts[extra.name] = rel(r.id, [m])[0]));
+  }
+  await tagVersion(r.id, made, image, r.ctx, r.target);
 }
 
-// Change the selection: the browser sends the final mask (a found part, plus and minus brush
-// strokes), Qwen repaints the image, and only the mask's pixels are kept (01_swap).
-export async function repaintSelection(id: string, form: FormData, rawTarget = "character") {
-  const target = Target.parse(rawTarget);
-  const change = z.string().trim().min(3, "Say what it should become.").max(300).parse(form.get("change"));
-  const what = z.string().trim().max(40).parse(form.get("what") ?? "") || "selection";
-  const mask = form.get("mask");
-  if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
-  const stack = stackOf(await load(id), target);
-  const at = stack.current!;
-  const version = currentVersion(stack);
-  const maskFile = abs(id, `${dirOf(target)}/selections/${stamp()}/mask.png`);
-  await mkdir(path.dirname(maskFile), { recursive: true });
-  await writeFile(maskFile, Buffer.from(await mask.arrayBuffer()));
+async function runAdd(r: Run, thing: string, strokes: Box) {
+  const source = abs(r.id, r.version.image);
+  // A little more room than Remove, and "small enough to fit", so the new thing is not cut at the
+  // crop's edge. Much more room (2.6x) made Qwen redraw the whole character small inside the crop.
+  const box = cropBox(strokes, await pngSize(source), { grow: 2.2, min: 448 });
+  const [image] = await runWorkflow({
+    workflow: "01_brush.api.json",
+    onSubmit: r.ctx.track,
+    set: [
+      ["17", "prompt", `Add ${thing}. Draw all of it, small enough to fit inside this picture. Keep everything else exactly the same size, position, art style and lighting.`],
+      ["22", "seed", newSeed()],
+      ["4", "x", box.x], ["4", "y", box.y], ["4", "width", box.width], ["4", "height", box.height],
+      ["27", "x", box.x], ["27", "y", box.y],
+    ],
+    images: [["1", source]],
+    output: "28",
+    outDir: abs(r.id, `${dirOf(r.target)}/brush/${stamp()}`),
+  });
+  if (!(await r.ctx.alive())) return;
+  const name = partName(thing);
+  await finish(r, rel(r.id, [image])[0], { label: `+ ${thing}`, tags: name ? [...(r.version.tags ?? []), name] : r.version.tags, edit: { kind: "add", what: "", change: thing, box: strokes } }, name ? { name, ctx: r.ctx } : undefined);
+}
+
+async function runChange(r: Run, what: string, change: string, mask: string) {
   const prompt =
     what === "selection"
       ? `Change the highlighted area into ${change}. Keep the face, pose, everything else and the background exactly the same.`
       : `Change only the ${what} into ${change}. Keep the face, pose, every other part and the background exactly the same.`;
-  await startJob(
-    id,
-    keyOf(target, "swap"),
-    async (ctx) => {
-      const [image] = await runWorkflow({
-        onSubmit: ctx.track,
-        workflow: "01_swap.api.json",
-        set: [["17", "prompt", prompt], ["22", "seed", newSeed()]],
-        images: [["1", abs(id, version.image)], ["2", maskFile]],
-        output: "28",
-        outDir: abs(id, `${dirOf(target)}/swaps/${stamp()}`),
-      });
-      if (!(await ctx.alive())) return;
-      let made = 0;
-      await updateProject(id, (q) => {
-        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `${what} → ${change}`, parts: {}, tags: version.tags, parent: at, edit: { kind: "change", what: what === "selection" ? "" : what, change } });
-      });
-      await tagVersion(id, made, rel(id, [image])[0], ctx, target);
-    },
-    `Repainting the ${what}`,
-  );
+  const [image] = await runWorkflow({
+    onSubmit: r.ctx.track,
+    workflow: "01_swap.api.json",
+    set: [["17", "prompt", prompt], ["22", "seed", newSeed()]],
+    images: [["1", abs(r.id, r.version.image)], ["2", abs(r.id, mask)]],
+    output: "28",
+    outDir: abs(r.id, `${dirOf(r.target)}/swaps/${stamp()}`),
+  });
+  if (!(await r.ctx.alive())) return;
+  await finish(r, rel(r.id, [image])[0], { label: `${what} → ${change}`, tags: r.version.tags, edit: { kind: "change", what: what === "selection" ? "" : what, change, mask } });
+}
+
+// Remove = inpainting: the selection is blanked inside a crop, Qwen fills what was underneath, and
+// only the selection's pixels are pasted back (01_remove).
+async function runRemove(r: Run, what: string, strokes: Box, mask: string) {
+  const source = abs(r.id, r.version.image);
+  const box = cropBox(strokes, await pngSize(source));
+  const crop = (n: string): [string, string, number][] => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
+  const [image] = await runWorkflow({
+    onSubmit: r.ctx.track,
+    workflow: "01_remove.api.json",
+    set: [["17", "prompt", removePrompt(what)], ["22", "seed", newSeed()], ...crop("4"), ...crop("5"), ["27", "x", box.x], ["27", "y", box.y]],
+    images: [["1", source], ["2", abs(r.id, mask)]],
+    output: "28",
+    outDir: abs(r.id, `${dirOf(r.target)}/removes/${stamp()}`),
+  });
+  if (!(await r.ctx.alive())) return;
+  await finish(r, rel(r.id, [image])[0], { label: `− ${what || "selection"}`, tags: r.version.tags?.filter((t) => t !== what), edit: { kind: "remove", what, mask, box: strokes } });
+}
+
+// The browser's selection (a part's mask plus/minus brush strokes) saved beside the stack.
+async function saveSelection(id: string, target: string, mask: FormDataEntryValue | null) {
+  if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
+  const file = abs(id, `${dirOf(target)}/selections/${stamp()}/mask.png`);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, Buffer.from(await mask.arrayBuffer()));
+  return rel(id, [file])[0];
+}
+
+const jobFor = (kind: Edit["kind"]) => (kind === "change" ? "swap" : "brush");
+
+async function start(id: string, target: string, kind: Edit["kind"], detail: string, work: (r: Run) => Promise<void>) {
+  const stack = stackOf(await load(id), target);
+  const at = stack.current!;
+  const version = currentVersion(stack);
+  await startJob(id, keyOf(target, jobFor(kind)), (ctx) => work({ id, target, at, version, ctx }), detail);
   done(id);
 }
 
-// Remove = inpainting: the selection is blanked inside a crop, Qwen removes the blank shape and
-// fills what was behind it, and only the selection's pixels are pasted back (01_remove).
+// Add with the brush (remove goes through removeSelection, which has the exact mask).
+export async function brushEdit(id: string, input: z.input<typeof BrushInput>, rawTarget = "character") {
+  const { mode, thing, strokes } = BrushInput.parse(input);
+  const target = Target.parse(rawTarget);
+  if (mode !== "add") throw new Error("Use Remove on the selection.");
+  if (thing.length < 2) throw new Error("Say what to add.");
+  await start(id, target, "add", `Painting ${thing}`, (r) => runAdd(r, thing, strokes));
+}
+
+// Change the selection: the browser sends the final mask, Qwen repaints, only its pixels are kept (01_swap).
+export async function repaintSelection(id: string, form: FormData, rawTarget = "character") {
+  const target = Target.parse(rawTarget);
+  const change = z.string().trim().min(3, "Say what it should become.").max(300).parse(form.get("change"));
+  const what = z.string().trim().max(40).parse(form.get("what") ?? "") || "selection";
+  const mask = await saveSelection(id, target, form.get("mask"));
+  await start(id, target, "change", `Repainting the ${what}`, (r) => runChange(r, what, change, mask));
+}
+
 export async function removeSelection(id: string, form: FormData, rawTarget = "character") {
   const target = Target.parse(rawTarget);
   const what = z.string().trim().max(40).parse(form.get("what") ?? "");
   let box0: unknown = null;
   try { box0 = JSON.parse(String(form.get("box") ?? "null")); } catch {}
-  const strokes = BrushInput.shape.strokes.parse(box0);
-  const mask = form.get("mask");
-  if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
+  const strokes = Strokes.parse(box0);
+  const mask = await saveSelection(id, target, form.get("mask"));
+  await start(id, target, "remove", `Removing ${what ? `the ${what}` : "the selection"}`, (r) => runRemove(r, what, strokes, mask));
+}
+
+// Try again: the current version's edit, run once more from the version it was made from, with a
+// new seed. The result is a new version beside it; the one you did not like stays in the history.
+export async function retryEdit(id: string, rawTarget = "character") {
+  const target = Target.parse(rawTarget);
   const stack = stackOf(await load(id), target);
-  const at = stack.current!;
-  const version = currentVersion(stack);
-  const source = abs(id, version.image);
-  const box = cropBox(strokes, await pngSize(source));
-  const maskFile = abs(id, `${dirOf(target)}/selections/${stamp()}/mask.png`);
-  await mkdir(path.dirname(maskFile), { recursive: true });
-  await writeFile(maskFile, Buffer.from(await mask.arrayBuffer()));
-  const crop = (n: string): [string, string, number][] => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
-  await startJob(
-    id,
-    keyOf(target, "brush"),
-    async (ctx) => {
-      const [image] = await runWorkflow({
-        onSubmit: ctx.track,
-        workflow: "01_remove.api.json",
-        set: [
-          ["17", "prompt", removePrompt(what)],
-          ["22", "seed", newSeed()],
-          ...crop("4"),
-          ...crop("5"),
-          ["27", "x", box.x],
-          ["27", "y", box.y],
-        ],
-        images: [["1", source], ["2", maskFile]],
-        output: "28",
-        outDir: abs(id, `${dirOf(target)}/removes/${stamp()}`),
-      });
-      if (!(await ctx.alive())) return;
-      let made = 0;
-      await updateProject(id, (q) => {
-        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `− ${what || "selection"}`, parts: {}, tags: version.tags?.filter((t) => t !== what), parent: at, edit: { kind: "remove", what } });
-      });
-      await tagVersion(id, made, rel(id, [image])[0], ctx, target);
-    },
-    `Removing ${what ? `the ${what}` : "the selection"}`,
-  );
+  const v = stack.versions[stack.current ?? -1];
+  const e = v?.edit;
+  if (!v || !e || v.parent === undefined) throw new Error("Nothing to try again here.");
+  const at = v.parent;
+  const version = stack.versions[at];
+  const run = (work: (r: Run) => Promise<void>) =>
+    startJob(id, keyOf(target, jobFor(e.kind)), (ctx) => work({ id, target, at, version, ctx }), `Trying ${v.label} again`);
+  if (e.kind === "add" && e.box) await run((r) => runAdd(r, e.change ?? "", e.box!));
+  else if (e.kind === "change" && e.mask) await run((r) => runChange(r, e.what || "selection", e.change ?? "", e.mask!));
+  else if (e.kind === "remove" && e.mask && e.box) await run((r) => runRemove(r, e.what, e.box!, e.mask!));
+  else throw new Error("This edit was made before Try again existed; do it once more by hand.");
   done(id);
 }
 

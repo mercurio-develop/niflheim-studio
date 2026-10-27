@@ -56,9 +56,10 @@ export async function maskBox(file: string): Promise<Box | null> {
 export const removePrompt = (what: string) =>
   `Remove the flat grey shape completely${what ? `; it was the ${what}` : ""}. Fill the space with what is underneath it on this character, continuing the surrounding skin, fur, body or material, and the plain background, in the same art style. Do not paint ${what ? `any ${what}, ` : ""}clothing or any new object in its place.`;
 
-// A square-ish box around the strokes with room for the new thing, at least 384 px, inside the image.
-export function cropBox(strokes: Box, image: { width: number; height: number }): Box {
-  const side = Math.max(384, Math.max(strokes.width, strokes.height) * 1.8);
+// A square-ish box around the strokes with room for the new thing (at least `min` px), inside the image.
+// grow/min: more room for Add, so the new thing is drawn whole inside the crop.
+export function cropBox(strokes: Box, image: { width: number; height: number }, { grow = 1.8, min = 384 } = {}): Box {
+  const side = Math.max(min, Math.max(strokes.width, strokes.height) * grow);
   const width = Math.round(Math.min(image.width, side));
   const height = Math.round(Math.min(image.height, side));
   const cx = strokes.x + strokes.width / 2;
