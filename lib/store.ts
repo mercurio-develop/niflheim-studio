@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 // Projects live on disk: data/projects/<id>/project.json, step results beside it.
 // Image paths in a project are relative to its folder and served by /api/files/<id>/<path>.
 
-export type Job = { status: "running" | "done" | "error" | "cancelled"; startedAt: string; error?: string; comfyId?: string; run?: string };
+export type Job = { status: "running" | "done" | "error" | "cancelled"; startedAt: string; error?: string; comfyId?: string; run?: string; detail?: string }; // detail: what this run makes, e.g. the concepts' style
 
 export type ViewId = "threequarter" | "side" | "back";
 

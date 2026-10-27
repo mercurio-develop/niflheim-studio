@@ -7,6 +7,7 @@ import { z } from "zod";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { redirect } from "next/navigation";
+import { cropBox, pngSize } from "@/lib/brush";
 import { mergeParts, partsFromTags } from "@/lib/parts";
 import { getProject, projectDir, updateProject, type Project } from "@/lib/store";
 import { STYLES, styleById } from "@/lib/styles";
@@ -50,7 +51,7 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
       q.character.style = style;
       q.character.concepts = rel(id, files);
     });
-  });
+  }, style);
   done(id);
 }
 
@@ -147,7 +148,54 @@ export async function swapPart(id: string, input: { part: string; change: string
   done(id);
 }
 
-const JobKey = z.enum(["concepts", "mask", "swap", "tags"]);
+const BrushInput = z.object({
+  mode: z.enum(["add", "remove"]),
+  thing: z.string().trim().min(2, "Say what to add or remove.").max(200),
+  // Bounding box of the strokes, in the image's own pixels.
+  strokes: z.object({ x: z.number().min(0), y: z.number().min(0), width: z.number().positive(), height: z.number().positive() }),
+});
+
+const brushPrompt = (mode: "add" | "remove", thing: string) =>
+  mode === "add"
+    ? `Add ${thing}. Keep everything else exactly the same, in the same art style and lighting.`
+    : `Remove ${thing} and fill the space with what would be behind it. Keep everything else exactly the same, in the same art style.`;
+
+export async function brushEdit(id: string, input: z.input<typeof BrushInput>) {
+  const { mode, thing, strokes } = BrushInput.parse(input);
+  const p = await load(id);
+  const version = currentVersion(p);
+  const source = abs(id, version.image);
+  const box = cropBox(strokes, await pngSize(source));
+  await startJob(
+    id,
+    "brush",
+    async (ctx) => {
+      const [image] = await runWorkflow({
+        workflow: "01_brush.api.json",
+        onSubmit: ctx.track,
+        set: [
+          ["17", "prompt", brushPrompt(mode, thing)],
+          ["22", "seed", newSeed()],
+          ["4", "x", box.x], ["4", "y", box.y], ["4", "width", box.width], ["4", "height", box.height],
+          ["27", "x", box.x], ["27", "y", box.y],
+        ],
+        images: [["1", source]],
+        output: "28",
+        outDir: abs(id, `character/brush/${stamp()}`),
+      });
+      if (!(await ctx.alive())) return; // cancelled after ComfyUI had already finished
+      const q = await updateProject(id, (q) => {
+        q.character.versions.push({ image: rel(id, [image])[0], label: `${mode === "add" ? "+" : "−"} ${thing}`, parts: {}, tags: version.tags });
+        q.character.current = q.character.versions.length - 1;
+      });
+      await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
+    },
+    `${mode === "add" ? "Painting" : "Removing"} ${thing}`,
+  );
+  done(id);
+}
+
+const JobKey = z.enum(["concepts", "mask", "swap", "tags", "brush"]);
 
 export async function cancel(id: string, key: string) {
   await cancelJob(id, JobKey.parse(key));

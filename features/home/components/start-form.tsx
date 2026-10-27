@@ -4,6 +4,7 @@ import { useActionState, useRef } from "react";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { LoadingDots } from "@/components/loading-dots";
 import { startCharacter, type StartState } from "../actions/start-character";
 
 const EXAMPLES = [
@@ -37,7 +38,13 @@ export function StartForm() {
             <span className="hidden sm:inline">Z-Image Turbo · </span>4 concepts
           </span>
           <Button type="submit" disabled={pending}>
-            {pending ? "Creating..." : "Create character"}
+            {pending ? (
+              <>
+                Creating <LoadingDots />
+              </>
+            ) : (
+              "Create character"
+            )}
             <ArrowRight data-icon="inline-end" />
           </Button>
         </div>
