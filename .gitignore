@@ -1,9 +1,60 @@
+# --- secrets ---
 .env
 .env.*
 !.env.example
+*.pem
+
+# --- dependencies / toolchains ---
+node_modules/
 .venv/
 venv/
 __pycache__/
-node_modules/
-*.log
+*.py[cod]
+.pnp
+.pnp.*
+.yarn/
+
+# --- build output ---
+/.next/
+/out/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+coverage/
+
+# --- local data: projects, uploads, renders, proxy state ---
+/data/*
+!/data/.gitkeep
+/output/
+
+# --- generated media and model weights (never in git) ---
+*.safetensors
+*.gguf
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx
+*.ply
+*.spz
+*.splat
+*.ksplat
+*.sog
+*.mp4
+*.mov
+*.webm
+*.exr
+!/samples/**
+
+# --- editors / OS / agents ---
+.idea/
+.vscode/
+*.swp
 .DS_Store
+Thumbs.db
+.claude/
+.cursor/
+
+# --- logs ---
+*.log
+npm-debug.log*

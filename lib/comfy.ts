@@ -1,0 +1,40 @@
+import { readFile, mkdir } from "node:fs/promises";
+import path from "node:path";
+import { Comfy } from "@comfyorg/sdk";
+
+// All ComfyUI traffic goes through here (Comfy SDK -> COMFY_BASE_URL). Server only.
+
+const WORKFLOWS = path.join(process.cwd(), "workflows");
+
+let client: Comfy | null = null;
+function comfy(): Comfy {
+  client ??= new Comfy(process.env.COMFY_API_KEY ? { apiKey: process.env.COMFY_API_KEY } : {});
+  return client;
+}
+
+export type RunSpec = {
+  workflow: string; // file name in workflows/, e.g. "01_concept.api.json"
+  set?: [node: string, field: string, value: unknown][];
+  images?: [node: string, filePath: string][]; // LoadImage nodes
+  output: string; // node id whose outputs we keep
+  outDir: string; // absolute folder for downloaded files
+  timeoutMs?: number;
+};
+
+export async function runWorkflow(spec: RunSpec): Promise<string[]> {
+  const c = comfy();
+  const graph = JSON.parse(await readFile(path.join(WORKFLOWS, spec.workflow), "utf8"));
+  const wf = c.workflows.fromJson(graph);
+  for (const [node, field, value] of spec.set ?? []) wf.setInput(node, field, value);
+  for (const [node, file] of spec.images ?? []) wf.setInput(node, "image", c.assets.fromFile(file));
+
+  const job = await c.run(wf, { timeoutMs: spec.timeoutMs ?? 15 * 60_000 });
+  await mkdir(spec.outDir, { recursive: true });
+  const files: string[] = [];
+  for (const [i, out] of job.getOutputs(spec.output).entries()) {
+    const file = path.join(spec.outDir, `${String(i).padStart(2, "0")}.png`);
+    await out.toFile(file);
+    files.push(file);
+  }
+  return files;
+}

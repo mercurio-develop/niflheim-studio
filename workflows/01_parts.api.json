@@ -1,0 +1,40 @@
+{
+ "1": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": ""
+  }
+ },
+ "2": {
+  "class_type": "SAM2Segment",
+  "inputs": {
+   "image": [
+    "1",
+    0
+   ],
+   "prompt": "jacket",
+   "sam2_model": "sam2.1_hiera_base_plus",
+   "dino_model": "GroundingDINO_SwinT_OGC (694MB)",
+   "device": "Auto"
+  }
+ },
+ "3": {
+  "class_type": "MaskToImage",
+  "inputs": {
+   "mask": [
+    "2",
+    1
+   ]
+  }
+ },
+ "4": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "3",
+    0
+   ],
+   "filename_prefix": "nifl/part"
+  }
+ }
+}
