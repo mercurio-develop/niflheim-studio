@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
-import { FogLoader } from "@/features/wizard/components/fog-loader";
+import { ParticleField } from "@/components/particle-field";
+import { JobStatus } from "@/features/wizard/components/job-status";
 import type { ConceptSet, Job } from "@/lib/store";
 import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -189,12 +190,24 @@ export function ConceptSection(props: {
           </div>
         )}
       </div>
+      {/* While painting: the field fills the page, one status line here, placeholders below.
+          When the set lands, the particles gather onto the new tiles ([data-land]) and burst. */}
+      <ParticleField active={!!running} />
+      {running && props.job && (
+        <JobStatus
+          message={`Painting ${props.count === 1 ? "one" : props.count} ${props.job.detail && props.job.detail !== props.style ? `${label(props.job.detail).toLowerCase()} ` : "new "}concept${props.count === 1 ? "" : "s"}`}
+          startedAt={props.job.startedAt}
+          expected={10 + props.count * 12}
+          onCancel={() => cancel(props.projectId, "concepts")}
+        />
+      )}
       <div className="relative grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {(shown.images.length ? shown.images : Array.from({ length: props.count }, () => "")).map((src, i) =>
+        {(running ? Array.from({ length: props.count }, () => "") : shown.images.length ? shown.images : Array.from({ length: props.count }, () => "")).map((src, i) =>
           src ? (
             <button
               key={src}
               type="button"
+              data-land
               disabled={busy}
               onClick={() =>
                 start(async () => {
@@ -218,17 +231,12 @@ export function ConceptSection(props: {
               </span>
             </button>
           ) : (
-            <div key={i} className="aspect-[7/9] rounded-lg border bg-card/60" />
+            <div
+              key={i}
+              className={cn("aspect-[7/9] rounded-lg border bg-card/30 backdrop-blur-[1px]", running && "animate-pulse border-primary/20")}
+              style={running ? { animationDelay: `${i * 120}ms` } : undefined}
+            />
           ),
-        )}
-        {running && props.job && (
-          <FogLoader
-            className="absolute inset-0 rounded-lg"
-            message={`Painting ${props.count === 1 ? "one" : props.count} ${props.job.detail && props.job.detail !== props.style ? `${label(props.job.detail).toLowerCase()} ` : "new "}concept${props.count === 1 ? "" : "s"}`}
-            startedAt={props.job.startedAt}
-            expected={10 + props.count * 12}
-            onCancel={() => cancel(props.projectId, "concepts")}
-          />
         )}
       </div>
       {props.job?.status === "error" && <p className="text-sm text-destructive">Painting failed: {props.job.error}</p>}
