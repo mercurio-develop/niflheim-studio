@@ -122,17 +122,19 @@ export function TurnaroundStep(props: {
                   <span className="text-xs text-muted-foreground">No parts named yet; pick parts on the Character step.</span>
                 )}
               </div>
-              <HiddenObjects
-                projectId={props.projectId}
-                character={props.character}
-                hide={options.hide}
-                keep={options.keep}
-                parts={props.parts}
-                finding={findingName}
-                disabled={anyRunning}
-                onKeep={(name, on) => setOptions((o) => ({ ...o, keep: on ? [...o.keep, name] : o.keep.filter((x) => x !== name) }))}
-                onUnhide={(name) => setHidden(name, false)}
-              />
+              {ASSETS && (
+                <HiddenObjects
+                  projectId={props.projectId}
+                  character={props.character}
+                  hide={options.hide}
+                  keep={options.keep}
+                  parts={props.parts}
+                  finding={findingName}
+                  disabled={anyRunning}
+                  onKeep={(name, on) => setOptions((o) => ({ ...o, keep: on ? [...o.keep, name] : o.keep.filter((x) => x !== name) }))}
+                  onUnhide={(name) => setHidden(name, false)}
+                />
+              )}
             </div>
 
             <span className="text-xs text-muted-foreground">Extra views</span>
