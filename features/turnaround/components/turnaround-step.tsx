@@ -170,7 +170,10 @@ export function TurnaroundStep(props: {
             <SectionTitle n="2" tone="bg-primary" title="Views" line={props.options ? `Pose: ${props.options.pose === "tpose" ? "T-pose" : "as designed"}${props.options.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}` : "Nothing painted yet."} />
           </div>
           {running && job && <JobStatus message={job.detail ?? "Painting the views"} startedAt={job.startedAt} expected={shown.length * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, "turnaround")} />}
-          {!props.fresh && Object.keys(props.views).length > 0 && (
+          {/* Turnarounds from before views were painted fresh have no options and no front. */}
+          {Object.keys(props.views).length > 0 && (!props.options || !image("front")) ? (
+            <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made with an older version. Generate again to paint every view fresh, the front included, and keep hidden objects as assets.</p>
+          ) : !props.fresh && Object.keys(props.views).length > 0 && (
             <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made from an older version of the character. Generate again to update them.</p>
           )}
           {/* The concept art the views are made from, large on top; every view below is painted new. */}
@@ -196,7 +199,7 @@ export function TurnaroundStep(props: {
                     {img ? (
                       <FadeImage key={img} src={file(img)} alt={`${v.label} view`} className="aspect-[7/9] w-full object-cover" />
                     ) : (
-                      <div className={cn("aspect-[7/9] w-full", running && "motion-safe:animate-pulse")} />
+                      <div className={cn("flex aspect-[7/9] w-full items-center justify-center text-xs text-muted-foreground", running && "motion-safe:animate-pulse")}>{running ? "" : "Not painted yet"}</div>
                     )}
                     {img && !busy && (
                       <button
