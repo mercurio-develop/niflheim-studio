@@ -14,7 +14,11 @@ export type Version = {
   label: string;
   parts: Record<string, string>; // part name -> mask image, for this version
   tags?: string[]; // parts Florence-2 sees in this version
+  parent?: number; // the version this one was made from; Undo goes there
 };
+
+// One "Generate" press: the prompt and style it used and the four images it made.
+export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
 
 export type Project = {
   id: string;
@@ -23,7 +27,8 @@ export type Project = {
     prompt: string;
     style: string; // lib/styles.ts id
     seed: number;
-    concepts: string[];
+    concepts: string[]; // the current set's images
+    sets?: ConceptSet[]; // earlier sets, oldest first; a new set never replaces them
     versions: Version[];
     current: number | null; // index into versions
     doneAt?: string; // the user pressed Next with this version
@@ -68,6 +73,7 @@ function normalize(p: Project): Project {
   c.style ??= "painterly";
   c.seed ??= Math.floor(Math.random() * 2 ** 31);
   c.concepts ??= [];
+  c.sets ??= [];
   c.versions ??= [];
   c.current ??= null;
   p.jobs ??= {};
