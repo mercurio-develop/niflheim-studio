@@ -21,6 +21,7 @@ async function Turnaround({ params }: { params: Promise<{ id: string }> }) {
         character={character}
         characterLabel={version.label}
         tags={version.tags ?? []}
+        parts={version.parts}
         options={t?.options ?? null}
         views={t?.views ?? {}}
         fresh={t?.source === character}

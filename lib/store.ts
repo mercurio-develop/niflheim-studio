@@ -15,9 +15,14 @@ export type Version = {
   parts: Record<string, string>; // part name -> mask image, for this version
   tags?: string[]; // parts Florence-2 sees in this version
   parent?: number; // the version this one was made from; Undo goes there
+  edit?: Edit; // what made it, so the same change can be repeated on other views
 };
+// what: the part ("" = a painted selection); change: what it became, or what was added.
+export type Edit = { kind: "change" | "add" | "remove"; what: string; change?: string };
 
-export type TurnaroundOptions = { pose: "designed" | "tpose"; hide: string[]; extras: ("top" | "bottom")[] };
+// hide: left out of every view; keep: the hidden ones also kept as assets.
+export type TurnaroundOptions = { pose: "designed" | "tpose"; hide: string[]; keep: string[]; extras: ("top" | "bottom")[] };
+export type AssetView = "front" | "threequarter" | "side" | "back";
 export type ViewStack = { versions: Version[]; current: number };
 // A hidden object: its cutout and mask from the character it came off, and its own views once made.
 export type Asset = {
@@ -26,7 +31,7 @@ export type Asset = {
   cutout?: string; // the object with a transparent background (none if it was not found)
   mask: string;
   source: string; // the character image it came off
-  views?: Partial<Record<"front" | "side", string>>;
+  views?: Partial<Record<AssetView, string>>;
 };
 
 // One "Generate" press: the prompt and style it used and the four images it made.
@@ -50,6 +55,7 @@ export type Project = {
   turnaround?: {
     source: string; // the character version image the views were made from
     options: TurnaroundOptions; // what the last Generate used
+    clean?: string; // the source with the hidden objects removed (what the front is painted from)
     views: Partial<Record<ViewId, ViewStack>>; // each view keeps its own versions, like the character
   };
   assets?: Asset[]; // objects hidden from the turnaround, kept to be made on their own later
@@ -95,7 +101,8 @@ function normalize(p: Project): Project {
   p.jobs ??= {};
   const t = p.turnaround as (Project["turnaround"] & { views: Record<string, unknown> }) | undefined;
   if (t) {
-    t.options ??= { pose: "designed", hide: [], extras: [] };
+    t.options ??= { pose: "designed", hide: [], keep: [], extras: [] };
+    t.options.keep ??= [...t.options.hide];
     // Turnarounds made before views had versions stored one image per view.
     for (const [k, v] of Object.entries(t.views)) {
       if (typeof v === "string") t.views[k] = { versions: [{ image: v, label: k, parts: {} }], current: 0 };

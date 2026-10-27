@@ -6,7 +6,7 @@ import { runWorkflow } from "../lib/comfy.ts";
 import { frontPrompt, viewPrompt, viewsFor } from "../lib/progress.ts";
 
 const [image, pose = "tpose", hide = "shield"] = process.argv.slice(2);
-const options = { pose: pose as "tpose" | "designed", hide: hide ? hide.split(",") : [], extras: [] as ("top" | "bottom")[] };
+const options = { pose: pose as "tpose" | "designed", hide: hide ? hide.split(",") : [], keep: [] as string[], extras: [] as ("top" | "bottom")[] };
 const out = path.join(process.cwd(), "data", "proof", `turnaround-${Date.now().toString(36)}`);
 const edit = async (from: string, prompt: string, name: string) => {
   const t0 = performance.now();

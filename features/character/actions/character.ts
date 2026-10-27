@@ -249,7 +249,7 @@ export async function brushEdit(id: string, input: z.input<typeof BrushInput>, r
       if (!(await ctx.alive())) return; // cancelled after ComfyUI had already finished
       let made = 0;
       await updateProject(id, (q) => {
-        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `${mode === "add" ? "+" : "−"} ${thing || "selection"}`, parts: {}, tags: version.tags, parent: at });
+        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `${mode === "add" ? "+" : "−"} ${thing || "selection"}`, parts: {}, tags: version.tags, parent: at, edit: mode === "add" ? { kind: "add", what: "", change: thing } : { kind: "remove", what: thing } });
       });
       await tagVersion(id, made, rel(id, [image])[0], ctx, target);
     },
@@ -291,7 +291,7 @@ export async function repaintSelection(id: string, form: FormData, rawTarget = "
       if (!(await ctx.alive())) return;
       let made = 0;
       await updateProject(id, (q) => {
-        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `${what} → ${change}`, parts: {}, tags: version.tags, parent: at });
+        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `${what} → ${change}`, parts: {}, tags: version.tags, parent: at, edit: { kind: "change", what: what === "selection" ? "" : what, change } });
       });
       await tagVersion(id, made, rel(id, [image])[0], ctx, target);
     },
@@ -341,7 +341,7 @@ export async function removeSelection(id: string, form: FormData, rawTarget = "c
       if (!(await ctx.alive())) return;
       let made = 0;
       await updateProject(id, (q) => {
-        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `− ${what || "selection"}`, parts: {}, tags: version.tags?.filter((t) => t !== what), parent: at });
+        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `− ${what || "selection"}`, parts: {}, tags: version.tags?.filter((t) => t !== what), parent: at, edit: { kind: "remove", what } });
       });
       await tagVersion(id, made, rel(id, [image])[0], ctx, target);
     },

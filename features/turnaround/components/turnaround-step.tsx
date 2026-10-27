@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Maximize2, Pencil, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
@@ -17,7 +17,10 @@ import { stackMoves } from "@/lib/history";
 import { VIEWS, viewsFor } from "@/lib/progress";
 import type { Asset, Job, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { cancelTurnaround, generateTurnaround, generateView, makeAssetViews } from "../actions/turnaround";
+import { cancelTurnaround, findMasks, generateTurnaround, generateView } from "../actions/turnaround";
+import { AssetsShelf } from "./assets-shelf";
+import { HiddenObjects } from "./hidden-objects";
+import { ReplicateBar } from "./replicate-bar";
 
 // Things a character holds or carries come first among the parts you can hide.
 const HELD = /(sword|dagger|axe|spear|staff|wand|bow|shield|gun|lantern|book|umbrella|bag|satchel|backpack|pouch|cape|cloak|helmet|hat|hood|banner|flag)$/;
@@ -29,13 +32,14 @@ export function TurnaroundStep(props: {
   character: string; // current character image
   characterLabel: string;
   tags: string[]; // parts of the current character version
+  parts: Record<string, string>; // their masks, where found
   options: TurnaroundOptions | null; // what the last Generate used
   views: Partial<Record<ViewId, ViewStack>>;
   fresh: boolean; // made from the current character
   assets: Asset[];
   jobs: Record<string, Job>;
 }) {
-  const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: "designed", hide: [], extras: [] });
+  const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: "designed", hide: [], keep: [], extras: [] });
   const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);
   const [editing, setEditing] = useState<ViewId | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +51,7 @@ export function TurnaroundStep(props: {
   const editJobs = (v: ViewId) => Object.fromEntries(EDIT_JOBS.map((k) => [k, props.jobs[`view:${v}:${k}`]]));
   const editBusy = (v: ViewId) => EDIT_JOBS.some((k) => props.jobs[`view:${v}:${k}`]?.status === "running" && k !== "tags");
   const assetJob = (name: string) => props.jobs[`asset:${name.replace(/ /g, "-")}`];
-  const anyRunning = running || VIEWS.some((v) => viewJob(v.id)?.status === "running" || editBusy(v.id) || props.jobs[`view:${v.id}:tags`]?.status === "running") || props.assets.some((a) => assetJob(a.name)?.status === "running");
+  const anyRunning = running || (["hide-masks", "assets", "replicate"] as const).some((k) => props.jobs[k]?.status === "running") || VIEWS.some((v) => viewJob(v.id)?.status === "running" || editBusy(v.id) || props.jobs[`view:${v.id}:tags`]?.status === "running") || props.assets.some((a) => assetJob(a.name)?.status === "running");
   const wanted = viewsFor(options);
   const shown = viewsFor(props.options ?? options);
   const image = (v: ViewId) => {
@@ -59,7 +63,21 @@ export function TurnaroundStep(props: {
   const chips = [...props.tags].sort((a, b) => Number(HELD.test(b)) - Number(HELD.test(a)));
   const fail = (e: Error) => setError(e.message);
 
-  const toggle = <K extends "hide" | "extras">(k: K, v: TurnaroundOptions[K][number]) =>
+  // Find the mask of every hidden object that has none yet, one SAM job at a time, each name once.
+  const finding = props.jobs["hide-masks"]?.status === "running";
+  const asked = useRef(new Set<string>());
+  useEffect(() => {
+    if (finding) return;
+    const missing = options.hide.filter((n) => !Object.hasOwn(props.parts, n) && !asked.current.has(n));
+    if (!missing.length) return;
+    missing.forEach((n) => asked.current.add(n));
+    findMasks(props.projectId, missing).catch((e: Error) => setError(e.message));
+  }, [finding, options.hide, props.parts, props.projectId]);
+  const findingName = finding ? (props.jobs["hide-masks"]?.detail?.replace(/^Finding the /, "") ?? null) : null;
+  const setHidden = (name: string, on: boolean) =>
+    setOptions((o) => ({ ...o, hide: on ? [...o.hide, name] : o.hide.filter((x) => x !== name), keep: on ? [...o.keep, name] : o.keep.filter((x) => x !== name) }));
+
+  const toggle = <K extends "extras">(k: K, v: TurnaroundOptions[K][number]) =>
     setOptions((o) => ({ ...o, [k]: (o[k] as string[]).includes(v) ? (o[k] as string[]).filter((x) => x !== v) : [...(o[k] as string[]), v] }));
   const chip = (on: boolean, tone = "border-primary bg-primary text-primary-foreground") =>
     cn("rounded-full border px-2.5 py-0.5 text-xs transition-colors", on ? tone : "text-muted-foreground hover:border-ring/60 hover:text-foreground");
@@ -95,7 +113,7 @@ export function TurnaroundStep(props: {
               <div className="flex flex-wrap gap-1.5">
                 {chips.length ? (
                   chips.map((t) => (
-                    <button key={t} type="button" aria-pressed={options.hide.includes(t)} onClick={() => toggle("hide", t)} className={chip(options.hide.includes(t), "border-tone-pink bg-tone-pink text-background")}>
+                    <button key={t} type="button" aria-pressed={options.hide.includes(t)} onClick={() => setHidden(t, !options.hide.includes(t))} className={chip(options.hide.includes(t), "border-tone-pink bg-tone-pink text-background")}>
                       {t}
                     </button>
                   ))
@@ -103,7 +121,17 @@ export function TurnaroundStep(props: {
                   <span className="text-xs text-muted-foreground">No parts named yet; pick parts on the Character step.</span>
                 )}
               </div>
-              {options.hide.length > 0 && <span className="text-[11px] text-muted-foreground">Hidden objects are left out of every view and kept as assets.</span>}
+              <HiddenObjects
+                projectId={props.projectId}
+                character={props.character}
+                hide={options.hide}
+                keep={options.keep}
+                parts={props.parts}
+                finding={findingName}
+                disabled={anyRunning}
+                onKeep={(name, on) => setOptions((o) => ({ ...o, keep: on ? [...o.keep, name] : o.keep.filter((x) => x !== name) }))}
+                onUnhide={(name) => setHidden(name, false)}
+              />
             </div>
 
             <span className="text-xs text-muted-foreground">Extra views</span>
@@ -220,44 +248,22 @@ export function TurnaroundStep(props: {
                 style=""
                 jobs={editJobs(editing)}
               />
+              {stack.versions[stack.current].edit && (
+                <ReplicateBar
+                  key={stack.current}
+                  projectId={props.projectId}
+                  from={editing}
+                  edit={stack.versions[stack.current].edit!}
+                  others={shown.filter((v) => v.id !== editing && image(v.id)).map((v) => ({ id: v.id, label: v.label }))}
+                  job={props.jobs.replicate}
+                  locked={editBusy(editing)}
+                />
+              )}
             </div>
           );
         })()}
 
-        {/* Hidden objects, kept to be made on their own later */}
-        {props.assets.length > 0 && (
-          <section className="flex flex-col gap-4">
-            <SectionTitle n="3" tone="bg-tone-pink" title="Assets" line="Objects you hid, kept with their cutout. Make their views when you need them." />
-            <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {props.assets.map((a) => {
-                const j = assetJob(a.name);
-                const busy = j?.status === "running";
-                const pics = [a.cutout ? a.image : null, a.views?.front, a.views?.side].filter((x): x is string => !!x);
-                return (
-                  <li key={a.name} className="flex flex-col gap-2 rounded-xl border bg-card/40 p-2">
-                    <div className="relative grid grid-cols-3 gap-1">
-                      {pics.map((src) => (
-                        <button key={src} type="button" onClick={() => setViewing({ src: file(src), label: a.name })} className="overflow-hidden rounded-md border bg-card">
-                          <FadeImage src={file(src)} alt={a.name} className="aspect-square w-full object-contain" />
-                        </button>
-                      ))}
-                      {busy && j && <FogLoader className="absolute inset-0 rounded-md" compact message={j.detail ?? `Painting the ${a.name}`} startedAt={j.startedAt} expected={2 * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, `asset:${a.name.replace(/ /g, "-")}`)} />}
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm">{a.name}</span>
-                      <Button variant="ghost" size="sm" disabled={busy || anyRunning || pending} onClick={() => start(() => makeAssetViews(props.projectId, a.name).catch(fail))}>
-                        <RefreshCw data-icon="inline-start" />
-                        {a.views ? "Again" : "Make views"}
-                      </Button>
-                    </div>
-                    {!a.cutout && !a.views && <p className="text-xs text-muted-foreground">Not found in the picture; its views are painted from the whole character.</p>}
-                    {j?.status === "error" && <p className="text-xs text-destructive">{j.error}</p>}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
+        <AssetsShelf projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={running} onView={(src, label) => setViewing({ src, label })} />
       </div>
       {viewing && <ImageViewer src={viewing.src} label={viewing.label} onClose={() => setViewing(null)} />}
       <NextBar
