@@ -56,24 +56,28 @@
 }
 
 .dark {
-  --background: oklch(0.13 0.003 285.8);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.16 0.004 285.8);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.16 0.004 285.8);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.92 0.004 286.32);
-  --primary-foreground: oklch(0.21 0.006 285.885);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.22 0.005 286);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.22 0.005 286);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.552 0.016 285.938);
+  /* Ristretto (Omarchy / Monokai Pro): coffee browns, cream text, one peach accent. */
+  --background: #211b1b;
+  --foreground: #e6d9db;
+  --card: #2c2525;
+  --card-foreground: #e6d9db;
+  --popover: #2c2525;
+  --popover-foreground: #e6d9db;
+  --primary: #f38d70;
+  --primary-foreground: #211b1b;
+  --secondary: #3d2f2a;
+  --secondary-foreground: #e6d9db;
+  --muted: #2c2525;
+  --muted-foreground: #a89c9d;
+  --accent: #3d2f2a;
+  --accent-foreground: #e6d9db;
+  --destructive: #fd6883;
+  --border: rgb(230 217 219 / 10%);
+  --input: rgb(230 217 219 / 14%);
+  --ring: rgb(243 141 112 / 60%);
+  --glow: rgb(243 141 112 / 9%);
+  --field: 249 226 210; /* magnet particles, rgb */
+  --field-hot: 243 141 112;
 }
 
 @layer base {
@@ -86,4 +90,48 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
+}
+
+/* NIFL fog: drifting light used behind every "working" state. */
+@keyframes nifl-fog {
+  0% { background-position: 0% 50%, 100% 50%; }
+  50% { background-position: 100% 30%, 0% 70%; }
+  100% { background-position: 0% 50%, 100% 50%; }
+}
+.nifl-fog {
+  background-image:
+    radial-gradient(ellipse 60% 50% at 30% 40%, rgb(249 204 108 / 12%), transparent 70%),
+    radial-gradient(ellipse 50% 60% at 70% 60%, rgb(243 141 112 / 10%), transparent 70%);
+  background-size: 200% 200%, 200% 200%;
+  animation: nifl-fog 6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nifl-fog { animation: none; }
+}
+
+/* Motion: one easing, three durations, shared by every transition in the app. */
+:root {
+  --ease-nifl: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 180ms;
+  --dur-base: 420ms;
+  --dur-slow: 700ms;
+}
+
+/* A section arriving: rise a little, sharpen out of a blur. Stagger with style="--i: n". */
+@keyframes nifl-enter {
+  from { opacity: 0; transform: translateY(8px); filter: blur(6px); }
+}
+.nifl-enter {
+  animation: nifl-enter var(--dur-base) var(--ease-nifl) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* A result condensing out of the fog (new images, new versions). */
+@keyframes nifl-condense {
+  from { opacity: 0; transform: scale(1.03); filter: blur(14px) brightness(1.4); }
+}
+.nifl-condense { animation: nifl-condense var(--dur-slow) var(--ease-nifl) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nifl-enter, .nifl-condense { animation: none; }
 }

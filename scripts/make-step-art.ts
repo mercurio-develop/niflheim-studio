@@ -1,35 +1,40 @@
-// Home page art: one tall painting per wizard step, same world, made with Z-Image Turbo.
-// Run: node --env-file=.env scripts/make-step-art.ts   (then scripts/step-art-webp.py)
+// Home page art: one tall painting per wizard step, one hero across all eight (sketch -> splat),
+// made with Z-Image Turbo through the Comfy SDK. Writes 4 candidates per step to
+// data/step-art/<step>/; the chosen ones are copied to public/steps/ as webp.
+// Run: node --env-file=.env scripts/make-step-art.ts [step ...]
 import path from "node:path";
 import { runWorkflow } from "../lib/comfy.ts";
 
+const HERO = "a young lantern keeper in a hooded deep teal wool coat holding a glowing amber iron lantern";
 const LOOK =
-  "Cinematic painterly concept art, moody volumetric fog, teal and amber colour palette, glowing lantern light, rich saturated colours, dramatic lighting, high detail, no text, no letters, no watermark.";
+  "Cinematic concept art, striking composition, strong silhouette, volumetric fog, teal and amber palette with one vivid accent, dramatic rim light, rich saturated colour, highly detailed, no text, no letters, no watermark, no frame.";
 
-const ART: [string, string][] = [
-  ["01-character", "A concept art sheet on a drafting table: several sketches of a young lantern keeper in a hooded wool coat, pencil lines and watercolour, one finished colourful painting of the character in the middle."],
-  ["02-turnaround", "A character turnaround lineup of the same hooded lantern keeper shown four times side by side: front view, three-quarter view, side view and back view, on a misty grey studio floor."],
-  ["03-set", "A misty nordic fishing village at dusk, wooden houses on stilts over dark water, lanterns glowing in windows, mountains fading into fog, wide establishing painting."],
-  ["04-style", "The same misty village repainted in a bold Japanese ukiyo-e woodblock style, great stylised waves, flat vivid colour blocks, paint swatches and brush strokes spilling across the image."],
-  ["05-stage", "A holographic 3D stage of a misty village made of glowing points and wireframe, a small hooded figure standing on a grid floor, a translucent camera frustum aiming at the figure, dark void around it."],
-  ["06-vfx", "Swirling embers, sparks and drifting rain in thick fog at night around a hooded figure raising a lantern, magic particles spiralling upward, strong orange glow against deep teal darkness."],
-  ["07-shot", "A cinematic anamorphic film still: a hooded lantern keeper raises a glowing lantern on a foggy pier at night, shallow depth of field, lens flare, dramatic rim light, movie frame."],
-  ["08-export", "A village and a hooded figure dissolving into millions of glowing coloured gaussian splat particles floating in space, holographic point cloud, film strip frames and light trails."],
-];
+const ART: Record<string, string> = {
+  "01-character": `An artist's desk seen from above: loose pencil sketches of ${HERO}, and in the centre one finished, vividly coloured painting of the character, brushes and ink around it.`,
+  "02-turnaround": `A character turnaround of ${HERO}: the same figure four times in a row, front view, three-quarter view, side view and back view, standing on a glowing floor line in a misty studio.`,
+  "03-set": `A breathtaking misty nordic fishing village at dusk, wooden houses on stilts over dark mirror water, warm windows, towering mountains dissolving into fog, tiny ${HERO} on the pier.`,
+  "04-style": `The same hooded lantern keeper painted four times side by side in four different art styles: anime cel shading, loose watercolour, pixel art and comic ink, each a vertical strip, colourful.`,
+  "05-stage": `A dark void with a glowing holographic 3D stage of a village made of luminous points and wireframe, ${HERO} standing on a grid floor, a translucent camera frustum and dotted camera path circling the figure.`,
+  "06-vfx": `${HERO} at night in thick fog, raising the lantern as a storm of embers and sparks spirals upward around them, rain streaks, glowing magic particles, intense orange light against deep teal darkness.`,
+  "07-shot": `A widescreen cinematic film still from behind: ${HERO} walks down a foggy wooden pier toward a distant lighthouse at night, anamorphic lens flare, shallow depth of field, film grain, letterbox framing.`,
+  "08-export": `${HERO} and the village around them dissolving into millions of glowing coloured gaussian splat particles floating in a dark void, holographic point cloud, light trails orbiting the figure.`,
+};
 
-for (const [name, prompt] of ART) {
+const only = process.argv.slice(2);
+for (const [name, prompt] of Object.entries(ART)) {
+  if (only.length && !only.includes(name)) continue;
   const t0 = performance.now();
-  const [file] = await runWorkflow({
+  const files = await runWorkflow({
     workflow: "01_concept.api.json",
     set: [
       ["5", "text", `${prompt} ${LOOK}`],
       ["7", "width", 768],
       ["7", "height", 1344],
-      ["7", "batch_size", 1],
-      ["8", "seed", 1234],
+      ["7", "batch_size", 4],
+      ["8", "seed", 2026],
     ],
     output: "10",
     outDir: path.join(process.cwd(), "data", "step-art", name),
   });
-  console.log(name, ((performance.now() - t0) / 1000).toFixed(1) + "s", file);
+  console.log(name, ((performance.now() - t0) / 1000).toFixed(1) + "s", files.length);
 }

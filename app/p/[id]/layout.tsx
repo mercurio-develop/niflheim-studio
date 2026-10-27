@@ -11,7 +11,7 @@ export default function ProjectLayout({ children, params }: LayoutProps<"/p/[id]
     <div className="relative flex min-h-svh flex-col">
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[28rem] bg-[radial-gradient(ellipse_60%_100%_at_50%_0%,oklch(1_0_0/7%),transparent)]"
+        className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[28rem] bg-[radial-gradient(ellipse_60%_100%_at_50%_0%,var(--glow),transparent)]"
       />
       <Suspense fallback={<div className="h-12 border-b" />}>
         <Header params={params} />

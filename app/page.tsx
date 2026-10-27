@@ -9,7 +9,7 @@ export default function Home() {
     <div className="relative flex min-h-svh flex-col">
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[36rem] bg-[radial-gradient(ellipse_60%_100%_at_50%_0%,oklch(1_0_0/8%),transparent)]"
+        className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[36rem] bg-[radial-gradient(ellipse_60%_100%_at_50%_0%,var(--glow),transparent)]"
       />
       <header className="sticky top-0 z-10 border-b bg-background/70 backdrop-blur-md">
         <div className="mx-auto flex h-12 max-w-5xl items-center gap-6 px-4">

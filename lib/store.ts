@@ -5,12 +5,15 @@ import { randomBytes } from "node:crypto";
 // Projects live on disk: data/projects/<id>/project.json, step results beside it.
 // Image paths in a project are relative to its folder and served by /api/files/<id>/<path>.
 
-export type Job = { status: "running" | "done" | "error"; startedAt: string; error?: string };
+export type Job = { status: "running" | "done" | "error" | "cancelled"; startedAt: string; error?: string; comfyId?: string };
+
+export type ViewId = "threequarter" | "side" | "back";
 
 export type Version = {
   image: string;
   label: string;
   parts: Record<string, string>; // part name -> mask image, for this version
+  tags?: string[]; // parts Florence-2 sees in this version
 };
 
 export type Project = {
@@ -18,10 +21,16 @@ export type Project = {
   createdAt: string;
   character: {
     prompt: string;
+    style: string; // lib/styles.ts id
     seed: number;
     concepts: string[];
     versions: Version[];
     current: number | null; // index into versions
+    doneAt?: string; // the user pressed Next with this version
+  };
+  turnaround?: {
+    source: string; // the character version image the views were made from
+    views: Partial<Record<ViewId, string>>;
   };
   jobs: Record<string, Job>;
 };
@@ -36,7 +45,7 @@ export async function createProject(prompt: string): Promise<Project> {
   const project: Project = {
     id: randomBytes(5).toString("hex"),
     createdAt: new Date().toISOString(),
-    character: { prompt, seed: Math.floor(Math.random() * 2 ** 31), concepts: [], versions: [], current: null },
+    character: { prompt, style: "painterly", seed: Math.floor(Math.random() * 2 ** 31), concepts: [], versions: [], current: null },
     jobs: {},
   };
   await mkdir(projectDir(project.id), { recursive: true });
