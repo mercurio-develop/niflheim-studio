@@ -1,18 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ChevronLeft, ChevronRight, ImageUp, PenLine, RefreshCw, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
-import { LoadingDots } from "@/components/loading-dots";
 import { ParticleField } from "@/components/particle-field";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import type { ConceptSet, Job } from "@/lib/store";
 import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { cancel, clearReference, generateConcepts, pickConcept, setReference } from "../actions/character";
-import { SketchPad } from "./sketch-pad";
+import { Composer, type ComposerValues } from "./composer";
 
 const label = (id: string) => STYLES.find((s) => s.id === id)?.label ?? id;
 
@@ -49,10 +47,6 @@ export function ConceptSection(props: {
   job?: Job;
 }) {
   const [open, setOpen] = useState(!props.hasVersion);
-  const [prompt, setPrompt] = useState(props.prompt);
-  const [style, setStyle] = useState(props.style);
-  const [count, setCount] = useState(props.count);
-  const [sketching, setSketching] = useState(false);
   const perImage = props.reference ? 22 : 12; // seconds: a sketch is one Qwen edit per concept
   const [viewing, setViewing] = useState<number | null>(null); // index into sets; null = the current set
   const [error, setError] = useState<string | null>(null);
@@ -69,11 +63,11 @@ export function ConceptSection(props: {
   const shownIndex = viewing === null ? all.length - 1 : viewing;
   const shown = all[shownIndex];
 
-  const generate = () => {
+  const generate = (v: ComposerValues) => {
     setError(null);
     start(async () => {
       try {
-        await generateConcepts(props.projectId, { prompt: prompt.trim(), style, count, reseed: true });
+        await generateConcepts(props.projectId, { ...v, reseed: true });
         setViewing(null);
       } catch (e) {
         setError((e as Error).message);
@@ -110,125 +104,22 @@ export function ConceptSection(props: {
           </Button>
         )}
       </div>
-      {/* Composer */}
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          generate();
+      <Composer
+        key={`${props.style}:${props.prompt}:${props.count}`}
+        id="concept-prompt"
+        defaults={{ prompt: props.prompt, style: props.style, count: props.count }}
+        reference={props.reference ? file(props.reference) : null}
+        onReference={(image) => {
+          const form = new FormData();
+          form.set("image", image);
+          start(() => setReference(props.projectId, form).catch((err: Error) => setError(err.message)));
         }}
-      >
-        <label htmlFor="concept-prompt" className="sr-only">
-          Describe your character
-        </label>
-        <Textarea
-          id="concept-prompt"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={2}
-          className="resize-none text-base"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) e.currentTarget.form?.requestSubmit();
-          }}
-        />
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-xs text-muted-foreground">Style</span>
-          {STYLES.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              aria-pressed={style === s.id}
-              onClick={() => setStyle(s.id)}
-              className={cn(
-                "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
-                style === s.id ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
-              )}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-xs text-muted-foreground">Reference</span>
-          {props.reference ? (
-            <span className="flex items-center gap-2 rounded-lg border bg-card/60 p-1 pr-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={file(props.reference)} alt="Your reference" className="h-12 w-[37px] rounded-md border bg-white object-cover" />
-              <span className="text-xs">Concepts follow this sketch</span>
-              <button
-                type="button"
-                aria-label="Remove the reference"
-                disabled={busy}
-                onClick={() => start(() => clearReference(props.projectId))}
-                className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3.5" />
-              </button>
-            </span>
-          ) : (
-            <span className="text-xs text-muted-foreground">optional</span>
-          )}
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setSketching(true)}>
-            <PenLine data-icon="inline-start" />
-            {props.reference ? "New sketch" : "Draw a sketch"}
-          </Button>
-          <label className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-card hover:text-foreground", busy && "pointer-events-none opacity-50")}>
-            <ImageUp className="size-3.5" />
-            Upload
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="sr-only"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (!f) return;
-                const form = new FormData();
-                form.set("image", f);
-                start(() => setReference(props.projectId, form).catch((err: Error) => setError(err.message)));
-              }}
-            />
-          </label>
-        </div>
-        {sketching && (
-          <SketchPad
-            onClose={() => setSketching(false)}
-            onDone={(png) => {
-              setSketching(false);
-              const form = new FormData();
-              form.set("image", new File([png], "sketch.png", { type: "image/png" }));
-              start(() => setReference(props.projectId, form).catch((err: Error) => setError(err.message)));
-            }}
-          />
-        )}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5" role="radiogroup" aria-label="How many concepts">
-            <span className="mr-1 text-xs text-muted-foreground">How many</span>
-            {[1, 2, 4, 6].map((n) => (
-              <button
-                key={n}
-                type="button"
-                role="radio"
-                aria-checked={count === n}
-                onClick={() => setCount(n)}
-                className={cn(
-                  "min-w-8 rounded-full border px-2.5 py-0.5 font-mono text-xs transition-colors",
-                  count === n ? "border-tone-yellow bg-tone-yellow text-background" : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
-                )}
-              >
-                {n}
-              </button>
-            ))}
-            <span className="ml-1 font-mono text-[11px] text-muted-foreground">~{Math.max(1, Math.round((10 + count * perImage) / 10) * 10)} s</span>
-          </div>
-          <Button type="submit" size="lg" className="ml-auto" disabled={busy || prompt.trim().length < 3}>
-            {pending && !running ? <LoadingDots /> : null}
-            Generate
-          </Button>
-        </div>
-        <p className="-mt-1 text-right text-[11px] text-muted-foreground">Earlier sets are kept.</p>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </form>
+        onClearReference={() => start(() => clearReference(props.projectId))}
+        onGenerate={generate}
+        busy={busy}
+        pending={pending && !running}
+        error={error}
+      />
 
       {/* Results */}
       <div className="flex items-end gap-3">
@@ -254,7 +145,7 @@ export function ConceptSection(props: {
         <JobStatus
           message={`Painting ${props.count === 1 ? "one" : props.count} ${props.job.detail && props.job.detail !== props.style ? `${label(props.job.detail).toLowerCase()} ` : "new "}concept${props.count === 1 ? "" : "s"}${props.reference ? " from your sketch" : ""}`}
           startedAt={props.job.startedAt}
-          expected={10 + props.count * 12}
+          expected={10 + props.count * perImage}
           onCancel={() => cancel(props.projectId, "concepts")}
         />
       )}
