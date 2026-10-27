@@ -68,6 +68,7 @@
 
 .dark {
   /* Ristretto (Omarchy / Monokai Pro): coffee browns, cream text, one peach accent. */
+  color-scheme: dark; /* native scrollbars, form controls and pickers follow the dark theme */
   --background: #211b1b;
   --foreground: #e6d9db;
   --card: #2c2525;
@@ -172,3 +173,12 @@
 .nifl-scroll::-webkit-scrollbar-track { background: transparent; }
 .nifl-scroll::-webkit-scrollbar-thumb { background: rgb(230 217 219 / 18%); border-radius: 999px; }
 .nifl-scroll:hover::-webkit-scrollbar-thumb { background: rgb(243 141 112 / 45%); }
+
+/* Every scrollbar in the app (the page's too) uses the theme, not the browser's grey. */
+html {
+  scrollbar-color: rgb(230 217 219 / 20%) var(--background);
+}
+html::-webkit-scrollbar { width: 10px; height: 10px; }
+html::-webkit-scrollbar-track { background: var(--background); }
+html::-webkit-scrollbar-thumb { background: rgb(230 217 219 / 16%); border-radius: 999px; border: 2px solid var(--background); }
+html::-webkit-scrollbar-thumb:hover { background: rgb(243 141 112 / 50%); }

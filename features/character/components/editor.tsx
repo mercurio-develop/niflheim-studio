@@ -17,7 +17,7 @@ import { SectionTitle } from "./concept-section";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
 
 const FALLBACK = ["hair", "face", "coat", "pants", "boots"];
-type Tool = "part" | "paint" | "unpaint"; // the rail: only ways to make the selection
+type Tool = "part" | "paint"; // the rail: the two ways to make the selection
 type Action = "change" | "add" | "remove" | "restyle"; // the Do block: what happens to it
 
 const ACTIONS: { id: Action; label: string; verb: string; dot: string }[] = [
@@ -43,6 +43,7 @@ export function Editor(props: {
   const [edited, setEdited] = useState(false); // the selection is no longer exactly the part's mask
   const [box, setBox] = useState<Box | null>(null);
   const [size, setSize] = useState(48);
+  const [paintMode, setPaintMode] = useState<"add" | "erase">("add");
   const [action, setAction] = useState<Action>("change");
   const [text, setText] = useState("");
   const [style, setStyle] = useState(props.style);
@@ -85,6 +86,11 @@ export function Editor(props: {
   // Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z walk the history, except while typing.
   const onKey = useCallback(
     (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement).closest("input, textarea");
+      if (!typing && !e.metaKey && !e.ctrlKey && e.key.toLowerCase() === "x") {
+        setPaintMode((m) => (m === "add" ? "erase" : "add"));
+        return;
+      }
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
       if ((e.target as HTMLElement).closest("input, textarea")) return;
       e.preventDefault();
@@ -155,13 +161,12 @@ export function Editor(props: {
   const loader = running && props.jobs[running];
   const rail: [Tool, string, typeof Brush, string][] = [
     ["part", "Part", ScanSearch, "Select a part by name"],
-    ["paint", "Paint +", Brush, "Paint to select more"],
-    ["unpaint", "Paint −", Eraser, "Paint to select less"],
+    ["paint", "Paint", Brush, "Paint the selection (X switches add / erase)"],
   ];
 
   return (
     <section className="flex flex-col gap-3">
-      <SectionTitle n="2" tone="bg-primary" title="Edit" line="Select on the left, then choose what happens on the right." />
+      <SectionTitle n="2" tone="bg-primary" title="Edit" line="Pick a tool on the left, set it above the image, choose what happens on the right." />
       {/* Top bar: history and compare */}
       <div className="flex flex-wrap items-center gap-1.5">
         <Button variant="ghost" size="sm" disabled={busy || props.moves.undo === null} onClick={() => act(() => undo(props.projectId))} title="Undo (Ctrl/⌘ Z)">
@@ -216,6 +221,124 @@ export function Editor(props: {
 
         {/* Canvas */}
         <div className="flex flex-col gap-3">
+          {/* Tool options for the active tool, plus the selection's status (Photoshop's options bar) */}
+          {action !== "restyle" && (
+            <div className="flex flex-col gap-2 rounded-xl bg-card/50 p-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+                  <span className={cn("size-2 shrink-0 rounded-full", box ? "bg-primary" : "border border-muted-foreground")} />
+                  {running === "mask" ? (
+                    <span className="flex items-center gap-2">
+                      Finding the {part} <LoadingDots className="text-primary" />
+                    </span>
+                  ) : box ? (
+                    <span className="truncate">{named ? `Selected: the ${named}` : part ? `Selected: the ${part}, edited by paint` : "Selected: a painted area"}</span>
+                  ) : (
+                    <span className="text-muted-foreground">{tool === "part" ? "Pick a part to select it" : "Paint over what you want to select"}</span>
+                  )}
+                </p>
+                {box && !named && (
+                  <Button variant="ghost" size="sm" disabled={busy} onClick={() => setSaving(!saving)}>
+                    Save as part
+                  </Button>
+                )}
+                {box && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Clear selection"
+                    title="Clear selection"
+                    onClick={() => {
+                      selection.current?.clear();
+                      setPart(null);
+                      setSaving(false);
+                    }}
+                  >
+                    <X />
+                  </Button>
+                )}
+              </div>
+              {saving && box && (
+                <form
+                  className="flex gap-1.5"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    saveAsPart();
+                  }}
+                >
+                  <Input autoFocus aria-label="Part name" value={partName} onChange={(e) => setPartName(e.target.value)} placeholder="Name it, e.g. scarf" />
+                  <Button type="submit" variant="outline" disabled={busy || partName.trim().length < 2}>
+                    Save
+                  </Button>
+                </form>
+              )}
+              {tool === "part" ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {tagging ? (
+                    <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                      Naming the parts <LoadingDots className="text-primary" />
+                    </span>
+                  ) : (
+                    chips.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => choosePart(name)}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-sm transition-colors disabled:opacity-50",
+                          part === name ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
+                        )}
+                      >
+                        {name}
+                        {running === "mask" && part === name && <LoadingDots />}
+                      </button>
+                    ))
+                  )}
+                  <form
+                    className="flex items-center gap-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (custom.trim()) choosePart(custom.trim().toLowerCase());
+                      setCustom("");
+                    }}
+                  >
+                    <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="other part…" aria-label="Find another part" className="h-7 w-32" />
+                    <Button type="submit" variant="ghost" size="icon-sm" disabled={busy || !custom.trim()} aria-label="Find part">
+                      <Search />
+                    </Button>
+                  </form>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex gap-0.5 rounded-lg bg-background/60 p-0.5" role="radiogroup" aria-label="Paint mode">
+                    {(["add", "erase"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={paintMode === m}
+                        onClick={() => setPaintMode(m)}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm transition-colors",
+                          paintMode === m ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {m === "add" ? <Brush className="size-3.5" /> : <Eraser className="size-3.5" />}
+                        {m === "add" ? "Add" : "Erase"}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="flex min-w-40 flex-1 items-center gap-2 text-xs text-muted-foreground">
+                    Size
+                    <input type="range" min={8} max={200} value={size} onChange={(e) => setSize(Number(e.target.value))} className="flex-1 accent-primary" />
+                    <span className="w-8 font-mono">{size}</span>
+                  </label>
+                  <span className="font-mono text-[11px] text-muted-foreground">X switches</span>
+                </div>
+              )}
+            </div>
+          )}
           <div className="relative mx-auto aspect-[7/9] w-full max-w-[min(100%,calc(70svh*7/9))] overflow-hidden rounded-xl border bg-card">
             <FadeImage key={props.version.image} src={file(props.version.image)} alt={props.version.label} className="absolute inset-0 h-full w-full object-cover" />
             {!running && (
@@ -226,7 +349,7 @@ export function Editor(props: {
                   ref={selection}
                   src={file(props.version.image)}
                   baseMask={baseMask}
-                  tool={action === "restyle" ? null : tool === "paint" ? "add" : tool === "unpaint" ? "erase" : null}
+                  tool={action === "restyle" || tool !== "paint" ? null : paintMode}
                   size={size}
                   onChange={setBox}
                   onPaint={() => setEdited(true)}
@@ -254,111 +377,8 @@ export function Editor(props: {
           )}
         </div>
 
-        {/* Right: what is selected, then what to do */}
+        {/* Right: only what to do with the selection */}
         <div className="flex flex-col gap-5">
-          {action !== "restyle" && (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold">Selection</h2>
-                {box && (
-                  <div className="flex items-center gap-1">
-                    {!named && (
-                      <Button variant="ghost" size="sm" disabled={busy} onClick={() => setSaving(!saving)}>
-                        Save as part
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Clear selection"
-                      title="Clear selection"
-                      onClick={() => {
-                        selection.current?.clear();
-                        setPart(null);
-                        setSaving(false);
-                      }}
-                    >
-                      <X />
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <p className="flex items-center gap-2 text-sm">
-                <span className={cn("size-2 shrink-0 rounded-full", box ? "bg-primary" : "border border-muted-foreground")} />
-                {running === "mask" ? (
-                  <span className="flex items-center gap-2">
-                    Finding the {part} <LoadingDots className="text-primary" />
-                  </span>
-                ) : box ? (
-                  named ? `The ${named}` : part ? `The ${part}, edited by paint` : "A painted area"
-                ) : (
-                  <span className="text-muted-foreground">Nothing selected yet</span>
-                )}
-              </p>
-              {saving && box && (
-                <form
-                  className="flex gap-1.5"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    saveAsPart();
-                  }}
-                >
-                  <Input autoFocus aria-label="Part name" value={partName} onChange={(e) => setPartName(e.target.value)} placeholder="Name it, e.g. scarf" />
-                  <Button type="submit" variant="outline" disabled={busy || partName.trim().length < 2}>
-                    Save
-                  </Button>
-                </form>
-              )}
-
-              {tool === "part" ? (
-                <>
-                  {tagging ? (
-                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                      Naming the parts <LoadingDots className="text-primary" />
-                    </p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {chips.map((name) => (
-                        <button
-                          key={name}
-                          type="button"
-                          disabled={busy}
-                          onClick={() => choosePart(name)}
-                          className={cn(
-                            "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors disabled:opacity-50",
-                            part === name ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
-                          )}
-                        >
-                          {name}
-                          {running === "mask" && part === name && <LoadingDots />}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <form
-                    className="flex gap-1.5"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (custom.trim()) choosePart(custom.trim().toLowerCase());
-                      setCustom("");
-                    }}
-                  >
-                    <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Another part, e.g. scarf" aria-label="Find another part" />
-                    <Button type="submit" variant="outline" size="icon" disabled={busy || !custom.trim()} aria-label="Find part">
-                      <Search />
-                    </Button>
-                  </form>
-                </>
-              ) : (
-                <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                  Size
-                  <input type="range" min={8} max={200} value={size} onChange={(e) => setSize(Number(e.target.value))} className="flex-1 accent-primary" />
-                  <span className="w-8 font-mono">{size}</span>
-                </label>
-              )}
-            </div>
-          )}
-
           {/* Do: one action, one input, one button named by the verb */}
           <form
             className="flex flex-col gap-2.5 rounded-xl border bg-card/70 p-2.5"

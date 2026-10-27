@@ -76,7 +76,7 @@ export function VersionsSidebar(props: { projectId: string; versions: Version[];
       {props.versions.length === 0 ? (
         open && <p className="text-sm text-muted-foreground">Every pick and edit lands here. You can always go back.</p>
       ) : (
-        <ol className={cn("nifl-scroll flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto", open ? "lg:pr-1" : "lg:items-center")}>
+        <ol className={cn("nifl-scroll flex gap-2 overflow-x-auto pb-1 lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto", open ? "lg:pr-1" : "lg:items-center")}>
           {order.map(([v, i]) => {
             const kind = versionKind(v);
             const chosen = picked.includes(i);
