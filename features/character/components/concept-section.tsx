@@ -38,6 +38,7 @@ export function ConceptSection(props: {
   prompt: string;
   style: string;
   seed: number;
+  count: number;
   concepts: string[];
   sets: ConceptSet[];
   pickedImage: string | null;
@@ -47,6 +48,7 @@ export function ConceptSection(props: {
   const [open, setOpen] = useState(!props.hasVersion);
   const [prompt, setPrompt] = useState(props.prompt);
   const [style, setStyle] = useState(props.style);
+  const [count, setCount] = useState(props.count);
   const [viewing, setViewing] = useState<number | null>(null); // index into sets; null = the current set
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -61,13 +63,12 @@ export function ConceptSection(props: {
   ];
   const shownIndex = viewing === null ? all.length - 1 : viewing;
   const shown = all[shownIndex];
-  const changed = prompt.trim() !== props.prompt || style !== props.style;
 
   const generate = () => {
     setError(null);
     start(async () => {
       try {
-        await generateConcepts(props.projectId, { prompt: prompt.trim(), style, reseed: true });
+        await generateConcepts(props.projectId, { prompt: prompt.trim(), style, count, reseed: true });
         setViewing(null);
       } catch (e) {
         setError((e as Error).message);
@@ -96,7 +97,7 @@ export function ConceptSection(props: {
   return (
     <section className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-3">
-        <SectionTitle n="1" tone="bg-tone-yellow" title="Describe" line="Who are they, and what look? You get four concepts in about a minute." />
+        <SectionTitle n="1" tone="bg-tone-yellow" title="Describe" line="Who are they, and what look? Choose how many concepts to paint." />
         {props.hasVersion && !running && (
           <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} aria-label="Close and keep editing">
             <X data-icon="inline-start" />
@@ -142,13 +143,32 @@ export function ConceptSection(props: {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" size="lg" disabled={busy || prompt.trim().length < 3}>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5" role="radiogroup" aria-label="How many concepts">
+            <span className="mr-1 text-xs text-muted-foreground">How many</span>
+            {[1, 2, 4, 6].map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={count === n}
+                onClick={() => setCount(n)}
+                className={cn(
+                  "min-w-8 rounded-full border px-2.5 py-0.5 font-mono text-xs transition-colors",
+                  count === n ? "border-tone-yellow bg-tone-yellow text-background" : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
+                )}
+              >
+                {n}
+              </button>
+            ))}
+            <span className="ml-1 font-mono text-[11px] text-muted-foreground">~{Math.max(1, Math.round((10 + count * 12) / 10) * 10)} s</span>
+          </div>
+          <Button type="submit" size="lg" className="ml-auto" disabled={busy || prompt.trim().length < 3}>
             {pending && !running ? <LoadingDots /> : null}
-            {changed ? "Generate 4 concepts" : "Generate 4 more"}
+            Generate
           </Button>
-          <span className="text-xs text-muted-foreground">Earlier sets are kept.</span>
         </div>
+        <p className="-mt-1 text-right text-[11px] text-muted-foreground">Earlier sets are kept.</p>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </form>
 
@@ -170,7 +190,7 @@ export function ConceptSection(props: {
         )}
       </div>
       <div className="relative grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {(shown.images.length ? shown.images : ["", "", "", ""]).map((src, i) =>
+        {(shown.images.length ? shown.images : Array.from({ length: props.count }, () => "")).map((src, i) =>
           src ? (
             <button
               key={src}
@@ -204,9 +224,9 @@ export function ConceptSection(props: {
         {running && props.job && (
           <FogLoader
             className="absolute inset-0 rounded-lg"
-            message={props.job.detail && props.job.detail !== props.style ? `Painting four ${label(props.job.detail).toLowerCase()} concepts` : "Painting four new concepts"}
+            message={`Painting ${props.count === 1 ? "one" : props.count} ${props.job.detail && props.job.detail !== props.style ? `${label(props.job.detail).toLowerCase()} ` : "new "}concept${props.count === 1 ? "" : "s"}`}
             startedAt={props.job.startedAt}
-            expected={60}
+            expected={10 + props.count * 12}
             onCancel={() => cancel(props.projectId, "concepts")}
           />
         )}

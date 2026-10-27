@@ -36,8 +36,13 @@ const StyleId = z.enum(STYLES.map((s) => s.id) as [string, ...string[]]);
 
 const Prompt = z.string().trim().min(3, "Describe your character in a few words.").max(600);
 
-export async function generateConcepts(id: string, options: { reseed?: boolean; style?: string; prompt?: string } = {}) {
+// 6 at 896x1152 still fits the 16 GB card next to Z-Image Turbo int8; 8 does not reliably.
+const Count = z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(6)]);
+
+export async function generateConcepts(id: string, options: { reseed?: boolean; style?: string; prompt?: string; count?: number } = {}) {
   const p = await load(id);
+  const count = options.count !== undefined ? Count.parse(options.count) : (p.character.count ?? 4);
+  if (count !== p.character.count) await updateProject(id, (q) => void (q.character.count = count));
   const style = options.style ? StyleId.parse(options.style) : p.character.style;
   const prompt = options.prompt !== undefined ? Prompt.parse(options.prompt) : p.character.prompt;
   const seed = options.reseed || options.style || options.prompt !== undefined ? newSeed() : p.character.seed;
@@ -45,7 +50,7 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
     const files = await runWorkflow({
       onSubmit: track,
       workflow: "01_concept.api.json",
-      set: [["5", "text", conceptPrompt(prompt, style)], ["8", "seed", seed]],
+      set: [["5", "text", conceptPrompt(prompt, style)], ["8", "seed", seed], ["7", "batch_size", count]],
       output: "10",
       outDir: abs(id, `character/concepts/${seed}`),
     });
