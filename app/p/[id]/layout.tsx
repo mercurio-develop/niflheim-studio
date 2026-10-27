@@ -2,8 +2,8 @@ import { Suspense } from "react";
 import { ProjectHeader } from "@/features/wizard/components/project-header";
 
 async function Header({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  return <ProjectHeader projectId={id} />;
+  await params;
+  return <ProjectHeader />;
 }
 
 export default function ProjectLayout({ children, params }: LayoutProps<"/p/[id]">) {

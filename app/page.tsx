@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import Link from "next/link";
+import { Wordmark } from "@/components/wordmark";
 import { ComfyStatus } from "@/features/home/components/comfy-status";
 import { Pipeline } from "@/features/home/components/pipeline";
 import { StartForm } from "@/features/home/components/start-form";
@@ -13,13 +13,9 @@ export default function Home() {
       />
       <header className="sticky top-0 z-10 border-b bg-background/70 backdrop-blur-md">
         <div className="mx-auto flex h-12 max-w-5xl items-center gap-6 px-4">
-          <Link href="/" className="flex items-baseline gap-0.5 text-sm tracking-tight">
-            <span className="font-semibold">NIFL</span>
-            <span className="text-muted-foreground">heim</span>
-            <span className="ml-1.5 text-muted-foreground">Studio</span>
-          </Link>
+          <Wordmark />
           <div className="ml-auto flex items-center gap-5">
-            <Suspense fallback={<span className="font-mono text-xs text-muted-foreground">comfy ...</span>}>
+            <Suspense fallback={null}>
               <ComfyStatus />
             </Suspense>
             <a
@@ -34,7 +30,8 @@ export default function Home() {
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center gap-16 px-4 pt-24 pb-16">
         <section className="flex w-full flex-col items-center gap-6 text-center">
-          <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance sm:text-6xl">
+          {/* One line across the column on desktop; wraps on phones. */}
+          <h1 className="w-full text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-[4.55rem] lg:leading-none lg:tracking-tighter lg:whitespace-nowrap">
             Direct a shot from a single idea.
           </h1>
           <p className="max-w-xl text-balance text-muted-foreground">
@@ -51,10 +48,9 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t">
-        <div className="mx-auto flex h-12 max-w-5xl items-center justify-between px-4 font-mono text-xs text-muted-foreground">
-          <span>open weights · one 16 GB GPU · Comfy SDK</span>
-          <span>MIT</span>
+      <footer>
+        <div className="mx-auto flex max-w-5xl items-center justify-center px-4 py-8 text-xs text-muted-foreground">
+          <span>Open source · MIT</span>
         </div>
       </footer>
     </div>

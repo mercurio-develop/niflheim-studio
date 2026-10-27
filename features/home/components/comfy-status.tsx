@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { cn } from "@/lib/utils";
 
-// Filled dot = the Comfy API proxy answers; hollow = it does not. Words, not colours.
+// The ComfyUI mark with a live dot: green when the Comfy API proxy answers, hollow when not.
 export async function ComfyStatus() {
   await connection();
   const base = process.env.COMFY_BASE_URL ?? "http://127.0.0.1:8189";
@@ -11,9 +11,17 @@ export async function ComfyStatus() {
     up = res.ok;
   } catch {}
   return (
-    <span className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
-      <span className={cn("size-1.5 rounded-full border border-foreground", up && "bg-foreground")} />
-      {up ? "comfy online" : "comfy offline"}
+    <span
+      className="flex items-center gap-2 rounded-full border px-2 py-1 text-xs text-muted-foreground"
+      title={up ? "ComfyUI is online" : "ComfyUI is offline"}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/comfy-logo.svg" alt="ComfyUI" className={cn("size-4 rounded-[4px]", !up && "opacity-50 grayscale")} />
+      <span className="relative flex size-2">
+        {up && <span className="absolute inset-0 animate-ping rounded-full bg-tone-green/60 [animation-duration:2.4s]" />}
+        <span className={cn("relative size-2 rounded-full", up ? "bg-tone-green" : "border border-muted-foreground")} />
+      </span>
+      <span className={up ? "text-tone-green" : ""}>{up ? "online" : "offline"}</span>
     </span>
   );
 }
