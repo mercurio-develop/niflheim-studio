@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Composer } from "@/features/character/components/composer";
+import { Composer } from "@/components/composer";
 import { startCharacter } from "../actions/start-character";
 
 const EXAMPLES = [

@@ -41,10 +41,10 @@ const swap = await runWorkflow({
 lap("swap", swap);
 
 const angle = await runWorkflow({
-  workflow: "01_angle.api.json",
-  set: [["17", "prompt", "Rotate the camera 90 degrees to the left."], ["22", "seed", 7]],
+  workflow: "01_edit.api.json",
+  set: [["17", "prompt", "Turn the character to face left, showing a full-body left side profile view. Same character, same outfit, same proportions, standing upright, same plain grey background."], ["22", "seed", 7]],
   images: [["1", swap[0]]],
   output: "28",
-  outDir: out("angle-90l"),
+  outDir: out("side"),
 });
-lap("angle", angle);
+lap("side view", angle);

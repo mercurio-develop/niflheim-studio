@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { Wordmark } from "@/components/wordmark";
-import { ComfyStatus } from "@/features/home/components/comfy-status";
+import { ComfyStatus } from "@/features/wizard/components/comfy-status";
 import { Pipeline } from "@/features/home/components/pipeline";
 import { StartForm } from "@/features/home/components/start-form";
 

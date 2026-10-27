@@ -15,7 +15,7 @@ import { STYLES, styleById } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { KIND_DOT, versionKind } from "@/lib/versions";
 import { brushEdit, cancel, maskPart, redo, removeSelection, repaintSelection, restyleCurrent, savePart, undo } from "../actions/character";
-import { SectionTitle } from "./concept-section";
+import { SectionTitle } from "@/components/section-title";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
 
 const FALLBACK = ["hair", "face", "coat", "pants", "boots"];
@@ -88,13 +88,13 @@ export function Editor(props: {
   // Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z walk the history, except while typing.
   const onKey = useCallback(
     (e: KeyboardEvent) => {
-      const typing = (e.target as HTMLElement).closest("input, textarea");
-      if (!typing && !e.metaKey && !e.ctrlKey && e.key.toLowerCase() === "x") {
+      // Not while typing, and not behind a dialog that has its own keys (sketch pad, viewer, compare).
+      if (e.defaultPrevented || (e.target as HTMLElement).closest("input, textarea") || document.querySelector('[role="dialog"][aria-modal]')) return;
+      if (!e.metaKey && !e.ctrlKey && e.key.toLowerCase() === "x") {
         setPaintMode((m) => (m === "add" ? "erase" : "add"));
         return;
       }
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
-      if ((e.target as HTMLElement).closest("input, textarea")) return;
       e.preventDefault();
       if (busy) return;
       if (e.shiftKey && props.moves.redo !== null) act(() => redo(props.projectId));

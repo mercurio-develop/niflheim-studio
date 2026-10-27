@@ -13,5 +13,5 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app ./
-EXPOSE 3000
+EXPOSE 4800
 CMD ["npm", "start"]

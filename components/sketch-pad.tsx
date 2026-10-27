@@ -27,7 +27,7 @@ export function SketchPad(props: { onDone: (png: Blob) => void; onClose: () => v
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undoKey.current(); }
-      if (e.key.toLowerCase() === "e") setTool((t) => (t === "pen" ? "eraser" : "pen"));
+      if (e.key.toLowerCase() === "e" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setTool((t) => (t === "pen" ? "eraser" : "pen")); }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);

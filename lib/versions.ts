@@ -19,11 +19,3 @@ export const KIND_DOT: Record<VersionKind, string> = {
   remove: "bg-tone-pink",
   restyle: "bg-tone-lilac",
 };
-
-export const KIND_LABEL: Record<VersionKind, string> = {
-  concept: "concept",
-  change: "change",
-  add: "add",
-  remove: "remove",
-  restyle: "restyle",
-};

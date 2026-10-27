@@ -6,7 +6,7 @@ import { CompareView } from "@/components/compare-view";
 import { FadeImage } from "@/components/fade-image";
 import type { Version } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { KIND_DOT, KIND_LABEL, versionKind } from "@/lib/versions";
+import { KIND_DOT, versionKind } from "@/lib/versions";
 import { selectVersion } from "../actions/character";
 
 // Every pick and edit, newest first, coloured by what made it. Click one to carry on from it,
@@ -16,6 +16,7 @@ export function VersionsSidebar(props: { projectId: string; versions: Version[];
   const [comparing, setComparing] = useState(false);
   const [picked, setPicked] = useState<number[]>([]);
   const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const order = props.versions.map((v, i) => [v, i] as const).reverse();
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const side = (i: number) => {
@@ -24,7 +25,7 @@ export function VersionsSidebar(props: { projectId: string; versions: Version[];
   };
 
   const click = (i: number) => {
-    if (!comparing) return start(() => selectVersion(props.projectId, i));
+    if (!comparing) return start(() => selectVersion(props.projectId, i).catch((e: Error) => setError(e.message)));
     setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i].slice(-2)));
   };
 
@@ -73,6 +74,7 @@ export function VersionsSidebar(props: { projectId: string; versions: Version[];
           {picked.length === 0 ? "Pick two versions to compare." : picked.length === 1 ? "Now pick the second one." : "Opening..."}
         </p>
       )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
       {props.versions.length === 0 ? (
         open && <p className="text-sm text-muted-foreground">Every pick and edit lands here. You can always go back.</p>
       ) : (
@@ -105,7 +107,7 @@ export function VersionsSidebar(props: { projectId: string; versions: Version[];
                   {open && (
                     <span className="flex min-w-0 flex-col gap-0.5">
                       <span className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
-                        <span className={cn("size-1.5 rounded-full", KIND_DOT[kind])} />v{i + 1} · {KIND_LABEL[kind]}
+                        <span className={cn("size-1.5 rounded-full", KIND_DOT[kind])} />v{i + 1} · {kind}
                         {i === props.current ? " · now" : ""}
                       </span>
                       <span className="line-clamp-2 text-xs">{v.label.replace(/^Style: /, "")}</span>

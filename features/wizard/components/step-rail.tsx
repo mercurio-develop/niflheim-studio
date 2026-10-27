@@ -31,7 +31,7 @@ export function StepRail(props: { projectId: string; active: StepSlug; states: P
               )}
             >
               {state === "done" ? <Check className="size-4" strokeWidth={3} /> : <span className="font-mono">{s.n}</span>}
-              {current && <span className="absolute -inset-0.5 animate-ping rounded-full border border-primary/40 [animation-duration:2.4s]" />}
+              {current && <span className="absolute -inset-0.5 motion-safe:animate-ping rounded-full border border-primary/40 [animation-duration:2.4s]" />}
             </span>
           );
           const label = (

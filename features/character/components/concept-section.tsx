@@ -10,29 +10,11 @@ import type { ConceptSet, Job } from "@/lib/store";
 import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { cancel, clearReference, generateConcepts, pickConcept, setReference } from "../actions/character";
-import { Composer, type ComposerValues } from "./composer";
+import { Composer, type ComposerValues } from "@/components/composer";
+import { SectionTitle } from "@/components/section-title";
 
 const label = (id: string) => STYLES.find((s) => s.id === id)?.label ?? id;
 
-// A numbered section heading with its colour dot and one short line.
-export function SectionTitle(props: { n: string; tone: string; title: string; line?: string }) {
-  return (
-    <div className="flex min-w-0 items-start gap-2.5">
-      {props.n ? (
-        <span className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-xs font-semibold text-background ${props.tone}`}>{props.n}</span>
-      ) : (
-        <span className={`mt-2 ml-2 size-2 shrink-0 rounded-full ${props.tone}`} />
-      )}
-      <div className="min-w-0">
-        <h2 className="text-base font-semibold leading-6">{props.title}</h2>
-        {props.line && <p className="truncate text-sm text-muted-foreground">{props.line}</p>}
-      </div>
-    </div>
-  );
-}
-
-// Generate: one composer (prompt + style), one primary button. Earlier sets stay browsable;
-// after a pick the section folds to a thumbnail strip with "New concepts".
 export function ConceptSection(props: {
   projectId: string;
   prompt: string;
@@ -114,7 +96,7 @@ export function ConceptSection(props: {
           form.set("image", image);
           start(() => setReference(props.projectId, form).catch((err: Error) => setError(err.message)));
         }}
-        onClearReference={() => start(() => clearReference(props.projectId))}
+        onClearReference={() => start(() => clearReference(props.projectId).catch((err: Error) => setError(err.message)))}
         onGenerate={generate}
         busy={busy}
         pending={pending && !running}
@@ -159,8 +141,12 @@ export function ConceptSection(props: {
               disabled={busy}
               onClick={() =>
                 start(async () => {
-                  await pickConcept(props.projectId, i, shown.at ?? undefined);
-                  setOpen(false);
+                  try {
+                    await pickConcept(props.projectId, i, shown.at ?? undefined);
+                    setOpen(false);
+                  } catch (err) {
+                    setError((err as Error).message);
+                  }
                 })
               }
               className={cn(
@@ -181,7 +167,7 @@ export function ConceptSection(props: {
           ) : (
             <div
               key={i}
-              className={cn("aspect-[7/9] rounded-lg border bg-card/30 backdrop-blur-[1px]", running && "animate-pulse border-primary/20")}
+              className={cn("aspect-[7/9] rounded-lg border bg-card/30 backdrop-blur-[1px]", running && "motion-safe:animate-pulse border-primary/20")}
               style={running ? { animationDelay: `${i * 120}ms` } : undefined}
             />
           ),

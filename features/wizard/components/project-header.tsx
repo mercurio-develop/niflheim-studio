@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { Wordmark } from "@/components/wordmark";
-import { ComfyStatus } from "@/features/home/components/comfy-status";
+import { ComfyStatus } from "@/features/wizard/components/comfy-status";
 
 export function ProjectHeader() {
   return (

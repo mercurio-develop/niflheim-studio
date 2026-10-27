@@ -28,7 +28,7 @@ export function JobStatus(props: { message: string; startedAt: string; expected:
           disabled={cancelling}
           onClick={() => {
             setCancelling(true);
-            void props.onCancel?.();
+            Promise.resolve(props.onCancel?.()).catch(() => setCancelling(false));
           }}
           className="rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-ring/60 hover:text-foreground disabled:opacity-50"
         >

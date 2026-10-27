@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { LoadingDots } from "@/components/loading-dots";
 import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import { SketchPad } from "./sketch-pad";
+import { SketchPad } from "@/components/sketch-pad";
 
 export type ComposerValues = { prompt: string; style: string; count: number };
 

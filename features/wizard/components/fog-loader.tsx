@@ -41,7 +41,7 @@ export function FogLoader(props: {
           disabled={cancelling}
           onClick={() => {
             setCancelling(true);
-            void props.onCancel?.();
+            Promise.resolve(props.onCancel?.()).catch(() => setCancelling(false));
           }}
           className="mt-1 rounded-full border border-foreground/25 bg-background/60 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-foreground/60 hover:text-foreground disabled:opacity-50"
         >

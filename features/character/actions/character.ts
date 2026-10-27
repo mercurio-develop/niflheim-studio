@@ -8,9 +8,11 @@ import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { redirect } from "next/navigation";
 import { cropBox, pngSize } from "@/lib/brush";
+import { parentOf } from "@/lib/history";
 import { mergeParts, partsFromTags } from "@/lib/parts";
 import { getProject, projectDir, updateProject, type Project } from "@/lib/store";
-import { STYLES, styleById } from "@/lib/styles";
+import { styleById } from "@/lib/styles";
+import { Count, Index, Prompt, REFERENCE_TYPES, StyleId, referenceError } from "../schemas";
 
 const rel = (id: string, files: string[]) => files.map((f) => path.relative(projectDir(id), f));
 const abs = (id: string, file: string) => path.join(projectDir(id), file);
@@ -35,17 +37,12 @@ const sketchPrompt = (prompt: string, style: string) =>
 const conceptPrompt = (prompt: string, style: string) =>
   `Full-body character concept art of ${prompt}. Standing, neutral pose, front view, whole figure in frame, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
 
-const StyleId = z.enum(STYLES.map((s) => s.id) as [string, ...string[]]);
 
-const Prompt = z.string().trim().min(3, "Describe your character in a few words.").max(600);
 
-// 6 at 896x1152 still fits the 16 GB card next to Z-Image Turbo int8; 8 does not reliably.
-const Count = z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(6)]);
 
 export async function generateConcepts(id: string, options: { reseed?: boolean; style?: string; prompt?: string; count?: number } = {}) {
   const p = await load(id);
   const count = options.count !== undefined ? Count.parse(options.count) : (p.character.count ?? 4);
-  if (count !== p.character.count) await updateProject(id, (q) => void (q.character.count = count));
   const style = options.style ? StyleId.parse(options.style) : p.character.style;
   const prompt = options.prompt !== undefined ? Prompt.parse(options.prompt) : p.character.prompt;
   const seed = options.reseed || options.style || options.prompt !== undefined ? newSeed() : p.character.seed;
@@ -58,7 +55,7 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
       for (let i = 0; i < count; i++) {
         const [f] = await runWorkflow({
           onSubmit: track,
-          workflow: "01_sketch.api.json",
+          workflow: "01_edit.api.json",
           set: [["17", "prompt", sketchPrompt(prompt, style)], ["22", "seed", seed + i]],
           images: [["1", abs(id, reference)]],
           output: "28",
@@ -76,6 +73,7 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
         outDir: abs(id, `character/concepts/${seed}`),
       });
     }
+    if (!(await alive())) return; // cancelled after ComfyUI had already finished
     await updateProject(id, (q) => {
       const c = q.character;
       // The set on screen moves to the history; nothing the user saw is thrown away.
@@ -86,15 +84,16 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
       c.concepts = rel(id, files);
     });
   }, style);
+  if (count !== p.character.count) await updateProject(id, (q) => void (q.character.count = count));
   done(id);
 }
 
-const REFERENCE_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 
 // A drawn sketch or an uploaded image; later concepts follow its pose and silhouette.
 export async function setReference(id: string, form: FormData) {
   const image = form.get("image");
-  if (!(image instanceof File) || !REFERENCE_TYPES[image.type] || image.size > 12_000_000) throw new Error("Use a PNG, JPG or WebP image under 12 MB.");
+  const bad = referenceError(image);
+  if (bad || !(image instanceof File)) throw new Error(bad ?? "The image did not come through.");
   await load(id);
   const file = abs(id, `character/reference/${stamp()}.${REFERENCE_TYPES[image.type]}`);
   await mkdir(path.dirname(file), { recursive: true });
@@ -126,7 +125,9 @@ async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx) {
 }
 
 // set: index into character.sets for an earlier set; omitted = the set on screen.
-export async function pickConcept(id: string, index: number, set?: number) {
+export async function pickConcept(id: string, rawIndex: number, rawSet?: number) {
+  const index = Index.parse(rawIndex);
+  const set = rawSet === undefined ? undefined : Index.parse(rawSet);
   const p = await updateProject(id, (q) => {
     const images = set === undefined ? q.character.concepts : q.character.sets?.[set]?.images;
     const image = images?.[index];
@@ -145,7 +146,8 @@ export async function pickConcept(id: string, index: number, set?: number) {
   done(id);
 }
 
-export async function selectVersion(id: string, index: number) {
+export async function selectVersion(id: string, rawIndex: number) {
+  const index = Index.parse(rawIndex);
   await updateProject(id, (p) => {
     if (!p.character.versions[index]) throw new Error("No such version.");
     p.character.current = index;
@@ -160,7 +162,7 @@ export async function maskPart(id: string, rawPart: string) {
   const p = await load(id);
   const at = p.character.current;
   const version = currentVersion(p);
-  if (version.parts[part]) return;
+  if (Object.hasOwn(version.parts, part)) return;
   await startJob(id, "mask", async ({ track, alive }) => {
     const [mask] = await runWorkflow({
       onSubmit: track,
@@ -174,38 +176,6 @@ export async function maskPart(id: string, rawPart: string) {
     await updateProject(id, (q) => {
       q.character.versions[at!].parts[part] = rel(id, [mask])[0];
     });
-  });
-  done(id);
-}
-
-const SwapInput = z.object({
-  part: Part,
-  change: z.string().trim().min(3, "Say what it should become.").max(300),
-});
-
-export async function swapPart(id: string, input: { part: string; change: string }) {
-  const { part, change } = SwapInput.parse(input);
-  const p = await load(id);
-  const at = p.character.current!;
-  const version = currentVersion(p);
-  const mask = version.parts[part];
-  if (!mask) throw new Error(`Find the ${part} first.`);
-  const prompt = `Change only the ${part} into ${change}. Keep the face, pose, every other part and the background exactly the same.`;
-  await startJob(id, "swap", async (ctx) => {
-    const [image] = await runWorkflow({
-      onSubmit: ctx.track,
-      workflow: "01_swap.api.json",
-      set: [["17", "prompt", prompt], ["22", "seed", newSeed()]],
-      images: [["1", abs(id, version.image)], ["2", abs(id, mask)]],
-      output: "28",
-      outDir: abs(id, `character/swaps/${stamp()}`),
-    });
-    if (!(await ctx.alive())) return; // cancelled after ComfyUI had already finished
-    const q = await updateProject(id, (q) => {
-      q.character.versions.push({ image: rel(id, [image])[0], label: `${part} → ${change}`, parts: {}, tags: version.tags, parent: at });
-      q.character.current = q.character.versions.length - 1;
-    });
-    await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
   });
   done(id);
 }
@@ -305,7 +275,9 @@ export async function repaintSelection(id: string, form: FormData) {
 // fills what was behind it, and only the selection's pixels are pasted back (01_remove).
 export async function removeSelection(id: string, form: FormData) {
   const what = z.string().trim().max(40).parse(form.get("what") ?? "");
-  const strokes = BrushInput.shape.strokes.parse(JSON.parse(String(form.get("box") ?? "null")));
+  let box0: unknown = null;
+  try { box0 = JSON.parse(String(form.get("box") ?? "null")); } catch {}
+  const strokes = BrushInput.shape.strokes.parse(box0);
   const mask = form.get("mask");
   if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
   const p = await load(id);
@@ -379,11 +351,10 @@ export async function restyleCurrent(id: string, rawStyle: string) {
     async (ctx) => {
       const [image] = await runWorkflow({
         onSubmit: ctx.track,
-        workflow: "01_angle.api.json", // plain Qwen edit (the angles LoRA is switched off below)
+        workflow: "01_edit.api.json",
         set: [
           ["17", "prompt", `Repaint this exact character as ${style.phrase}. Keep the same design, outfit, colours, proportions, pose and the plain background.`],
           ["22", "seed", newSeed()],
-          ["9", "strength_model", 0],
         ],
         images: [["1", abs(id, version.image)]],
         output: "28",
@@ -401,13 +372,6 @@ export async function restyleCurrent(id: string, rawStyle: string) {
 }
 
 // Undo goes to the version this one was made from; Redo to the newest version made from this one.
-function parentOf(p: Project, i: number): number | null {
-  const v = p.character.versions[i];
-  if (v?.parent !== undefined) return v.parent;
-  if (!v || v.label.startsWith("Concept")) return null;
-  return i > 0 ? i - 1 : null; // versions from before parents were recorded
-}
-
 export async function undo(id: string) {
   await updateProject(id, (p) => {
     const to = p.character.current === null ? null : parentOf(p, p.character.current);

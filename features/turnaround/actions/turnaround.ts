@@ -18,15 +18,16 @@ export async function generateView(id: string, rawView: string) {
   const source = p && characterImage(p);
   if (!source) throw new Error("Finish the character first.");
   const spec = VIEWS.find((v) => v.id === view)!;
-  await startJob(id, `view:${view}`, async ({ track }) => {
+  await startJob(id, `view:${view}`, async ({ track, alive }) => {
     const [image] = await runWorkflow({
-      workflow: "01_angle.api.json",
+      workflow: "01_edit.api.json",
       onSubmit: track,
-      set: [["17", "prompt", spec.prompt], ["22", "seed", Math.floor(Math.random() * 2 ** 31)], ["9", "strength_model", 0]],
+      set: [["17", "prompt", spec.prompt], ["22", "seed", Math.floor(Math.random() * 2 ** 31)]],
       images: [["1", path.join(projectDir(id), source)]],
       output: "28",
       outDir: path.join(projectDir(id), "turnaround", `${view}-${Date.now().toString(36)}`),
     });
+    if (!(await alive())) return; // cancelled after ComfyUI had already finished
     await updateProject(id, (q) => {
       // Views made from a different character are thrown away: the turnaround is one character.
       if (q.turnaround?.source !== source) q.turnaround = { source, views: {} };

@@ -48,3 +48,14 @@ export async function cancelComfyJob(comfyJobId: string) {
   const job = await comfy().jobs.get(comfyJobId);
   await job.cancel();
 }
+
+// Is the Comfy API v2 surface answering? For the status badge; never throws.
+export async function comfyHealth(): Promise<boolean> {
+  const base = process.env.COMFY_BASE_URL ?? "http://127.0.0.1:8189";
+  try {
+    const res = await fetch(`${base}/api/v2/health`, { signal: AbortSignal.timeout(1500), cache: "no-store" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

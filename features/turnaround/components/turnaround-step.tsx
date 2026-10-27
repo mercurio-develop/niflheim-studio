@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
@@ -21,6 +21,8 @@ export function TurnaroundStep(props: {
   jobs: Record<string, Job>;
 }) {
   const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const fail = (e: Error) => setError(e.message);
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const job = (v: ViewId) => props.jobs[`view:${v}`];
   const running = VIEWS.some((v) => job(v.id)?.status === "running");
@@ -32,7 +34,7 @@ export function TurnaroundStep(props: {
   useEffect(() => {
     if (kicked.current || complete || running) return;
     kicked.current = true;
-    start(() => generateMissingViews(props.projectId));
+    start(() => generateMissingViews(props.projectId).catch(fail));
   }, [complete, running, props.projectId]);
 
   const cards: { id: ViewId | "front"; label: string; image?: string }[] = [
@@ -57,6 +59,7 @@ export function TurnaroundStep(props: {
           )}
         </div>
 
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <ol className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {cards.map((c, i) => {
             const j = c.id === "front" ? undefined : job(c.id);
@@ -87,7 +90,7 @@ export function TurnaroundStep(props: {
                       variant="ghost"
                       size="sm"
                       disabled={busy || pending}
-                      onClick={() => start(() => generateView(props.projectId, c.id))}
+                      onClick={() => start(() => generateView(props.projectId, c.id).catch(fail))}
                     >
                       <RefreshCw data-icon="inline-start" />
                       {c.image ? "Again" : "Make"}
