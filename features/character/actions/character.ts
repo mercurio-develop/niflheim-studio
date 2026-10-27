@@ -56,10 +56,12 @@ function currentVersion(s: Stack) {
 }
 
 const sketchPrompt = (prompt: string, style: string) =>
-  `Turn this sketch into finished full-body character concept art of ${prompt}. Keep the pose, proportions and silhouette of the sketch. Plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
+  `Turn this sketch into finished full-body character concept art of ${prompt}. Keep the pose, proportions and silhouette of the sketch. A face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
 
+// "A face with eyes, nose and mouth": flat styles (pixel art, low poly) otherwise often leave the
+// face blank (2026-10-27, a pixel-art elf).
 const conceptPrompt = (prompt: string, style: string) =>
-  `Full-body character concept art of ${prompt}. Standing, neutral pose, front view, whole figure in frame, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
+  `Full-body character concept art of ${prompt}. Standing, neutral pose, front view, whole figure in frame, a face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
 
 
 
@@ -257,11 +259,25 @@ async function finish(r: Run, image: string, v: Omit<Version, "image" | "parts" 
 // drawn whole where you painted and is not cut at its edges. "Placeholder ... no grey left" stops a
 // grey ring staying around it (2026-10-27, a skull in a hand). Edits made before there was a mask
 // fall back to the whole-crop paste (01_brush).
-const addPrompt = (thing: string) =>
-  `The flat grey shape is a placeholder: replace all of it. Paint ${thing} inside it, whole and sized to fill most of it, nothing cut off; the rest of the grey becomes what is around it, continuing the background and the character. No grey left. Same art style, lighting and colours as the rest of the picture; everything outside the shape stays exactly the same.`;
+const addPrompt = (thing: string, about: string) =>
+  `${about} The flat grey shape is a placeholder: replace all of it. Paint ${thing} inside it, whole and sized to fill most of it, nothing cut off; the rest of the grey becomes what is around it, continuing the background and the character. No grey left. Same art style, lighting and colours as the rest of the picture; ${keepFace(thing)}everything outside the shape stays exactly the same.`;
+
+// Add and Change edit a close-up crop, so Qwen does not see the whole character: it is told what
+// the picture is and to keep to the picture's own look, or it paints in its own (2026-10-27: a face
+// added to a flat, blocky pixel-art elf came back as a smooth, detailed cartoon face). The style
+// chip is not named: the picture is what counts, and the chip can disagree with the prompt
+// ("pixal art lady elf" made with Painterly).
+async function about(id: string) {
+  const c = (await load(id)).character;
+  return `This is a close-up of a character: ${c.prompt}, ${styleById(c.style).phrase}. Match this picture's own art style exactly: the same shapes, level of detail, line work, shading and palette, nothing more detailed or realistic than the rest of it.`;
+}
+// The face stays (eyes, nose, mouth), unless the edit is about the face itself.
+const FACE = /\b(face|head|eyes?|nose|mouth|lips|expression|glasses|mask|makeup|beard)\b/i;
+const keepFace = (...words: string[]) => (FACE.test(words.join(" ")) ? "" : "the face keeps its eyes, nose and mouth exactly as they are; ");
 
 async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
   const source = abs(r.id, r.version.image);
+  const picture = await about(r.id);
   const outDir = abs(r.id, `${dirOf(r.target)}/brush/${stamp()}`);
   let image: string;
   if (mask) {
@@ -270,7 +286,7 @@ async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
     [image] = await runWorkflow({
       workflow: "01_fill.api.json",
       onSubmit: r.ctx.track,
-      set: [["17", "prompt", addPrompt(thing)], ["22", "seed", newSeed()], ...crop("4"), ...crop("5"), ["27", "x", box.x], ["27", "y", box.y]],
+      set: [["17", "prompt", addPrompt(thing, picture)], ["22", "seed", newSeed()], ...crop("4"), ...crop("5"), ["27", "x", box.x], ["27", "y", box.y]],
       images: [["1", source], ["2", abs(r.id, mask)]],
       output: "28",
       outDir,
@@ -281,7 +297,7 @@ async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
       workflow: "01_brush.api.json",
       onSubmit: r.ctx.track,
       set: [
-        ["17", "prompt", `Add ${thing}. Draw all of it, small enough to fit inside this picture. Keep everything else exactly the same size, position, art style and lighting.`],
+        ["17", "prompt", `${picture} Add ${thing}. Draw all of it, small enough to fit inside this picture, in the same art style; ${keepFace(thing)}everything else keeps exactly the same size, position, art style and lighting.`],
         ["22", "seed", newSeed()],
         ["4", "x", box.x], ["4", "y", box.y], ["4", "width", box.width], ["4", "height", box.height],
         ["27", "x", box.x], ["27", "y", box.y],
@@ -300,10 +316,11 @@ async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
 // parts (hands, a buckle) really change, and the selection plus a soft 40 px margin is pasted back,
 // so the new part is not cut flat at the selection's edge (2026-10-27, hands on a front view).
 async function runChange(r: Run, what: string, change: string, mask: string) {
-  const prompt =
+  const ask =
     what === "selection"
-      ? `Change the highlighted area into ${change}, drawn whole and attached naturally. Keep the face, pose, everything else and the background exactly the same.`
-      : `Change only the ${what} into ${change}, drawn whole. Keep the face, pose, every other part and the background exactly the same.`;
+      ? `Change the highlighted area into ${change}, drawn whole and attached naturally, in the same art style.`
+      : `Change only the ${what} into ${change}, drawn whole, in the same art style.`;
+  const prompt = `${await about(r.id)} ${ask} The pose stays; ${keepFace(what, change)}${what === "selection" ? "everything else" : "every other part"} and the background stay exactly the same.`;
   const source = abs(r.id, r.version.image);
   const strokes = await maskBox(abs(r.id, mask));
   if (!strokes) throw new Error("The selection is empty; paint or pick a part first.");
