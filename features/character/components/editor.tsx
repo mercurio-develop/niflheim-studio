@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ArrowRight, Brush, Eraser, Redo2, ScanSearch, Search, SplitSquareHorizontal, Undo2, X } from "lucide-react";
+import { ArrowRight, Brush, CirclePlus, Eraser, Palette, Redo2, Replace, ScanSearch, Search, SplitSquareHorizontal, Trash2, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
@@ -17,19 +18,18 @@ import { SectionTitle } from "./concept-section";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
 
 const FALLBACK = ["hair", "face", "coat", "pants", "boots"];
-type Tool = "part" | "paint"; // the rail: the two ways to make the selection
-type Action = "change" | "add" | "remove" | "restyle"; // the Do block: what happens to it
+type Tool = "part" | "paint" | "restyle"; // the rail: two ways to select, and Restyle (whole image)
+type Action = "change" | "add" | "remove"; // what happens to the selection
 
-const ACTIONS: { id: Action; label: string; verb: string; dot: string }[] = [
-  { id: "change", label: "Change", verb: "Change", dot: "bg-primary" },
-  { id: "add", label: "Add object", verb: "Add", dot: "bg-tone-green" },
-  { id: "remove", label: "Remove", verb: "Remove", dot: "bg-tone-pink" },
-  { id: "restyle", label: "Restyle", verb: "Restyle", dot: "bg-tone-lilac" },
+const ACTIONS: { id: Action; label: string; verb: string; icon: typeof Replace; tone: string }[] = [
+  { id: "change", label: "Change", verb: "Change", icon: Replace, tone: "text-primary" },
+  { id: "add", label: "Add object", verb: "Add", icon: CirclePlus, tone: "text-tone-green" },
+  { id: "remove", label: "Remove", verb: "Remove", icon: Trash2, tone: "text-tone-pink" },
 ];
 
-// Edit the chosen character like Generative Fill. Left rail: make the selection (a found part,
-// paint more, paint less). Right: what is selected, then what to do with it. Restyle needs no
-// selection: it repaints the whole character.
+// Edit the chosen character like Generative Fill. Left rail: the tool (Part or Paint make the
+// selection; Restyle repaints the whole character). Above the image: that tool's options.
+// Right: what happens (Change / Add object / Remove the selection, or Restyle).
 export function Editor(props: {
   projectId: string;
   version: Version;
@@ -107,7 +107,7 @@ export function Editor(props: {
 
   // Why the Do button is off, said once; null = ready.
   const blocked =
-    action === "restyle"
+    tool === "restyle"
       ? null
       : !box
         ? `Select something to ${current.verb.toLowerCase()}`
@@ -129,7 +129,7 @@ export function Editor(props: {
   const submit = () => {
     if (blocked) return;
     act(async () => {
-      if (action === "restyle") return restyleCurrent(props.projectId, style);
+      if (tool === "restyle") return restyleCurrent(props.projectId, style);
       if (action === "add") return brushEdit(props.projectId, { mode: "add", thing: text, strokes: box! }).then(() => setText(""));
       const form = await selectionForm();
       if (action === "remove") {
@@ -162,11 +162,12 @@ export function Editor(props: {
   const rail: [Tool, string, typeof Brush, string][] = [
     ["part", "Part", ScanSearch, "Select a part by name"],
     ["paint", "Paint", Brush, "Paint the selection (X switches add / erase)"],
+    ["restyle", "Restyle", Palette, "Repaint the whole character in another style"],
   ];
 
   return (
     <section className="flex flex-col gap-3">
-      <SectionTitle n="2" tone="bg-primary" title="Edit" line="Pick a tool on the left, set it above the image, choose what happens on the right." />
+      <SectionTitle n="2" tone="bg-primary" title="Edit" line="Pick a tool on the left, set it above the image, then act on the right." />
       {/* Top bar: history and compare */}
       <div className="flex flex-wrap items-center gap-1.5">
         <Button variant="ghost" size="sm" disabled={busy || props.moves.undo === null} onClick={() => act(() => undo(props.projectId))} title="Undo (Ctrl/⌘ Z)">
@@ -197,20 +198,17 @@ export function Editor(props: {
 
       <div className="grid gap-4 md:grid-cols-[auto_minmax(0,1fr)_18rem]">
         {/* Rail: selection tools only */}
-        <div role="toolbar" aria-label="Selection tools" aria-orientation="vertical" className="flex gap-1 md:flex-col">
+        <div role="toolbar" aria-label="Tools" aria-orientation="vertical" className="flex gap-1 md:flex-col">
           {rail.map(([id, label, Icon, hint]) => (
             <button
               key={id}
               type="button"
               title={hint}
-              onClick={() => {
-                setTool(id);
-                if (action === "restyle") setAction("change");
-              }}
-              aria-pressed={tool === id && action !== "restyle"}
+              onClick={() => setTool(id)}
+              aria-pressed={tool === id}
               className={cn(
                 "flex min-h-11 min-w-14 flex-col items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] transition-colors",
-                tool === id && action !== "restyle" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-card hover:text-foreground",
+                tool === id ? (id === "restyle" ? "bg-tone-lilac text-background" : "bg-primary text-primary-foreground") : "text-muted-foreground hover:bg-card hover:text-foreground",
               )}
             >
               <Icon className="size-4" />
@@ -222,7 +220,28 @@ export function Editor(props: {
         {/* Canvas */}
         <div className="flex flex-col gap-3">
           {/* Tool options for the active tool, plus the selection's status (Photoshop's options bar) */}
-          {action !== "restyle" && (
+          {tool === "restyle" ? (
+            <div className="flex flex-col gap-2 rounded-xl bg-card/50 p-2.5">
+              <p className="text-sm text-muted-foreground">Pick a style for the whole character. Same design and pose.</p>
+              <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Style">
+                {STYLES.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={style === s.id}
+                    onClick={() => setStyle(s.id)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-0.5 text-sm transition-colors",
+                      style === s.id ? "border-tone-lilac bg-tone-lilac text-background" : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
+                    )}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
             <div className="flex flex-col gap-2 rounded-xl bg-card/50 p-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="flex min-w-0 flex-1 items-center gap-2 text-sm">
@@ -343,13 +362,13 @@ export function Editor(props: {
             <FadeImage key={props.version.image} src={file(props.version.image)} alt={props.version.label} className="absolute inset-0 h-full w-full object-cover" />
             {!running && (
               // Hidden, not unmounted, while Restyle is chosen, so the selection survives the switch.
-              <div className={cn("absolute inset-0", action === "restyle" && "invisible")}>
+              <div className={cn("absolute inset-0", tool === "restyle" && "invisible")}>
                 <SelectionCanvas
                   key={`${props.version.image}:${baseMask ?? ""}`}
                   ref={selection}
                   src={file(props.version.image)}
                   baseMask={baseMask}
-                  tool={action === "restyle" || tool !== "paint" ? null : paintMode}
+                  tool={tool === "paint" ? paintMode : null}
                   size={size}
                   onChange={setBox}
                   onPaint={() => setEdited(true)}
@@ -379,78 +398,102 @@ export function Editor(props: {
 
         {/* Right: only what to do with the selection */}
         <div className="flex flex-col gap-5">
-          {/* Do: one action, one input, one button named by the verb */}
-          <form
-            className="flex flex-col gap-2.5 rounded-xl border bg-card/70 p-2.5"
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit();
-            }}
-          >
-            <div role="tablist" aria-label="What to do" className="grid grid-cols-2 gap-0.5 rounded-lg bg-background/60 p-0.5">
-              {ACTIONS.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={action === a.id}
-                  onClick={() => setAction(a.id)}
-                  className={cn(
-                    "flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors",
-                    action === a.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <span className={cn("size-1.5 rounded-full", a.dot)} />
-                  {a.label}
-                </button>
-              ))}
-            </div>
-
-            {action === "restyle" ? (
-              <>
-                <p className="px-1 text-sm text-muted-foreground">The whole character, same design and pose.</p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {STYLES.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      aria-pressed={style === s.id}
-                      onClick={() => setStyle(s.id)}
-                      className={cn(
-                        "rounded-lg border px-2.5 py-1.5 text-left text-sm transition-colors",
-                        style === s.id ? "border-tone-lilac bg-tone-lilac/15 text-foreground" : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
-                      )}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
+          {tool === "restyle" ? (
+            <form
+              className="flex flex-col gap-4 rounded-xl border bg-card/70 p-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-tone-lilac/15 text-tone-lilac">
+                  <Palette className="size-4.5" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold">Restyle</h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Repaints the whole character as <span className="text-foreground">{styleById(style).label}</span>. Undo brings this version back.
+                  </p>
                 </div>
-              </>
-            ) : action === "remove" ? (
-              <p className="px-1 text-sm">{box ? `Paints out ${named ? `the ${named}` : "the selected area"} and fills in what is behind it.` : "Paints out what you select."}</p>
-            ) : (
-              <input
-                aria-label={action === "change" ? "What it becomes" : "What to add"}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder={action === "change" ? `${named ? `The ${named}` : "It"} becomes, e.g. a red leather coat` : "e.g. a black raven on the shoulder"}
-                className="min-w-0 rounded-md bg-background/40 px-2 py-2 text-base outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring/60"
-              />
-            )}
+              </div>
+              <Button type="submit" size="lg" className="w-full" disabled={busy}>
+                {pending && !running ? <LoadingDots /> : <>Restyle as {styleById(style).label}<ArrowRight data-icon="inline-end" /></>}
+              </Button>
+            </form>
+          ) : (
+            <form
+              className="flex flex-col gap-4 rounded-xl border bg-card/70 p-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+            >
+              <div role="tablist" aria-label="What to do" className="grid grid-cols-3 gap-1 rounded-lg bg-background/50 p-1">
+                {ACTIONS.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={action === a.id}
+                    onClick={() => setAction(a.id)}
+                    className={cn(
+                      "flex flex-col items-center gap-1 rounded-md px-1 py-2 text-xs font-medium transition-colors",
+                      action === a.id ? "bg-secondary text-foreground shadow-sm" : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
+                    )}
+                  >
+                    <a.icon className={cn("size-4", action === a.id && a.tone)} />
+                    {a.label}
+                  </button>
+                ))}
+              </div>
 
-            <Button type="submit" size="lg" className="w-full" disabled={busy || !!blocked}>
-              {pending && !running ? (
-                <LoadingDots />
-              ) : blocked ? (
-                blocked
+              {action === "remove" ? (
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {box ? (
+                    <>
+                      Paints out <span className="text-foreground">{named ? `the ${named}` : "the selected area"}</span> and fills in what is behind it.
+                    </>
+                  ) : (
+                    "Paints out whatever you select."
+                  )}
+                </p>
               ) : (
-                <>
-                  {action === "restyle" ? `Restyle as ${styleById(style).label}` : current.verb}
-                  <ArrowRight data-icon="inline-end" />
-                </>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="do-text" className="text-xs font-medium text-muted-foreground">
+                    {action === "change" ? `${named ? `The ${named}` : "The selection"} becomes` : "Add to the selected spot"}
+                  </label>
+                  <Textarea
+                    id="do-text"
+                    rows={2}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        e.currentTarget.form?.requestSubmit();
+                      }
+                    }}
+                    placeholder={action === "change" ? "a red leather coat with brass buttons" : "a black raven perched on the shoulder"}
+                    className="min-h-0 resize-none text-sm leading-relaxed placeholder:text-muted-foreground/70"
+                  />
+                </div>
               )}
-            </Button>
-          </form>
+
+              <Button type="submit" size="lg" className="w-full" disabled={busy || !!blocked}>
+                {pending && !running ? (
+                  <LoadingDots />
+                ) : blocked ? (
+                  blocked
+                ) : (
+                  <>
+                    {current.verb}
+                    <ArrowRight data-icon="inline-end" />
+                  </>
+                )}
+              </Button>
+            </form>
+          )}
         </div>
       </div>
     </section>
