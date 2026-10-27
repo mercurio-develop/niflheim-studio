@@ -10,7 +10,7 @@ read the model card before redistributing.
 | `z_image_turbo_int8_convrot.safetensors` | `diffusion_models/` | 01_concept | Comfy-Org/z_image_turbo (Tongyi-MAI/Z-Image-Turbo) | Apache-2.0 |
 | `qwen_3_4b_fp8_mixed.safetensors` | `text_encoders/` | 01_concept | Comfy-Org/z_image_turbo | Apache-2.0 |
 | `ae.safetensors` | `vae/` | 01_concept | FLUX.1-schnell autoencoder | Apache-2.0 (*check*) |
-| `qwen_image_edit_2511_int8_convrot.safetensors` | `diffusion_models/` | 01_swap, 01_brush, 01_remove, 01_edit | Comfy-Org (Qwen/Qwen-Image-Edit-2511) | Apache-2.0 |
+| `qwen_image_edit_2511_int8_convrot.safetensors` | `diffusion_models/` | 01_swap, 01_brush, 01_remove, 01_fill, 01_change, 01_edit | Comfy-Org (Qwen/Qwen-Image-Edit-2511) | Apache-2.0 |
 | `qwen_2.5_vl_7b_fp8_scaled.safetensors` | `text_encoders/` | the Qwen graphs | Comfy-Org/Qwen-Image_ComfyUI | Apache-2.0 |
 | `qwen_image_vae.safetensors` | `vae/` | the Qwen graphs | Comfy-Org/Qwen-Image_ComfyUI | Apache-2.0 |
 | `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` | `loras/` | the Qwen graphs (4 steps, CFG 1) | lightx2v/Qwen-Image-Edit-2511-Lightning | Apache-2.0 |

@@ -132,7 +132,8 @@ export async function clearReference(id: string) {
 }
 
 // Florence-2 lists what it sees; the chips for this version come from that.
-async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx, target = "character") {
+// What Florence-2 sees in an image, as part names.
+async function readTags(id: string, image: string, ctx?: JobCtx, target = "character") {
   const [file] = await runWorkflow({
     onSubmit: ctx?.track,
     workflow: "01_tags.api.json",
@@ -141,14 +142,21 @@ async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx, t
     outDir: abs(id, `${dirOf(target)}/tags/${stamp()}`),
     ext: "txt",
   });
-  const tags = partsFromTags(await readFile(file, "utf8"));
+  return partsFromTags(await readFile(file, "utf8"));
+}
+
+// Florence only names parts from a fixed list; what has a mask, or was just added, always stays.
+function mergeTags(found: string[], v: Pick<Version, "parts" | "tags" | "edit">) {
+  const pinned = [...Object.keys(v.parts), ...(v.edit?.kind === "add" && v.tags?.length ? [v.tags.at(-1)!] : [])];
+  const merged = mergeParts(found, v.tags);
+  return [...new Set([...merged, ...pinned])];
+}
+
+async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx, target = "character") {
+  const found = await readTags(id, image, ctx, target);
   await updateProject(id, (q) => {
     const v = stackOf(q, target).versions[at];
-    if (!v) return;
-    // Florence only names parts from a fixed list; what has a mask, or was just added, always stays.
-    const pinned = [...Object.keys(v.parts), ...(v.edit?.kind === "add" && v.tags?.length ? [v.tags.at(-1)!] : [])];
-    const merged = mergeParts(tags, v.tags);
-    v.tags = [...merged, ...pinned.filter((t) => !merged.includes(t))];
+    if (v) v.tags = mergeTags(found, v);
   });
 }
 
@@ -211,12 +219,8 @@ export async function maskPart(id: string, rawPart: string, rawTarget = "charact
   done(id);
 }
 
+// The bounding box of the strokes, in the image's own pixels.
 const Strokes = z.object({ x: z.number().min(0), y: z.number().min(0), width: z.number().positive(), height: z.number().positive() });
-const BrushInput = z.object({
-  mode: z.enum(["add", "remove"]),
-  thing: z.string().trim().max(200), // optional for remove: the strokes already say what
-  strokes: Strokes, // bounding box of the strokes, in the image's own pixels
-});
 
 // What was added, as a part name for the chips: "a small red bird perched on the shoulder" -> "small red bird".
 const POSE = /^(perched|sitting|standing|resting|hanging|flying|held|worn|attached|placed|tucked|strapped|tied)$/;
@@ -231,52 +235,85 @@ const partName = (thing: string) => {
 // edit with its inputs, so Try again can run it once more from the same version with a new seed.
 type Run = { id: string; target: string; at: number; version: Version; ctx: JobCtx };
 
+// A finished edit becomes the new current version only once it is complete (its new part found,
+// its tags read), so the page shows it once, when the loader ends, not half-way through the job.
 async function finish(r: Run, image: string, v: Omit<Version, "image" | "parts" | "parent">, extra?: { name: string; ctx: JobCtx }) {
-  let made = 0;
-  await updateProject(r.id, (q) => {
-    made = pushVersion(q, r.target, { image, parts: {}, parent: r.at, ...v });
-  });
+  const parts: Record<string, string> = {};
   // An added thing becomes a part at once: SAM 3 finds it on the new image.
   if (extra) {
     const [m] = await runWorkflow({ onSubmit: r.ctx.track, workflow: "01_parts.api.json", set: [["2", "prompt", extra.name]], images: [["1", abs(r.id, image)]], output: "4", outDir: abs(r.id, `${dirOf(r.target)}/masks/${stamp()}-${extra.name.replace(/ /g, "-")}`) });
-    if (await maskBox(m)) await updateProject(r.id, (q) => void (stackOf(q, r.target).versions[made].parts[extra.name] = rel(r.id, [m])[0]));
+    if (await maskBox(m)) parts[extra.name] = rel(r.id, [m])[0];
   }
-  await tagVersion(r.id, made, image, r.ctx, r.target);
+  const found = await readTags(r.id, image, r.ctx, r.target);
+  if (!(await r.ctx.alive())) return;
+  await updateProject(r.id, (q) => {
+    const version = { image, parts, parent: r.at, ...v };
+    pushVersion(q, r.target, { ...version, tags: mergeTags(found, version) });
+  });
 }
 
-async function runAdd(r: Run, thing: string, strokes: Box) {
+// Add inside the painted shape (01_fill): the shape is blanked grey inside a crop, Qwen paints the
+// thing filling it, and the shape plus a soft 40 px margin is pasted back, so what is added is
+// drawn whole where you painted and is not cut at its edges. "Placeholder ... no grey left" stops a
+// grey ring staying around it (2026-10-27, a skull in a hand). Edits made before there was a mask
+// fall back to the whole-crop paste (01_brush).
+const addPrompt = (thing: string) =>
+  `The flat grey shape is a placeholder: replace all of it. Paint ${thing} inside it, whole and sized to fill most of it, nothing cut off; the rest of the grey becomes what is around it, continuing the background and the character. No grey left. Same art style, lighting and colours as the rest of the picture; everything outside the shape stays exactly the same.`;
+
+async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
   const source = abs(r.id, r.version.image);
-  // A little more room than Remove, and "small enough to fit", so the new thing is not cut at the
-  // crop's edge. Much more room (2.6x) made Qwen redraw the whole character small inside the crop.
-  const box = cropBox(strokes, await pngSize(source), { grow: 2.2, min: 448 });
-  const [image] = await runWorkflow({
-    workflow: "01_brush.api.json",
-    onSubmit: r.ctx.track,
-    set: [
-      ["17", "prompt", `Add ${thing}. Draw all of it, small enough to fit inside this picture. Keep everything else exactly the same size, position, art style and lighting.`],
-      ["22", "seed", newSeed()],
-      ["4", "x", box.x], ["4", "y", box.y], ["4", "width", box.width], ["4", "height", box.height],
-      ["27", "x", box.x], ["27", "y", box.y],
-    ],
-    images: [["1", source]],
-    output: "28",
-    outDir: abs(r.id, `${dirOf(r.target)}/brush/${stamp()}`),
-  });
+  const outDir = abs(r.id, `${dirOf(r.target)}/brush/${stamp()}`);
+  let image: string;
+  if (mask) {
+    const box = cropBox(strokes, await pngSize(source), { grow: 2.0, min: 448 });
+    const crop = (n: string): [string, string, number][] => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
+    [image] = await runWorkflow({
+      workflow: "01_fill.api.json",
+      onSubmit: r.ctx.track,
+      set: [["17", "prompt", addPrompt(thing)], ["22", "seed", newSeed()], ...crop("4"), ...crop("5"), ["27", "x", box.x], ["27", "y", box.y]],
+      images: [["1", source], ["2", abs(r.id, mask)]],
+      output: "28",
+      outDir,
+    });
+  } else {
+    const box = cropBox(strokes, await pngSize(source), { grow: 2.2, min: 448 });
+    [image] = await runWorkflow({
+      workflow: "01_brush.api.json",
+      onSubmit: r.ctx.track,
+      set: [
+        ["17", "prompt", `Add ${thing}. Draw all of it, small enough to fit inside this picture. Keep everything else exactly the same size, position, art style and lighting.`],
+        ["22", "seed", newSeed()],
+        ["4", "x", box.x], ["4", "y", box.y], ["4", "width", box.width], ["4", "height", box.height],
+        ["27", "x", box.x], ["27", "y", box.y],
+      ],
+      images: [["1", source]],
+      output: "28",
+      outDir,
+    });
+  }
   if (!(await r.ctx.alive())) return;
   const name = partName(thing);
-  await finish(r, rel(r.id, [image])[0], { label: `+ ${thing}`, tags: name ? [...(r.version.tags ?? []), name] : r.version.tags, edit: { kind: "add", what: "", change: thing, box: strokes } }, name ? { name, ctx: r.ctx } : undefined);
+  await finish(r, rel(r.id, [image])[0], { label: `+ ${thing}`, tags: name ? [...(r.version.tags ?? []), name] : r.version.tags, edit: { kind: "add", what: "", change: thing, box: strokes, ...(mask ? { mask } : {}) } }, name ? { name, ctx: r.ctx } : undefined);
 }
 
+// Change in a close-up (01_change): a crop around the selection is edited at full size, so small
+// parts (hands, a buckle) really change, and the selection plus a soft 40 px margin is pasted back,
+// so the new part is not cut flat at the selection's edge (2026-10-27, hands on a front view).
 async function runChange(r: Run, what: string, change: string, mask: string) {
   const prompt =
     what === "selection"
-      ? `Change the highlighted area into ${change}. Keep the face, pose, everything else and the background exactly the same.`
-      : `Change only the ${what} into ${change}. Keep the face, pose, every other part and the background exactly the same.`;
+      ? `Change the highlighted area into ${change}, drawn whole and attached naturally. Keep the face, pose, everything else and the background exactly the same.`
+      : `Change only the ${what} into ${change}, drawn whole. Keep the face, pose, every other part and the background exactly the same.`;
+  const source = abs(r.id, r.version.image);
+  const strokes = await maskBox(abs(r.id, mask));
+  if (!strokes) throw new Error("The selection is empty; paint or pick a part first.");
+  const box = cropBox(strokes, await pngSize(source), { grow: 2.0, min: 448 });
+  const crop = (n: string): [string, string, number][] => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
   const [image] = await runWorkflow({
     onSubmit: r.ctx.track,
-    workflow: "01_swap.api.json",
-    set: [["17", "prompt", prompt], ["22", "seed", newSeed()]],
-    images: [["1", abs(r.id, r.version.image)], ["2", abs(r.id, mask)]],
+    workflow: "01_change.api.json",
+    set: [["17", "prompt", prompt], ["22", "seed", newSeed()], ...crop("4"), ...crop("5"), ["27", "x", box.x], ["27", "y", box.y]],
+    images: [["1", source], ["2", abs(r.id, mask)]],
     output: "28",
     outDir: abs(r.id, `${dirOf(r.target)}/swaps/${stamp()}`),
   });
@@ -322,15 +359,18 @@ async function start(id: string, target: string, kind: Edit["kind"], detail: str
 }
 
 // Add with the brush (remove goes through removeSelection, which has the exact mask).
-export async function brushEdit(id: string, input: z.input<typeof BrushInput>, rawTarget = "character") {
-  const { mode, thing, strokes } = BrushInput.parse(input);
+// Add something inside the painted selection: the browser sends the mask and its box.
+export async function addSelection(id: string, form: FormData, rawTarget = "character") {
   const target = Target.parse(rawTarget);
-  if (mode !== "add") throw new Error("Use Remove on the selection.");
-  if (thing.length < 2) throw new Error("Say what to add.");
-  await start(id, target, "add", `Painting ${thing}`, (r) => runAdd(r, thing, strokes));
+  const thing = z.string().trim().min(2, "Say what to add.").max(200).parse(form.get("thing"));
+  let box0: unknown = null;
+  try { box0 = JSON.parse(String(form.get("box") ?? "null")); } catch {}
+  const strokes = Strokes.parse(box0);
+  const mask = await saveSelection(id, target, form.get("mask"));
+  await start(id, target, "add", `Painting ${thing}`, (r) => runAdd(r, thing, strokes, mask));
 }
 
-// Change the selection: the browser sends the final mask, Qwen repaints, only its pixels are kept (01_swap).
+// Change the selection: the browser sends the final mask; Qwen repaints a close-up (01_change).
 export async function repaintSelection(id: string, form: FormData, rawTarget = "character") {
   const target = Target.parse(rawTarget);
   const change = z.string().trim().min(3, "Say what it should become.").max(300).parse(form.get("change"));
@@ -361,7 +401,7 @@ export async function retryEdit(id: string, rawTarget = "character") {
   const version = stack.versions[at];
   const run = (work: (r: Run) => Promise<void>) =>
     startJob(id, keyOf(target, jobFor(e.kind)), (ctx) => work({ id, target, at, version, ctx }), `Trying ${v.label} again`);
-  if (e.kind === "add" && e.box) await run((r) => runAdd(r, e.change ?? "", e.box!));
+  if (e.kind === "add" && e.box) await run((r) => runAdd(r, e.change ?? "", e.box!, e.mask));
   else if (e.kind === "change" && e.mask) await run((r) => runChange(r, e.what || "selection", e.change ?? "", e.mask!));
   else if (e.kind === "remove" && e.mask && e.box) await run((r) => runRemove(r, e.what, e.box!, e.mask!));
   else throw new Error("This edit was made before Try again existed; do it once more by hand.");

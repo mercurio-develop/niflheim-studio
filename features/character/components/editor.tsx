@@ -14,7 +14,7 @@ import type { Job, Version } from "@/lib/store";
 import { STYLES, styleById } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { KIND_DOT, versionKind } from "@/lib/versions";
-import { brushEdit, cancel, maskPart, redo, removeSelection, repaintSelection, restyleCurrent, retryEdit, savePart, undo } from "../actions/character";
+import { addSelection, cancel, maskPart, redo, removeSelection, repaintSelection, restyleCurrent, retryEdit, savePart, undo } from "../actions/character";
 import { SectionTitle } from "@/components/section-title";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
 
@@ -136,8 +136,11 @@ export function Editor(props: {
     if (blocked) return;
     act(async () => {
       if (tool === "restyle") return restyleCurrent(props.projectId, style);
-      if (action === "add") return brushEdit(props.projectId, { mode: "add", thing: text, strokes: box! }, target).then(() => setText(""));
       const form = await selectionForm();
+      if (action === "add") {
+        form.set("thing", text);
+        return addSelection(props.projectId, form, target).then(() => setText(""));
+      }
       if (action === "remove") {
         form.set("what", named ?? "");
         return removeSelection(props.projectId, form, target);
@@ -164,7 +167,22 @@ export function Editor(props: {
     });
   };
 
-  const loader = running && props.jobs[running];
+  // The picture on screen changes only once the new one has downloaded, and the loader stays until
+  // then, so a finished edit appears once instead of the old picture flashing back first.
+  const [shown, setShown] = useState(props.version.image);
+  const [held, setHeld] = useState<Job | null>(null);
+  useEffect(() => {
+    if (shown === props.version.image) return;
+    let live = true;
+    const img = new Image();
+    img.onload = img.onerror = () => live && setShown(props.version.image);
+    img.src = `/api/files/${props.projectId}/${props.version.image}`;
+    return () => void (live = false);
+  }, [props.version.image, props.projectId, shown]);
+  const job = running ? props.jobs[running] : null;
+  if (job && job !== held) setHeld(job);
+  const loading = shown !== props.version.image;
+  const loader = job || (loading ? held : null);
   const rail: [Tool, string, typeof Brush, string][] = [
     ["part", "Part", ScanSearch, "Select a part by name"],
     ["paint", "Paint", Brush, "Paint the selection (X switches add / erase)"],
@@ -233,8 +251,8 @@ export function Editor(props: {
         {/* Canvas */}
         <div className="flex flex-col gap-3">
           <div className="relative mx-auto aspect-[7/9] w-full max-w-[min(100%,calc(70svh*7/9))] overflow-hidden rounded-xl border bg-card">
-            <FadeImage key={props.version.image} src={file(props.version.image)} alt={props.version.label} className="absolute inset-0 h-full w-full object-cover" />
-            {!running && (
+            <FadeImage key={shown} src={file(shown)} alt={props.version.label} className="absolute inset-0 h-full w-full object-cover" />
+            {!running && !loading && (
               // Hidden, not unmounted, while Restyle is chosen, so the selection survives the switch.
               <div className={cn("absolute inset-0", tool === "restyle" && "invisible")}>
                 <SelectionCanvas
@@ -271,7 +289,7 @@ export function Editor(props: {
                 message={running === "mask" ? `Finding the ${part ?? "part"}` : (loader.detail ?? "Repainting")}
                 startedAt={loader.startedAt}
                 expected={running === "mask" ? 8 : running === "brush" ? 30 : 45}
-                onCancel={() => cancel(props.projectId, running!, target)}
+                onCancel={running ? () => cancel(props.projectId, running, target) : undefined}
               />
             )}
           </div>
