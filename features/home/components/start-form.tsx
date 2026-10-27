@@ -29,7 +29,7 @@ export function StartForm() {
   useEffect(() => () => void (url.current && URL.revokeObjectURL(url.current)), []);
 
   return (
-    <div className="w-full text-left">
+    <div className="w-full text-left md:w-3/4">
       <Composer
         id="prompt"
         large
