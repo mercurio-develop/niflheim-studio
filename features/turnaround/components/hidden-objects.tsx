@@ -7,6 +7,7 @@ import { LoadingDots } from "@/components/loading-dots";
 import { savePart } from "@/features/character/actions/character";
 import { SelectionCanvas, type SelectionHandle } from "@/features/character/components/selection-canvas";
 import { cn } from "@/lib/utils";
+import { ASSETS } from "../flags";
 
 // Each hidden object with its mask on the character (pink), zoomed in on the object, so you see
 // what will be painted out before anything runs. An empty mask says it was not found. Keep as asset: also save it to make on its own later. Refine: paint or
@@ -39,10 +40,12 @@ export function HiddenObjects(props: {
                 </button>
               </div>
               <span className="truncate text-xs">{name}</span>
-              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <input type="checkbox" checked={props.keep.includes(name)} onChange={(e) => props.onKeep(name, e.target.checked)} className="accent-tone-pink" />
-                Keep as asset
-              </label>
+              {ASSETS && (
+                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <input type="checkbox" checked={props.keep.includes(name)} onChange={(e) => props.onKeep(name, e.target.checked)} className="accent-tone-pink" />
+                  Keep as asset
+                </label>
+              )}
               <Button variant="ghost" size="xs" disabled={props.disabled} onClick={() => setRefining(refining === name ? null : name)}>
                 <Paintbrush data-icon="inline-start" />
                 Refine

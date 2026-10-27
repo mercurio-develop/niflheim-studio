@@ -19,6 +19,7 @@ import type { Asset, Job, TurnaroundOptions, ViewId, ViewStack } from "@/lib/sto
 import { cn } from "@/lib/utils";
 import { cancelTurnaround, findMasks, generateTurnaround, generateView } from "../actions/turnaround";
 import { AssetsShelf } from "./assets-shelf";
+import { ASSETS } from "../flags";
 import { HiddenObjects } from "./hidden-objects";
 import { ReplicateBar } from "./replicate-bar";
 
@@ -75,7 +76,7 @@ export function TurnaroundStep(props: {
   }, [finding, options.hide, props.parts, props.projectId]);
   const findingName = finding ? (props.jobs["hide-masks"]?.detail?.replace(/^Finding the /, "") ?? null) : null;
   const setHidden = (name: string, on: boolean) =>
-    setOptions((o) => ({ ...o, hide: on ? [...o.hide, name] : o.hide.filter((x) => x !== name), keep: on ? [...o.keep, name] : o.keep.filter((x) => x !== name) }));
+    setOptions((o) => ({ ...o, hide: on ? [...o.hide, name] : o.hide.filter((x) => x !== name), keep: on && ASSETS ? [...o.keep, name] : o.keep.filter((x) => x !== name) }));
 
   const toggle = <K extends "extras">(k: K, v: TurnaroundOptions[K][number]) =>
     setOptions((o) => ({ ...o, [k]: (o[k] as string[]).includes(v) ? (o[k] as string[]).filter((x) => x !== v) : [...(o[k] as string[]), v] }));
@@ -172,7 +173,7 @@ export function TurnaroundStep(props: {
           {running && job && <JobStatus message={job.detail ?? "Painting the views"} startedAt={job.startedAt} expected={shown.length * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, "turnaround")} />}
           {/* Turnarounds from before views were painted fresh have no options and no front. */}
           {Object.keys(props.views).length > 0 && (!props.options || !image("front")) ? (
-            <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made with an older version. Generate again to paint every view fresh, the front included, and keep hidden objects as assets.</p>
+            <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made with an older version. Generate again to paint every view fresh, the front included.</p>
           ) : !props.fresh && Object.keys(props.views).length > 0 && (
             <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made from an older version of the character. Generate again to update them.</p>
           )}
@@ -276,7 +277,7 @@ export function TurnaroundStep(props: {
           );
         })()}
 
-        <AssetsShelf projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={running} onView={(src, label) => setViewing({ src, label })} />
+        {ASSETS && <AssetsShelf projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={running} onView={(src, label) => setViewing({ src, label })} />}
       </div>
       {viewing && <ImageViewer src={viewing.src} label={viewing.label} onClose={() => setViewing(null)} />}
       <NextBar

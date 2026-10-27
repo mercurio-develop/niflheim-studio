@@ -4,6 +4,7 @@ import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { cropBox, maskBox, pngSize, removePrompt, type Box } from "@/lib/brush";
+import { ASSETS } from "../flags";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { characterImage, frontPrompt, viewImage, viewPrompt, VIEWS, viewsFor } from "@/lib/progress";
@@ -158,7 +159,7 @@ const describe = (o: TurnaroundOptions) => [o.pose === "tpose" ? "T-pose" : "as 
 // mask; then the front from that clean character (pose, prompt), then every view from that front.
 export async function generateTurnaround(id: string, rawOptions: z.input<typeof Options>) {
   const options = Options.parse(rawOptions);
-  options.keep = options.keep.filter((k) => options.hide.includes(k));
+  options.keep = ASSETS ? options.keep.filter((k) => options.hide.includes(k)) : [];
   const p = await getProject(id);
   const source = p && characterImage(p);
   if (!source) throw new Error("Finish the character first.");
