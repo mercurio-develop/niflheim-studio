@@ -36,7 +36,9 @@ async function makeView(id: string, view: ViewId, from: string, prompt: string, 
   await updateProject(id, (q) => {
     const t = q.turnaround!;
     const stack = (t.views[view] ??= { versions: [], current: 0 });
-    stack.versions.push({ image: rel(id, image), label: note, parts: {}, parent: stack.versions.length ? stack.current : undefined });
+    // The view shows the character's own parts, less what was hidden: the editor's chips, no Florence run.
+    const tags = q.character.versions[q.character.current ?? -1]?.tags?.filter((x) => !t.options.hide.includes(x));
+    stack.versions.push({ image: rel(id, image), label: note, parts: {}, tags, parent: stack.versions.length ? stack.current : undefined });
     stack.current = stack.versions.length - 1;
   });
   return rel(id, image);

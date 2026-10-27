@@ -8,9 +8,9 @@ import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { redirect } from "next/navigation";
 import { cropBox, pngSize } from "@/lib/brush";
-import { parentOf } from "@/lib/history";
+import { parentIn, stackMoves } from "@/lib/history";
 import { mergeParts, partsFromTags } from "@/lib/parts";
-import { getProject, projectDir, updateProject, type Project } from "@/lib/store";
+import { getProject, projectDir, updateProject, type Project, type Version, type ViewId } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { Count, Index, Prompt, REFERENCE_TYPES, StyleId, referenceError } from "../schemas";
 
@@ -18,7 +18,31 @@ const rel = (id: string, files: string[]) => files.map((f) => path.relative(proj
 const abs = (id: string, file: string) => path.join(projectDir(id), file);
 const stamp = () => Date.now().toString(36);
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
-const done = (id: string) => revalidatePath(`/p/${id}/character`);
+const done = (id: string) => {
+  revalidatePath(`/p/${id}/character`);
+  revalidatePath(`/p/${id}/turnaround`);
+};
+
+// What an edit works on: the character, or one turnaround view ("view:side"). Each is a stack
+// of versions with a current one; the edit actions below take the target and work on its stack.
+const Target = z.union([z.literal("character"), z.string().regex(/^view:(front|threequarter|side|back|top|bottom)$/)]);
+type Stack = { versions: Version[]; current: number | null };
+function stackOf(p: Project, target: string): Stack {
+  if (target === "character") return p.character;
+  const s = p.turnaround?.views[target.slice(5) as ViewId];
+  if (!s) throw new Error("Paint the turnaround first.");
+  return s;
+}
+// Job keys and output folders per target, so a view's edit never blocks the character's.
+const keyOf = (target: string, key: string) => (target === "character" ? key : `${target}:${key}`);
+const dirOf = (target: string) => (target === "character" ? "character" : `turnaround/${target.slice(5)}`);
+// A new version made from version `at` becomes the current one.
+const pushVersion = (q: Project, target: string, v: Version) => {
+  const s = stackOf(q, target);
+  s.versions.push(v);
+  s.current = s.versions.length - 1;
+  return s.current;
+};
 
 async function load(id: string): Promise<Project> {
   const p = await getProject(id);
@@ -26,9 +50,9 @@ async function load(id: string): Promise<Project> {
   return p;
 }
 
-function currentVersion(p: Project) {
-  if (p.character.current === null) throw new Error("Pick a concept first.");
-  return p.character.versions[p.character.current];
+function currentVersion(s: Stack) {
+  if (s.current === null || !s.versions[s.current]) throw new Error("Pick a concept first.");
+  return s.versions[s.current];
 }
 
 const sketchPrompt = (prompt: string, style: string) =>
@@ -108,18 +132,18 @@ export async function clearReference(id: string) {
 }
 
 // Florence-2 lists what it sees; the chips for this version come from that.
-async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx) {
+async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx, target = "character") {
   const [file] = await runWorkflow({
     onSubmit: ctx?.track,
     workflow: "01_tags.api.json",
     images: [["1", abs(id, image)]],
     output: "4",
-    outDir: abs(id, `character/tags/${stamp()}`),
+    outDir: abs(id, `${dirOf(target)}/tags/${stamp()}`),
     ext: "txt",
   });
   const tags = partsFromTags(await readFile(file, "utf8"));
   await updateProject(id, (q) => {
-    const v = q.character.versions[at];
+    const v = stackOf(q, target).versions[at];
     if (v) v.tags = mergeParts(tags, v.tags);
   });
 }
@@ -146,35 +170,38 @@ export async function pickConcept(id: string, rawIndex: number, rawSet?: number)
   done(id);
 }
 
-export async function selectVersion(id: string, rawIndex: number) {
+export async function selectVersion(id: string, rawIndex: number, rawTarget = "character") {
   const index = Index.parse(rawIndex);
+  const target = Target.parse(rawTarget);
   await updateProject(id, (p) => {
-    if (!p.character.versions[index]) throw new Error("No such version.");
-    p.character.current = index;
+    const s = stackOf(p, target);
+    if (!s.versions[index]) throw new Error("No such version.");
+    s.current = index;
   });
   done(id);
 }
 
 const Part = z.string().trim().toLowerCase().min(2).max(40).regex(/^[a-z][a-z \-]*$/, "Use plain words, e.g. coat.");
 
-export async function maskPart(id: string, rawPart: string) {
+export async function maskPart(id: string, rawPart: string, rawTarget = "character") {
   const part = Part.parse(rawPart);
-  const p = await load(id);
-  const at = p.character.current;
-  const version = currentVersion(p);
+  const target = Target.parse(rawTarget);
+  const stack = stackOf(await load(id), target);
+  const at = stack.current!;
+  const version = currentVersion(stack);
   if (Object.hasOwn(version.parts, part)) return;
-  await startJob(id, "mask", async ({ track, alive }) => {
+  await startJob(id, keyOf(target, "mask"), async ({ track, alive }) => {
     const [mask] = await runWorkflow({
       onSubmit: track,
       workflow: "01_parts.api.json",
       set: [["2", "prompt", part]],
       images: [["1", abs(id, version.image)]],
       output: "4",
-      outDir: abs(id, `character/masks/${stamp()}-${part.replace(/ /g, "-")}`),
+      outDir: abs(id, `${dirOf(target)}/masks/${stamp()}-${part.replace(/ /g, "-")}`),
     });
     if (!(await alive())) return; // cancelled after ComfyUI had already finished
     await updateProject(id, (q) => {
-      q.character.versions[at!].parts[part] = rel(id, [mask])[0];
+      stackOf(q, target).versions[at].parts[part] = rel(id, [mask])[0];
     });
   });
   done(id);
@@ -193,17 +220,18 @@ const brushPrompt = (mode: "add" | "remove", thing: string) =>
     ? `Add ${thing}. Keep everything else exactly the same, in the same art style and lighting.`
     : `Remove ${thing || "the object in the centre of the image"} and fill the space with what would be behind it. Keep everything else exactly the same, in the same art style.`;
 
-export async function brushEdit(id: string, input: z.input<typeof BrushInput>) {
+export async function brushEdit(id: string, input: z.input<typeof BrushInput>, rawTarget = "character") {
   const { mode, thing, strokes } = BrushInput.parse(input);
+  const target = Target.parse(rawTarget);
   if (mode === "add" && thing.length < 2) throw new Error("Say what to add.");
-  const p = await load(id);
-  const at = p.character.current!;
-  const version = currentVersion(p);
+  const stack = stackOf(await load(id), target);
+  const at = stack.current!;
+  const version = currentVersion(stack);
   const source = abs(id, version.image);
   const box = cropBox(strokes, await pngSize(source));
   await startJob(
     id,
-    "brush",
+    keyOf(target, "brush"),
     async (ctx) => {
       const [image] = await runWorkflow({
         workflow: "01_brush.api.json",
@@ -216,14 +244,14 @@ export async function brushEdit(id: string, input: z.input<typeof BrushInput>) {
         ],
         images: [["1", source]],
         output: "28",
-        outDir: abs(id, `character/brush/${stamp()}`),
+        outDir: abs(id, `${dirOf(target)}/brush/${stamp()}`),
       });
       if (!(await ctx.alive())) return; // cancelled after ComfyUI had already finished
-      const q = await updateProject(id, (q) => {
-        q.character.versions.push({ image: rel(id, [image])[0], label: `${mode === "add" ? "+" : "−"} ${thing || "selection"}`, parts: {}, tags: version.tags, parent: at });
-        q.character.current = q.character.versions.length - 1;
+      let made = 0;
+      await updateProject(id, (q) => {
+        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `${mode === "add" ? "+" : "−"} ${thing || "selection"}`, parts: {}, tags: version.tags, parent: at });
       });
-      await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
+      await tagVersion(id, made, rel(id, [image])[0], ctx, target);
     },
     mode === "add" ? `Painting ${thing}` : `Removing ${thing || "the selection"}`,
   );
@@ -232,15 +260,16 @@ export async function brushEdit(id: string, input: z.input<typeof BrushInput>) {
 
 // Change the selection: the browser sends the final mask (a found part, plus and minus brush
 // strokes), Qwen repaints the image, and only the mask's pixels are kept (01_swap).
-export async function repaintSelection(id: string, form: FormData) {
+export async function repaintSelection(id: string, form: FormData, rawTarget = "character") {
+  const target = Target.parse(rawTarget);
   const change = z.string().trim().min(3, "Say what it should become.").max(300).parse(form.get("change"));
   const what = z.string().trim().max(40).parse(form.get("what") ?? "") || "selection";
   const mask = form.get("mask");
   if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
-  const p = await load(id);
-  const at = p.character.current!;
-  const version = currentVersion(p);
-  const maskFile = abs(id, `character/selections/${stamp()}/mask.png`);
+  const stack = stackOf(await load(id), target);
+  const at = stack.current!;
+  const version = currentVersion(stack);
+  const maskFile = abs(id, `${dirOf(target)}/selections/${stamp()}/mask.png`);
   await mkdir(path.dirname(maskFile), { recursive: true });
   await writeFile(maskFile, Buffer.from(await mask.arrayBuffer()));
   const prompt =
@@ -249,7 +278,7 @@ export async function repaintSelection(id: string, form: FormData) {
       : `Change only the ${what} into ${change}. Keep the face, pose, every other part and the background exactly the same.`;
   await startJob(
     id,
-    "swap",
+    keyOf(target, "swap"),
     async (ctx) => {
       const [image] = await runWorkflow({
         onSubmit: ctx.track,
@@ -257,14 +286,14 @@ export async function repaintSelection(id: string, form: FormData) {
         set: [["17", "prompt", prompt], ["22", "seed", newSeed()]],
         images: [["1", abs(id, version.image)], ["2", maskFile]],
         output: "28",
-        outDir: abs(id, `character/swaps/${stamp()}`),
+        outDir: abs(id, `${dirOf(target)}/swaps/${stamp()}`),
       });
       if (!(await ctx.alive())) return;
-      const q = await updateProject(id, (q) => {
-        q.character.versions.push({ image: rel(id, [image])[0], label: `${what} → ${change}`, parts: {}, tags: version.tags, parent: at });
-        q.character.current = q.character.versions.length - 1;
+      let made = 0;
+      await updateProject(id, (q) => {
+        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `${what} → ${change}`, parts: {}, tags: version.tags, parent: at });
       });
-      await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
+      await tagVersion(id, made, rel(id, [image])[0], ctx, target);
     },
     `Repainting the ${what}`,
   );
@@ -273,25 +302,26 @@ export async function repaintSelection(id: string, form: FormData) {
 
 // Remove = inpainting: the selection is blanked inside a crop, Qwen removes the blank shape and
 // fills what was behind it, and only the selection's pixels are pasted back (01_remove).
-export async function removeSelection(id: string, form: FormData) {
+export async function removeSelection(id: string, form: FormData, rawTarget = "character") {
+  const target = Target.parse(rawTarget);
   const what = z.string().trim().max(40).parse(form.get("what") ?? "");
   let box0: unknown = null;
   try { box0 = JSON.parse(String(form.get("box") ?? "null")); } catch {}
   const strokes = BrushInput.shape.strokes.parse(box0);
   const mask = form.get("mask");
   if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
-  const p = await load(id);
-  const at = p.character.current!;
-  const version = currentVersion(p);
+  const stack = stackOf(await load(id), target);
+  const at = stack.current!;
+  const version = currentVersion(stack);
   const source = abs(id, version.image);
   const box = cropBox(strokes, await pngSize(source));
-  const maskFile = abs(id, `character/selections/${stamp()}/mask.png`);
+  const maskFile = abs(id, `${dirOf(target)}/selections/${stamp()}/mask.png`);
   await mkdir(path.dirname(maskFile), { recursive: true });
   await writeFile(maskFile, Buffer.from(await mask.arrayBuffer()));
   const crop = (n: string): [string, string, number][] => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
   await startJob(
     id,
-    "brush",
+    keyOf(target, "brush"),
     async (ctx) => {
       const [image] = await runWorkflow({
         onSubmit: ctx.track,
@@ -306,14 +336,14 @@ export async function removeSelection(id: string, form: FormData) {
         ],
         images: [["1", source], ["2", maskFile]],
         output: "28",
-        outDir: abs(id, `character/removes/${stamp()}`),
+        outDir: abs(id, `${dirOf(target)}/removes/${stamp()}`),
       });
       if (!(await ctx.alive())) return;
-      const q = await updateProject(id, (q) => {
-        q.character.versions.push({ image: rel(id, [image])[0], label: `− ${what || "selection"}`, parts: {}, tags: version.tags?.filter((t) => t !== what), parent: at });
-        q.character.current = q.character.versions.length - 1;
+      let made = 0;
+      await updateProject(id, (q) => {
+        made = pushVersion(q, target, { image: rel(id, [image])[0], label: `− ${what || "selection"}`, parts: {}, tags: version.tags?.filter((t) => t !== what), parent: at });
       });
-      await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
+      await tagVersion(id, made, rel(id, [image])[0], ctx, target);
     },
     `Removing ${what ? `the ${what}` : "the selection"}`,
   );
@@ -321,18 +351,19 @@ export async function removeSelection(id: string, form: FormData) {
 }
 
 // A painted selection becomes a named part of this version, like the ones Florence-2 found.
-export async function savePart(id: string, form: FormData) {
+export async function savePart(id: string, form: FormData, rawTarget = "character") {
   const name = Part.parse(form.get("name"));
+  const target = Target.parse(rawTarget);
   const mask = form.get("mask");
   if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
-  const p = await load(id);
-  const at = p.character.current!;
-  currentVersion(p);
-  const file = abs(id, `character/masks/${stamp()}-${name.replace(/ /g, "-")}/00.png`);
+  const stack = stackOf(await load(id), target);
+  const at = stack.current!;
+  currentVersion(stack);
+  const file = abs(id, `${dirOf(target)}/masks/${stamp()}-${name.replace(/ /g, "-")}/00.png`);
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, Buffer.from(await mask.arrayBuffer()));
   await updateProject(id, (q) => {
-    const v = q.character.versions[at];
+    const v = stackOf(q, target).versions[at];
     v.parts[name] = rel(id, [file])[0];
     v.tags = [...(v.tags ?? []).filter((t) => t !== name), name];
   });
@@ -344,7 +375,7 @@ export async function restyleCurrent(id: string, rawStyle: string) {
   const style = styleById(StyleId.parse(rawStyle));
   const p = await load(id);
   const at = p.character.current!;
-  const version = currentVersion(p);
+  const version = currentVersion(p.character);
   await startJob(
     id,
     "restyle",
@@ -372,28 +403,30 @@ export async function restyleCurrent(id: string, rawStyle: string) {
 }
 
 // Undo goes to the version this one was made from; Redo to the newest version made from this one.
-export async function undo(id: string) {
+export async function undo(id: string, rawTarget = "character") {
+  const target = Target.parse(rawTarget);
   await updateProject(id, (p) => {
-    const to = p.character.current === null ? null : parentOf(p, p.character.current);
-    if (to !== null) p.character.current = to;
+    const s = stackOf(p, target);
+    const to = s.current === null ? null : parentIn(s.versions, s.current);
+    if (to !== null) s.current = to;
   });
   done(id);
 }
 
-export async function redo(id: string) {
+export async function redo(id: string, rawTarget = "character") {
+  const target = Target.parse(rawTarget);
   await updateProject(id, (p) => {
-    const at = p.character.current;
-    if (at === null) return;
-    const children = p.character.versions.map((_, i) => i).filter((i) => parentOf(p, i) === at);
-    if (children.length) p.character.current = children[children.length - 1];
+    const s = stackOf(p, target);
+    const to = stackMoves(s).redo;
+    if (to !== null) s.current = to;
   });
   done(id);
 }
 
 const JobKey = z.enum(["concepts", "mask", "swap", "tags", "brush", "restyle"]);
 
-export async function cancel(id: string, key: string) {
-  await cancelJob(id, JobKey.parse(key));
+export async function cancel(id: string, key: string, rawTarget = "character") {
+  await cancelJob(id, keyOf(Target.parse(rawTarget), JobKey.parse(key)));
   done(id);
 }
 

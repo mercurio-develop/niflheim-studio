@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Maximize2, RefreshCw } from "lucide-react";
+import { Maximize2, Pencil, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
 import { ImageViewer } from "@/components/image-viewer";
@@ -12,6 +12,8 @@ import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import { NextBar } from "@/features/wizard/components/next-bar";
+import { Editor } from "@/features/character/components/editor";
+import { stackMoves } from "@/lib/history";
 import { VIEWS, viewsFor } from "@/lib/progress";
 import type { Asset, Job, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -20,6 +22,7 @@ import { cancelTurnaround, generateTurnaround, generateView, makeAssetViews } fr
 // Things a character holds or carries come first among the parts you can hide.
 const HELD = /(sword|dagger|axe|spear|staff|wand|bow|shield|gun|lantern|book|umbrella|bag|satchel|backpack|pouch|cape|cloak|helmet|hat|hood|banner|flag)$/;
 const PER_VIEW = 25; // seconds for one Qwen edit, warm
+const EDIT_JOBS = ["mask", "swap", "tags", "brush"] as const; // the editor's jobs, per view: "view:side:brush"
 
 export function TurnaroundStep(props: {
   projectId: string;
@@ -34,14 +37,17 @@ export function TurnaroundStep(props: {
 }) {
   const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: "designed", hide: [], extras: [] });
   const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);
+  const [editing, setEditing] = useState<ViewId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const job = props.jobs.turnaround;
   const running = job?.status === "running";
   const viewJob = (v: ViewId) => props.jobs[`view:${v}`];
+  const editJobs = (v: ViewId) => Object.fromEntries(EDIT_JOBS.map((k) => [k, props.jobs[`view:${v}:${k}`]]));
+  const editBusy = (v: ViewId) => EDIT_JOBS.some((k) => props.jobs[`view:${v}:${k}`]?.status === "running" && k !== "tags");
   const assetJob = (name: string) => props.jobs[`asset:${name.replace(/ /g, "-")}`];
-  const anyRunning = running || VIEWS.some((v) => viewJob(v.id)?.status === "running") || props.assets.some((a) => assetJob(a.name)?.status === "running");
+  const anyRunning = running || VIEWS.some((v) => viewJob(v.id)?.status === "running" || editBusy(v.id) || props.jobs[`view:${v.id}:tags`]?.status === "running") || props.assets.some((a) => assetJob(a.name)?.status === "running");
   const wanted = viewsFor(options);
   const shown = viewsFor(props.options ?? options);
   const image = (v: ViewId) => {
@@ -145,6 +151,7 @@ export function TurnaroundStep(props: {
               const j = viewJob(v.id);
               const busy = j?.status === "running";
               const stack = props.views[v.id];
+              const fixing = editBusy(v.id);
               return (
                 <li key={v.id} className="nifl-enter flex flex-col gap-2" style={{ "--i": i } as React.CSSProperties}>
                   <div data-land className={cn("relative overflow-hidden rounded-xl border bg-card", !img && "bg-card/40", !props.fresh && img && "opacity-60")}>
@@ -172,10 +179,16 @@ export function TurnaroundStep(props: {
                       {v.label}
                       {stack && stack.versions.length > 1 && <span className="font-mono text-[11px] text-muted-foreground">v{stack.current + 1}/{stack.versions.length}</span>}
                     </span>
-                    <Button variant="ghost" size="sm" disabled={busy || running || pending || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id).catch(fail))}>
-                      <RefreshCw data-icon="inline-start" />
-                      Again
-                    </Button>
+                    <span className="flex items-center">
+                      <Button variant="ghost" size="sm" disabled={busy || fixing || running || pending || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id).catch(fail))}>
+                        <RefreshCw data-icon="inline-start" />
+                        Again
+                      </Button>
+                      <Button variant={editing === v.id ? "secondary" : "ghost"} size="sm" disabled={!img || busy || running} aria-pressed={editing === v.id} onClick={() => setEditing(editing === v.id ? null : v.id)}>
+                        <Pencil data-icon="inline-start" />
+                        Fix
+                      </Button>
+                    </span>
                   </div>
                   {j?.status === "error" && <p className="text-xs text-destructive">{j.error}</p>}
                 </li>
@@ -185,6 +198,31 @@ export function TurnaroundStep(props: {
           {job?.status === "error" && <p className="text-sm text-destructive">Painting stopped: {job.error}</p>}
           {job?.status === "cancelled" && <p className="text-sm text-muted-foreground">Painting cancelled; the views made so far are kept.</p>}
         </section>
+
+        {/* Fix one view with the character editor: Part / Paint, then Change, Add object or Remove */}
+        {editing && !running && props.views[editing]?.versions[props.views[editing]!.current] && (() => {
+          const stack = props.views[editing]!;
+          const moves = stackMoves(stack);
+          const label = VIEWS.find((v) => v.id === editing)!.label;
+          return (
+            <div key={editing} className="nifl-enter relative flex flex-col gap-3 rounded-xl border bg-card/30 p-4">
+              <Button variant="ghost" size="sm" className="absolute top-3 right-3 z-10" onClick={() => setEditing(null)} aria-label="Close the editor">
+                <X data-icon="inline-start" />
+                Close
+              </Button>
+              <Editor
+                projectId={props.projectId}
+                target={`view:${editing}`}
+                title={{ n: "", title: `Fix the ${label.toLowerCase()} view`, line: "Select what is wrong, then change it, add what is missing or remove it. Undo walks this view's history." }}
+                version={stack.versions[stack.current]}
+                parentImage={moves.parent === null ? null : stack.versions[moves.parent].image}
+                moves={moves}
+                style=""
+                jobs={editJobs(editing)}
+              />
+            </div>
+          );
+        })()}
 
         {/* Hidden objects, kept to be made on their own later */}
         {props.assets.length > 0 && (
