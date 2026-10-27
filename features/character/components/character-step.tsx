@@ -31,6 +31,7 @@ export function CharacterStep({ project }: { project: Project }) {
               style={c.style ?? "painterly"}
               seed={c.seed}
               count={c.count ?? 4}
+              reference={c.reference ?? null}
               concepts={c.concepts}
               sets={c.sets ?? []}
               pickedImage={version?.image ?? null}

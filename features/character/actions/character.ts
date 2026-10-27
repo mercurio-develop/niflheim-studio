@@ -29,6 +29,9 @@ function currentVersion(p: Project) {
   return p.character.versions[p.character.current];
 }
 
+const sketchPrompt = (prompt: string, style: string) =>
+  `Turn this sketch into finished full-body character concept art of ${prompt}. Keep the pose, proportions and silhouette of the sketch. Plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
+
 const conceptPrompt = (prompt: string, style: string) =>
   `Full-body character concept art of ${prompt}. Standing, neutral pose, front view, whole figure in frame, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
 
@@ -46,14 +49,33 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
   const style = options.style ? StyleId.parse(options.style) : p.character.style;
   const prompt = options.prompt !== undefined ? Prompt.parse(options.prompt) : p.character.prompt;
   const seed = options.reseed || options.style || options.prompt !== undefined ? newSeed() : p.character.seed;
-  await startJob(id, "concepts", async ({ track }) => {
-    const files = await runWorkflow({
-      onSubmit: track,
-      workflow: "01_concept.api.json",
-      set: [["5", "text", conceptPrompt(prompt, style)], ["8", "seed", seed], ["7", "batch_size", count]],
-      output: "10",
-      outDir: abs(id, `character/concepts/${seed}`),
-    });
+  const reference = p.character.reference;
+  await startJob(id, "concepts", async ({ track, alive }) => {
+    let files: string[];
+    if (reference) {
+      // From a sketch: Qwen-Image-Edit paints over it, one image per run, a new seed each.
+      files = [];
+      for (let i = 0; i < count; i++) {
+        const [f] = await runWorkflow({
+          onSubmit: track,
+          workflow: "01_sketch.api.json",
+          set: [["17", "prompt", sketchPrompt(prompt, style)], ["22", "seed", seed + i]],
+          images: [["1", abs(id, reference)]],
+          output: "28",
+          outDir: abs(id, `character/concepts/${seed}/${i}`),
+        });
+        files.push(f);
+        if (!(await alive())) return;
+      }
+    } else {
+      files = await runWorkflow({
+        onSubmit: track,
+        workflow: "01_concept.api.json",
+        set: [["5", "text", conceptPrompt(prompt, style)], ["8", "seed", seed], ["7", "batch_size", count]],
+        output: "10",
+        outDir: abs(id, `character/concepts/${seed}`),
+      });
+    }
     await updateProject(id, (q) => {
       const c = q.character;
       // The set on screen moves to the history; nothing the user saw is thrown away.
@@ -64,6 +86,25 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
       c.concepts = rel(id, files);
     });
   }, style);
+  done(id);
+}
+
+const REFERENCE_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+
+// A drawn sketch or an uploaded image; later concepts follow its pose and silhouette.
+export async function setReference(id: string, form: FormData) {
+  const image = form.get("image");
+  if (!(image instanceof File) || !REFERENCE_TYPES[image.type] || image.size > 12_000_000) throw new Error("Use a PNG, JPG or WebP image under 12 MB.");
+  await load(id);
+  const file = abs(id, `character/reference/${stamp()}.${REFERENCE_TYPES[image.type]}`);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, Buffer.from(await image.arrayBuffer()));
+  await updateProject(id, (q) => void (q.character.reference = rel(id, [file])[0]));
+  done(id);
+}
+
+export async function clearReference(id: string) {
+  await updateProject(id, (q) => void delete q.character.reference);
   done(id);
 }
 

@@ -27,6 +27,7 @@ export type Project = {
     prompt: string;
     style: string; // lib/styles.ts id
     count?: number; // how many concepts one Generate makes (1, 2, 4 or 6)
+    reference?: string; // a sketch or image the concepts should follow (pose, silhouette)
     seed: number;
     concepts: string[]; // the current set's images
     sets?: ConceptSet[]; // earlier sets, oldest first; a new set never replaces them
