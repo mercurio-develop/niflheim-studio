@@ -37,14 +37,18 @@ export type Asset = {
 
 // The set: paintings made from a prompt (or uploaded), the one picked, and the 3D stage MoGe
 // built from it (a textured depth mesh plus its depth map). stage.image says which painting it
-// was built from, so a new pick shows the stage is out of date.
+// was built from, so a new pick shows the stage is out of date. stage.fill: the same stage with
+// its holes painted from nearby cameras (lib/stage-fill.ts), the views it painted and their
+// cameras (nerfstudio transforms.json, for the splat later), and the hole share before/after.
 export type SetData = {
   prompt: string;
   style: string;
   paintings: string[]; // every painting made or uploaded, oldest first
   image?: string; // the chosen painting
-  stage?: { image: string; mesh: string; depth: string };
+  stage?: { image: string; mesh: string; depth: string; fill?: StageFill };
 };
+
+export type StageFill = { mesh: string; cameras: string; views: string[]; holes: { before: number; after: number } };
 
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };

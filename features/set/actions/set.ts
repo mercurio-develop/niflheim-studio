@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { runWorkflow } from "@/lib/comfy";
+import { fillStage } from "@/lib/stage-fill";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { getProject, projectDir, updateProject, type Project } from "@/lib/store";
 import { styleById } from "@/lib/styles";
@@ -108,6 +109,36 @@ async function buildStage(id: string, image: string, ctx: JobCtx) {
   await updateProject(id, (q) => {
     if (q.set?.image === image) q.set.stage = { image, mesh: rel(id, mesh), depth: rel(id, depth) };
   });
+  await fill(id, ctx);
+}
+
+// The stage is shown as soon as MoGe has it; the same job then paints its holes (1-2 min).
+async function fill(id: string, ctx: JobCtx) {
+  const p = await load(id);
+  const stage = p.set?.stage;
+  if (!stage) throw new Error("Build the stage first.");
+  const r = await fillStage({
+    image: abs(id, stage.image),
+    mesh: abs(id, stage.mesh),
+    place: p.set!.prompt,
+    dir: abs(id, `${path.dirname(path.dirname(stage.mesh))}/fill/${stamp()}`),
+    track: ctx.track,
+    alive: ctx.alive,
+    progress: ctx.progress,
+  });
+  if (!r || !(await ctx.alive())) return;
+  await updateProject(id, (q) => {
+    if (q.set?.stage?.mesh !== stage.mesh) return; // rebuilt meanwhile
+    q.set.stage.fill = { mesh: rel(id, r.mesh), cameras: rel(id, r.cameras), views: r.views.map((v) => rel(id, v.filled)), holes: r.holes };
+  });
+}
+
+// Paint the holes again (new seeds), keeping the stage MoGe built.
+export async function refillStage(id: string) {
+  const p = await load(id);
+  if (!p.set?.stage || p.set.stage.image !== p.set.image) throw new Error("Build the stage first.");
+  await startJob(id, "set", (ctx) => fill(id, ctx), "Filling the stage");
+  done(id);
 }
 
 export async function cancelSet(id: string) {
