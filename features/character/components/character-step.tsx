@@ -34,7 +34,7 @@ export function CharacterStep({ project }: { project: Project }) {
         />
         </div>
 
-        {version && <div className="nifl-enter" style={{ "--i": 2 } as React.CSSProperties}><PartEditor key={c.current} projectId={project.id} version={version} jobs={{ mask: jobs.mask, swap: jobs.swap, tags: jobs.tags }} /></div>}
+        {version && <div className="nifl-enter" style={{ "--i": 2 } as React.CSSProperties}><PartEditor key={c.current} projectId={project.id} version={version} jobs={{ mask: jobs.mask, swap: jobs.swap, tags: jobs.tags, brush: jobs.brush }} /></div>}
       </div>
 
       <VersionsSidebar projectId={project.id} versions={c.versions} current={c.current} busy={anyRunning} />

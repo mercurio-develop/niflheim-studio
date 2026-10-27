@@ -10,13 +10,13 @@ import { getProject, updateProject, type Project } from "./store";
 // alive(): still this run and not cancelled, checked before a result is written.
 export type JobCtx = { track: (comfyJobId: string) => Promise<unknown>; alive: () => Promise<boolean> };
 
-export async function startJob(projectId: string, key: string, work: (ctx: JobCtx) => Promise<void>) {
+export async function startJob(projectId: string, key: string, work: (ctx: JobCtx) => Promise<void>, detail?: string) {
   // Each run gets its own id, so a late finish (or failure) of a cancelled run never
   // overwrites the run that replaced it under the same key.
   const run = randomUUID();
   await updateProject(projectId, (p) => {
     if (p.jobs[key]?.status === "running") throw new Error(`${key} is already running`);
-    p.jobs[key] = { status: "running", startedAt: new Date().toISOString(), run };
+    p.jobs[key] = { status: "running", startedAt: new Date().toISOString(), run, ...(detail ? { detail } : {}) };
   });
   const mine = (p: Project) => p.jobs[key]?.run === run;
   const track = (comfyId: string) => updateProject(projectId, (p) => void (mine(p) && (p.jobs[key] = { ...p.jobs[key], comfyId })));

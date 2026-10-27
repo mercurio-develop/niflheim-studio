@@ -10,6 +10,13 @@ import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { cancel, generateConcepts, pickConcept } from "../actions/character";
 
+// While a set is painted, say which style it is in; a style switch reads as a new set in that style.
+function conceptMessage(current: string, requested: string | undefined, hadSet: boolean) {
+  const label = (id: string) => STYLES.find((s) => s.id === id)?.label ?? id;
+  if (requested && requested !== current && hadSet) return `Creating new concepts in the ${label(requested)} style`;
+  return `Painting four ${label(requested ?? current).toLowerCase()} concepts`;
+}
+
 export function ConceptSection(props: {
   projectId: string;
   concepts: string[];
@@ -108,7 +115,7 @@ export function ConceptSection(props: {
             {running && props.job && (
               <FogLoader
                 className="absolute inset-0 rounded-lg"
-                message={`Painting four ${STYLES.find((s) => s.id === props.style)?.label.toLowerCase() ?? ""} concepts`}
+                message={conceptMessage(props.style, props.job.detail, props.concepts.length > 0)}
                 startedAt={props.job.startedAt}
                 expected={60}
                 onCancel={() => cancel(props.projectId, "concepts")}
