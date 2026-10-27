@@ -32,11 +32,11 @@ export function VersionsSidebar(props: { projectId: string; versions: Version[];
     <aside
       className={cn(
         "nifl-enter flex flex-col gap-3 transition-[width] duration-500 ease-out lg:sticky lg:top-20 lg:mt-[5.25rem] lg:max-h-[calc(100svh-7rem)]",
-        open ? "lg:w-60" : "lg:w-14",
+        open ? "lg:w-60" : "lg:w-16",
       )}
       style={{ "--i": 2 } as React.CSSProperties}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className={cn("flex items-center gap-2", open ? "justify-between" : "justify-center")}>
         {open && <h2 className="text-sm font-semibold">History</h2>}
         <div className="flex items-center gap-1">
           {open && props.versions.length > 1 && (
@@ -76,7 +76,7 @@ export function VersionsSidebar(props: { projectId: string; versions: Version[];
       {props.versions.length === 0 ? (
         open && <p className="text-sm text-muted-foreground">Every pick and edit lands here. You can always go back.</p>
       ) : (
-        <ol className="flex gap-2 overflow-auto pb-1 lg:flex-col">
+        <ol className={cn("nifl-scroll flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto", open ? "lg:pr-1" : "lg:items-center")}>
           {order.map(([v, i]) => {
             const kind = versionKind(v);
             const chosen = picked.includes(i);
@@ -90,12 +90,13 @@ export function VersionsSidebar(props: { projectId: string; versions: Version[];
                   aria-pressed={comparing ? chosen : undefined}
                   title={v.label}
                   className={cn(
-                    "relative flex items-center gap-3 rounded-lg border p-1.5 text-left transition-colors disabled:opacity-60",
-                    open ? "w-44 lg:w-full" : "w-auto",
+                    "relative flex items-center gap-3 rounded-lg border text-left transition-colors disabled:opacity-60",
+                    open ? "w-44 p-1.5 lg:w-full" : "w-auto p-1",
                     chosen ? "border-tone-cyan bg-tone-cyan/10" : i === props.current ? "border-primary/70 bg-card" : "border-transparent hover:border-border hover:bg-card/60",
                   )}
                 >
-                  <FadeImage src={file(v.image)} alt={v.label} className="h-16 w-12 shrink-0 rounded-md border object-cover" />
+                  <FadeImage src={file(v.image)} alt={v.label} className={cn("shrink-0 rounded-md border object-cover", open ? "h-16 w-12" : "h-12 w-9")} />
+                  {!open && <span className={cn("absolute right-0.5 bottom-0.5 size-2 rounded-full ring-2 ring-background", KIND_DOT[kind])} />}
                   {chosen && (
                     <span className="absolute top-1 left-1 flex size-5 items-center justify-center rounded-full bg-tone-cyan font-mono text-[10px] text-background">
                       {picked.indexOf(i) === 0 ? "A" : "B"}
