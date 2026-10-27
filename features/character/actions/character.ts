@@ -7,7 +7,7 @@ import { z } from "zod";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { redirect } from "next/navigation";
-import { cropBox, pngSize } from "@/lib/brush";
+import { cropBox, pngSize, removePrompt } from "@/lib/brush";
 import { parentIn, stackMoves } from "@/lib/history";
 import { mergeParts, partsFromTags } from "@/lib/parts";
 import { getProject, projectDir, updateProject, type Project, type Version, type ViewId } from "@/lib/store";
@@ -327,7 +327,7 @@ export async function removeSelection(id: string, form: FormData, rawTarget = "c
         onSubmit: ctx.track,
         workflow: "01_remove.api.json",
         set: [
-          ["17", "prompt", "Remove the flat grey shape completely and fill the space with what would be behind it: the character's body, clothing and the plain background, in the same art style. Do not add any new object."],
+          ["17", "prompt", removePrompt(what)],
           ["22", "seed", newSeed()],
           ...crop("4"),
           ...crop("5"),

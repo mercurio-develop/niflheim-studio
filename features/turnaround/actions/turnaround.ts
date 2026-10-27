@@ -3,7 +3,7 @@
 import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { cropBox, maskBox, pngSize, type Box } from "@/lib/brush";
+import { cropBox, maskBox, pngSize, removePrompt, type Box } from "@/lib/brush";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { characterImage, frontPrompt, viewImage, viewPrompt, VIEWS, viewsFor } from "@/lib/progress";
@@ -101,14 +101,14 @@ async function keepAsset(id: string, name: string, source: string, mask: string,
 
 // Paint an object out with its mask (01_remove: blank the mask inside a crop, Qwen fills in what
 // was behind it, only the mask's pixels are pasted back). More exact than asking in the prompt.
-async function removeObject(id: string, from: string, mask: string, strokes: Box, ctx: JobCtx) {
+async function removeObject(id: string, from: string, mask: string, strokes: Box, ctx: JobCtx, what = "") {
   const box = cropBox(strokes, await pngSize(abs(id, from)));
   const crop = (n: string): [string, string, number][] => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
   const [image] = await runWorkflow({
     onSubmit: ctx.track,
     workflow: "01_remove.api.json",
     set: [
-      ["17", "prompt", "Remove the flat grey shape completely and fill the space with what would be behind it: the character's body, clothing and the plain background, in the same art style. Do not add any new object."],
+      ["17", "prompt", removePrompt(what)],
       ["22", "seed", seed()],
       ...crop("4"),
       ...crop("5"),
@@ -153,7 +153,7 @@ export async function generateTurnaround(id: string, rawOptions: z.input<typeof 
         }
         if (box) {
           await ctx.progress(`Removing the ${name}`);
-          clean = await removeObject(id, clean, mask, box, ctx);
+          clean = await removeObject(id, clean, mask, box, ctx, name);
         }
         if (!(await ctx.alive())) return;
       }
@@ -284,7 +284,7 @@ async function repeatEdit(id: string, view: ViewId, e: Edit, from: ViewId, ctx: 
     mask = (await maskBox(m)) ? rel(id, m) : null; // not on this view: fall back to words
   }
   let out: string;
-  if (mask && e.kind === "remove") out = await removeObject(id, version.image, mask, (await maskBox(abs(id, mask)))!, ctx);
+  if (mask && e.kind === "remove") out = await removeObject(id, version.image, mask, (await maskBox(abs(id, mask)))!, ctx, e.what);
   else {
     const [o] = await runWorkflow({
       workflow: mask ? "01_swap.api.json" : "01_edit.api.json",
