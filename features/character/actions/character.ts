@@ -1,7 +1,7 @@
 "use server";
 
 import path from "node:path";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { runWorkflow } from "@/lib/comfy";
@@ -34,22 +34,29 @@ const conceptPrompt = (prompt: string, style: string) =>
 
 const StyleId = z.enum(STYLES.map((s) => s.id) as [string, ...string[]]);
 
-export async function generateConcepts(id: string, options: { reseed?: boolean; style?: string } = {}) {
+const Prompt = z.string().trim().min(3, "Describe your character in a few words.").max(600);
+
+export async function generateConcepts(id: string, options: { reseed?: boolean; style?: string; prompt?: string } = {}) {
   const p = await load(id);
   const style = options.style ? StyleId.parse(options.style) : p.character.style;
-  const seed = options.reseed || options.style ? newSeed() : p.character.seed;
+  const prompt = options.prompt !== undefined ? Prompt.parse(options.prompt) : p.character.prompt;
+  const seed = options.reseed || options.style || options.prompt !== undefined ? newSeed() : p.character.seed;
   await startJob(id, "concepts", async ({ track }) => {
     const files = await runWorkflow({
       onSubmit: track,
       workflow: "01_concept.api.json",
-      set: [["5", "text", conceptPrompt(p.character.prompt, style)], ["8", "seed", seed]],
+      set: [["5", "text", conceptPrompt(prompt, style)], ["8", "seed", seed]],
       output: "10",
       outDir: abs(id, `character/concepts/${seed}`),
     });
     await updateProject(id, (q) => {
-      q.character.seed = seed;
-      q.character.style = style;
-      q.character.concepts = rel(id, files);
+      const c = q.character;
+      // The set on screen moves to the history; nothing the user saw is thrown away.
+      if (c.concepts.length) (c.sets ??= []).push({ prompt: c.prompt, style: c.style, seed: c.seed, images: c.concepts });
+      c.prompt = prompt;
+      c.seed = seed;
+      c.style = style;
+      c.concepts = rel(id, files);
     });
   }, style);
   done(id);
@@ -72,15 +79,23 @@ async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx) {
   });
 }
 
-export async function pickConcept(id: string, index: number) {
+// set: index into character.sets for an earlier set; omitted = the set on screen.
+export async function pickConcept(id: string, index: number, set?: number) {
   const p = await updateProject(id, (q) => {
-    const image = q.character.concepts[index];
+    const images = set === undefined ? q.character.concepts : q.character.sets?.[set]?.images;
+    const image = images?.[index];
     if (!image) throw new Error("No such concept.");
-    q.character.versions.push({ image, label: `Concept ${index + 1}`, parts: {} });
+    // Picking the same image again just goes back to that version.
+    const existing = q.character.versions.findIndex((v) => v.image === image);
+    if (existing >= 0) {
+      q.character.current = existing;
+      return;
+    }
+    q.character.versions.push({ image, label: `Concept ${index + 1}${set === undefined ? "" : ` · set ${set + 1}`}`, parts: {} });
     q.character.current = q.character.versions.length - 1;
   });
   const at = p.character.current!;
-  await startJob(id, "tags", (ctx) => tagVersion(id, at, p.character.versions[at].image, ctx)).catch(() => {});
+  if (!p.character.versions[at].tags) await startJob(id, "tags", (ctx) => tagVersion(id, at, p.character.versions[at].image, ctx)).catch(() => {});
   done(id);
 }
 
@@ -125,6 +140,7 @@ const SwapInput = z.object({
 export async function swapPart(id: string, input: { part: string; change: string }) {
   const { part, change } = SwapInput.parse(input);
   const p = await load(id);
+  const at = p.character.current!;
   const version = currentVersion(p);
   const mask = version.parts[part];
   if (!mask) throw new Error(`Find the ${part} first.`);
@@ -140,7 +156,7 @@ export async function swapPart(id: string, input: { part: string; change: string
     });
     if (!(await ctx.alive())) return; // cancelled after ComfyUI had already finished
     const q = await updateProject(id, (q) => {
-      q.character.versions.push({ image: rel(id, [image])[0], label: `${part} → ${change}`, parts: {}, tags: version.tags });
+      q.character.versions.push({ image: rel(id, [image])[0], label: `${part} → ${change}`, parts: {}, tags: version.tags, parent: at });
       q.character.current = q.character.versions.length - 1;
     });
     await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
@@ -150,19 +166,22 @@ export async function swapPart(id: string, input: { part: string; change: string
 
 const BrushInput = z.object({
   mode: z.enum(["add", "remove"]),
-  thing: z.string().trim().min(2, "Say what to add or remove.").max(200),
+  thing: z.string().trim().max(200), // optional for remove: the strokes already say what
   // Bounding box of the strokes, in the image's own pixels.
   strokes: z.object({ x: z.number().min(0), y: z.number().min(0), width: z.number().positive(), height: z.number().positive() }),
 });
 
+// The crop is centred on the strokes, so "in the centre" points Qwen at what was painted.
 const brushPrompt = (mode: "add" | "remove", thing: string) =>
   mode === "add"
     ? `Add ${thing}. Keep everything else exactly the same, in the same art style and lighting.`
-    : `Remove ${thing} and fill the space with what would be behind it. Keep everything else exactly the same, in the same art style.`;
+    : `Remove ${thing || "the object in the centre of the image"} and fill the space with what would be behind it. Keep everything else exactly the same, in the same art style.`;
 
 export async function brushEdit(id: string, input: z.input<typeof BrushInput>) {
   const { mode, thing, strokes } = BrushInput.parse(input);
+  if (mode === "add" && thing.length < 2) throw new Error("Say what to add.");
   const p = await load(id);
+  const at = p.character.current!;
   const version = currentVersion(p);
   const source = abs(id, version.image);
   const box = cropBox(strokes, await pngSize(source));
@@ -185,17 +204,183 @@ export async function brushEdit(id: string, input: z.input<typeof BrushInput>) {
       });
       if (!(await ctx.alive())) return; // cancelled after ComfyUI had already finished
       const q = await updateProject(id, (q) => {
-        q.character.versions.push({ image: rel(id, [image])[0], label: `${mode === "add" ? "+" : "−"} ${thing}`, parts: {}, tags: version.tags });
+        q.character.versions.push({ image: rel(id, [image])[0], label: `${mode === "add" ? "+" : "−"} ${thing || "selection"}`, parts: {}, tags: version.tags, parent: at });
         q.character.current = q.character.versions.length - 1;
       });
       await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
     },
-    `${mode === "add" ? "Painting" : "Removing"} ${thing}`,
+    mode === "add" ? `Painting ${thing}` : `Removing ${thing || "the selection"}`,
   );
   done(id);
 }
 
-const JobKey = z.enum(["concepts", "mask", "swap", "tags", "brush"]);
+// Change the selection: the browser sends the final mask (a found part, plus and minus brush
+// strokes), Qwen repaints the image, and only the mask's pixels are kept (01_swap).
+export async function repaintSelection(id: string, form: FormData) {
+  const change = z.string().trim().min(3, "Say what it should become.").max(300).parse(form.get("change"));
+  const what = z.string().trim().max(40).parse(form.get("what") ?? "") || "selection";
+  const mask = form.get("mask");
+  if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
+  const p = await load(id);
+  const at = p.character.current!;
+  const version = currentVersion(p);
+  const maskFile = abs(id, `character/selections/${stamp()}/mask.png`);
+  await mkdir(path.dirname(maskFile), { recursive: true });
+  await writeFile(maskFile, Buffer.from(await mask.arrayBuffer()));
+  const prompt =
+    what === "selection"
+      ? `Change the highlighted area into ${change}. Keep the face, pose, everything else and the background exactly the same.`
+      : `Change only the ${what} into ${change}. Keep the face, pose, every other part and the background exactly the same.`;
+  await startJob(
+    id,
+    "swap",
+    async (ctx) => {
+      const [image] = await runWorkflow({
+        onSubmit: ctx.track,
+        workflow: "01_swap.api.json",
+        set: [["17", "prompt", prompt], ["22", "seed", newSeed()]],
+        images: [["1", abs(id, version.image)], ["2", maskFile]],
+        output: "28",
+        outDir: abs(id, `character/swaps/${stamp()}`),
+      });
+      if (!(await ctx.alive())) return;
+      const q = await updateProject(id, (q) => {
+        q.character.versions.push({ image: rel(id, [image])[0], label: `${what} → ${change}`, parts: {}, tags: version.tags, parent: at });
+        q.character.current = q.character.versions.length - 1;
+      });
+      await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
+    },
+    `Repainting the ${what}`,
+  );
+  done(id);
+}
+
+// Remove = inpainting: the selection is blanked inside a crop, Qwen removes the blank shape and
+// fills what was behind it, and only the selection's pixels are pasted back (01_remove).
+export async function removeSelection(id: string, form: FormData) {
+  const what = z.string().trim().max(40).parse(form.get("what") ?? "");
+  const strokes = BrushInput.shape.strokes.parse(JSON.parse(String(form.get("box") ?? "null")));
+  const mask = form.get("mask");
+  if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
+  const p = await load(id);
+  const at = p.character.current!;
+  const version = currentVersion(p);
+  const source = abs(id, version.image);
+  const box = cropBox(strokes, await pngSize(source));
+  const maskFile = abs(id, `character/selections/${stamp()}/mask.png`);
+  await mkdir(path.dirname(maskFile), { recursive: true });
+  await writeFile(maskFile, Buffer.from(await mask.arrayBuffer()));
+  const crop = (n: string): [string, string, number][] => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
+  await startJob(
+    id,
+    "brush",
+    async (ctx) => {
+      const [image] = await runWorkflow({
+        onSubmit: ctx.track,
+        workflow: "01_remove.api.json",
+        set: [
+          ["17", "prompt", "Remove the flat grey shape completely and fill the space with what would be behind it: the character's body, clothing and the plain background, in the same art style. Do not add any new object."],
+          ["22", "seed", newSeed()],
+          ...crop("4"),
+          ...crop("5"),
+          ["27", "x", box.x],
+          ["27", "y", box.y],
+        ],
+        images: [["1", source], ["2", maskFile]],
+        output: "28",
+        outDir: abs(id, `character/removes/${stamp()}`),
+      });
+      if (!(await ctx.alive())) return;
+      const q = await updateProject(id, (q) => {
+        q.character.versions.push({ image: rel(id, [image])[0], label: `− ${what || "selection"}`, parts: {}, tags: version.tags?.filter((t) => t !== what), parent: at });
+        q.character.current = q.character.versions.length - 1;
+      });
+      await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
+    },
+    `Removing ${what ? `the ${what}` : "the selection"}`,
+  );
+  done(id);
+}
+
+// A painted selection becomes a named part of this version, like the ones Florence-2 found.
+export async function savePart(id: string, form: FormData) {
+  const name = Part.parse(form.get("name"));
+  const mask = form.get("mask");
+  if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
+  const p = await load(id);
+  const at = p.character.current!;
+  currentVersion(p);
+  const file = abs(id, `character/masks/${stamp()}-${name.replace(/ /g, "-")}/00.png`);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, Buffer.from(await mask.arrayBuffer()));
+  await updateProject(id, (q) => {
+    const v = q.character.versions[at];
+    v.parts[name] = rel(id, [file])[0];
+    v.tags = [...(v.tags ?? []).filter((t) => t !== name), name];
+  });
+  done(id);
+}
+
+// Restyle the chosen character, not new concepts: same design and pose, another look.
+export async function restyleCurrent(id: string, rawStyle: string) {
+  const style = styleById(StyleId.parse(rawStyle));
+  const p = await load(id);
+  const at = p.character.current!;
+  const version = currentVersion(p);
+  await startJob(
+    id,
+    "restyle",
+    async (ctx) => {
+      const [image] = await runWorkflow({
+        onSubmit: ctx.track,
+        workflow: "01_angle.api.json", // plain Qwen edit (the angles LoRA is switched off below)
+        set: [
+          ["17", "prompt", `Repaint this exact character as ${style.phrase}. Keep the same design, outfit, colours, proportions, pose and the plain background.`],
+          ["22", "seed", newSeed()],
+          ["9", "strength_model", 0],
+        ],
+        images: [["1", abs(id, version.image)]],
+        output: "28",
+        outDir: abs(id, `character/restyles/${stamp()}-${style.id}`),
+      });
+      if (!(await ctx.alive())) return;
+      await updateProject(id, (q) => {
+        q.character.versions.push({ image: rel(id, [image])[0], label: `Style: ${style.label}`, parts: {}, tags: version.tags, parent: at });
+        q.character.current = q.character.versions.length - 1;
+      });
+    },
+    `Repainting as ${style.label}`,
+  );
+  done(id);
+}
+
+// Undo goes to the version this one was made from; Redo to the newest version made from this one.
+function parentOf(p: Project, i: number): number | null {
+  const v = p.character.versions[i];
+  if (v?.parent !== undefined) return v.parent;
+  if (!v || v.label.startsWith("Concept")) return null;
+  return i > 0 ? i - 1 : null; // versions from before parents were recorded
+}
+
+export async function undo(id: string) {
+  await updateProject(id, (p) => {
+    const to = p.character.current === null ? null : parentOf(p, p.character.current);
+    if (to !== null) p.character.current = to;
+  });
+  done(id);
+}
+
+export async function redo(id: string) {
+  await updateProject(id, (p) => {
+    const at = p.character.current;
+    if (at === null) return;
+    const children = p.character.versions.map((_, i) => i).filter((i) => parentOf(p, i) === at);
+    if (children.length) p.character.current = children[children.length - 1];
+  });
+  done(id);
+}
+
+const JobKey = z.enum(["concepts", "mask", "swap", "tags", "brush", "restyle"]);
 
 export async function cancel(id: string, key: string) {
   await cancelJob(id, JobKey.parse(key));
