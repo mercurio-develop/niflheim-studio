@@ -1,0 +1,121 @@
+{
+ "1": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": ""
+  }
+ },
+ "2": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": ""
+  }
+ },
+ "3": {
+  "class_type": "ImageToMask",
+  "inputs": {
+   "image": [
+    "2",
+    0
+   ],
+   "channel": "red"
+  }
+ },
+ "4": {
+  "class_type": "GrowMask",
+  "inputs": {
+   "mask": [
+    "3",
+    0
+   ],
+   "expand": 4,
+   "tapered_corners": true
+  }
+ },
+ "5": {
+  "class_type": "InvertMask",
+  "inputs": {
+   "mask": [
+    "4",
+    0
+   ]
+  }
+ },
+ "6": {
+  "class_type": "JoinImageWithAlpha",
+  "inputs": {
+   "image": [
+    "1",
+    0
+   ],
+   "alpha": [
+    "5",
+    0
+   ]
+  }
+ },
+ "10": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "6",
+    0
+   ],
+   "filename_prefix": "nifl/asset-cutout"
+  }
+ },
+ "7": {
+  "class_type": "GetImageSize",
+  "inputs": {
+   "image": [
+    "1",
+    0
+   ]
+  }
+ },
+ "8": {
+  "class_type": "EmptyImage",
+  "inputs": {
+   "width": [
+    "7",
+    0
+   ],
+   "height": [
+    "7",
+    1
+   ],
+   "batch_size": 1,
+   "color": 14277081
+  }
+ },
+ "9": {
+  "class_type": "ImageCompositeMasked",
+  "inputs": {
+   "destination": [
+    "8",
+    0
+   ],
+   "source": [
+    "1",
+    0
+   ],
+   "x": 0,
+   "y": 0,
+   "resize_source": false,
+   "mask": [
+    "4",
+    0
+   ]
+  }
+ },
+ "11": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "9",
+    0
+   ],
+   "filename_prefix": "nifl/asset-grey"
+  }
+ }
+}

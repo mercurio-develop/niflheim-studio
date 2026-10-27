@@ -8,7 +8,8 @@ import { getProject, updateProject, type Project } from "./store";
 // kept so the user can cancel.
 
 // alive(): still this run and not cancelled, checked before a result is written.
-export type JobCtx = { track: (comfyJobId: string) => Promise<unknown>; alive: () => Promise<boolean> };
+// progress(): update the line the UI shows while a multi-step job runs ("Making the side view (3/6)").
+export type JobCtx = { track: (comfyJobId: string) => Promise<unknown>; alive: () => Promise<boolean>; progress: (detail: string) => Promise<unknown> };
 
 export async function startJob(projectId: string, key: string, work: (ctx: JobCtx) => Promise<void>, detail?: string) {
   // Each run gets its own id, so a late finish (or failure) of a cancelled run never
@@ -20,8 +21,9 @@ export async function startJob(projectId: string, key: string, work: (ctx: JobCt
   });
   const mine = (p: Project) => p.jobs[key]?.run === run;
   const track = (comfyId: string) => updateProject(projectId, (p) => void (mine(p) && (p.jobs[key] = { ...p.jobs[key], comfyId })));
+  const progress = (detail: string) => updateProject(projectId, (p) => void (mine(p) && (p.jobs[key] = { ...p.jobs[key], detail })));
   const alive = async () => { const p = await getProject(projectId); return !!p && mine(p) && p.jobs[key].status === "running"; };
-  void work({ track, alive })
+  void work({ track, alive, progress })
     .then(() =>
       updateProject(projectId, (p) => {
         if (mine(p) && p.jobs[key].status === "running") p.jobs[key] = { ...p.jobs[key], status: "done" };

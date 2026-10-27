@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ArrowRight, Brush, CirclePlus, Eraser, Maximize2, Palette, Redo2, Replace, ScanSearch, Search, SplitSquareHorizontal, Trash2, Undo2, X } from "lucide-react";
+import { ArrowRight, Brush, CirclePlus, Eraser, Maximize2, Palette, Redo2, RefreshCw, Replace, ScanSearch, Search, SplitSquareHorizontal, Trash2, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +14,7 @@ import type { Job, Version } from "@/lib/store";
 import { STYLES, styleById } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { KIND_DOT, versionKind } from "@/lib/versions";
-import { brushEdit, cancel, maskPart, redo, removeSelection, repaintSelection, restyleCurrent, savePart, undo } from "../actions/character";
+import { brushEdit, cancel, maskPart, redo, removeSelection, repaintSelection, restyleCurrent, retryEdit, savePart, undo } from "../actions/character";
 import { SectionTitle } from "@/components/section-title";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
 
@@ -31,8 +31,11 @@ const ACTIONS: { id: Action; label: string; verb: string; icon: typeof Replace; 
 // Edit the chosen character like Generative Fill. Left rail: the tool (Part or Paint make the
 // selection; Restyle repaints the whole character). Above the image: that tool's options.
 // Right: what happens (Change / Add object / Remove the selection, or Restyle).
+// target: what is edited, the character or one turnaround view ("view:side"; no Restyle there).
 export function Editor(props: {
   projectId: string;
+  target?: string;
+  title?: { n: string; title: string; line: string };
   version: Version;
   parentImage: string | null;
   moves: { undo: number | null; redo: number | null };
@@ -56,6 +59,7 @@ export function Editor(props: {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const selection = useRef<SelectionHandle>(null);
+  const target = props.target ?? "character";
 
   const is = (j?: Job) => j?.status === "running";
   const running = (["mask", "swap", "brush", "restyle"] as const).find((k) => is(props.jobs[k]));
@@ -82,7 +86,7 @@ export function Editor(props: {
     setPart(name);
     setEdited(false);
     setTool("part");
-    if (!props.version.parts[name]) act(() => maskPart(props.projectId, name));
+    if (!props.version.parts[name]) act(() => maskPart(props.projectId, name, target));
   };
 
   // Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z walk the history, except while typing.
@@ -97,10 +101,10 @@ export function Editor(props: {
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
       e.preventDefault();
       if (busy) return;
-      if (e.shiftKey && props.moves.redo !== null) act(() => redo(props.projectId));
-      else if (!e.shiftKey && props.moves.undo !== null) act(() => undo(props.projectId));
+      if (e.shiftKey && props.moves.redo !== null) act(() => redo(props.projectId, target));
+      else if (!e.shiftKey && props.moves.undo !== null) act(() => undo(props.projectId, target));
     },
-    [busy, props.moves.redo, props.moves.undo, props.projectId],
+    [busy, props.moves.redo, props.moves.undo, props.projectId, target],
   );
   useEffect(() => {
     window.addEventListener("keydown", onKey);
@@ -132,15 +136,15 @@ export function Editor(props: {
     if (blocked) return;
     act(async () => {
       if (tool === "restyle") return restyleCurrent(props.projectId, style);
-      if (action === "add") return brushEdit(props.projectId, { mode: "add", thing: text, strokes: box! }).then(() => setText(""));
+      if (action === "add") return brushEdit(props.projectId, { mode: "add", thing: text, strokes: box! }, target).then(() => setText(""));
       const form = await selectionForm();
       if (action === "remove") {
         form.set("what", named ?? "");
-        return removeSelection(props.projectId, form);
+        return removeSelection(props.projectId, form, target);
       }
       form.set("change", text);
       form.set("what", named ?? "selection");
-      await repaintSelection(props.projectId, form);
+      await repaintSelection(props.projectId, form, target);
       setText("");
     });
   };
@@ -151,7 +155,7 @@ export function Editor(props: {
     act(async () => {
       const form = await selectionForm();
       form.set("name", name);
-      await savePart(props.projectId, form);
+      await savePart(props.projectId, form, target);
       setPart(name);
       setEdited(false);
       setPartName("");
@@ -166,20 +170,27 @@ export function Editor(props: {
     ["paint", "Paint", Brush, "Paint the selection (X switches add / erase)"],
     ["restyle", "Restyle", Palette, "Repaint the whole character in another style"],
   ];
+  if (target !== "character") rail.pop(); // a view keeps the character's style
 
   return (
     <section className="flex flex-col gap-3">
-      <SectionTitle n="2" tone="bg-primary" title="Edit" line="Pick a tool on the left, then set it and act in the card on the right." />
+      <SectionTitle n={props.title?.n ?? "2"} tone="bg-primary" title={props.title?.title ?? "Edit"} line={props.title?.line ?? "Pick a tool on the left, then set it and act in the card on the right."} />
       {/* Top bar: history and compare */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button variant="ghost" size="sm" disabled={busy || props.moves.undo === null} onClick={() => act(() => undo(props.projectId))} title="Undo (Ctrl/⌘ Z)">
+        <Button variant="ghost" size="sm" disabled={busy || props.moves.undo === null} onClick={() => act(() => undo(props.projectId, target))} title="Undo (Ctrl/⌘ Z)">
           <Undo2 data-icon="inline-start" />
           Undo
         </Button>
-        <Button variant="ghost" size="sm" disabled={busy || props.moves.redo === null} onClick={() => act(() => redo(props.projectId))} title="Redo (Shift Ctrl/⌘ Z)">
+        <Button variant="ghost" size="sm" disabled={busy || props.moves.redo === null} onClick={() => act(() => redo(props.projectId, target))} title="Redo (Shift Ctrl/⌘ Z)">
           <Redo2 data-icon="inline-start" />
           Redo
         </Button>
+        {props.version.edit && props.version.parent !== undefined && (
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => act(() => retryEdit(props.projectId, target))} title="Run this change again from the version before, with a new seed">
+            <RefreshCw data-icon="inline-start" />
+            Try again
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -260,7 +271,7 @@ export function Editor(props: {
                 message={running === "mask" ? `Finding the ${part ?? "part"}` : (loader.detail ?? "Repainting")}
                 startedAt={loader.startedAt}
                 expected={running === "mask" ? 8 : running === "brush" ? 30 : 45}
-                onCancel={() => cancel(props.projectId, running!)}
+                onCancel={() => cancel(props.projectId, running!, target)}
               />
             )}
           </div>
