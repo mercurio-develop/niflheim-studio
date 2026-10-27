@@ -1,6 +1,16 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
-export default async function ProjectIndex({ params }: PageProps<"/p/[id]">) {
+async function ToCharacter({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  redirect(`/p/${id}/character`);
+  return redirect(`/p/${id}/character`);
+}
+
+// /p/<id> opens the first step. params are runtime data, so they sit inside Suspense.
+export default function ProjectIndex(props: PageProps<"/p/[id]">) {
+  return (
+    <Suspense>
+      <ToCharacter params={props.params} />
+    </Suspense>
+  );
 }

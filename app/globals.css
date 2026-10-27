@@ -1,26 +1,137 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Tokens shared with NIFLheim (web/src/index.css). Zinc, black and white. No accent hue: accent == muted. Hairline borders (Vercel / Supabase). */
+:root {
+  --radius: 0.5rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.21 0.006 285.885);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.705 0.015 286.067);
+}
+
+.dark {
+  /* Ristretto (Omarchy / Monokai Pro): coffee browns, cream text, one peach accent. */
+  --background: #211b1b;
+  --foreground: #e6d9db;
+  --card: #2c2525;
+  --card-foreground: #e6d9db;
+  --popover: #2c2525;
+  --popover-foreground: #e6d9db;
+  --primary: #f38d70;
+  --primary-foreground: #211b1b;
+  --secondary: #3d2f2a;
+  --secondary-foreground: #e6d9db;
+  --muted: #2c2525;
+  --muted-foreground: #a89c9d;
+  --accent: #3d2f2a;
+  --accent-foreground: #e6d9db;
+  --destructive: #fd6883;
+  --border: rgb(230 217 219 / 10%);
+  --input: rgb(230 217 219 / 14%);
+  --ring: rgb(243 141 112 / 60%);
+  --glow: rgb(243 141 112 / 9%);
+  --field: 249 226 210; /* magnet particles, rgb */
+  --field-hot: 243 141 112;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    font-family: var(--font-sans);
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* NIFL fog: drifting light used behind every "working" state. */
+@keyframes nifl-fog {
+  0% { background-position: 0% 50%, 100% 50%; }
+  50% { background-position: 100% 30%, 0% 70%; }
+  100% { background-position: 0% 50%, 100% 50%; }
+}
+.nifl-fog {
+  background-image:
+    radial-gradient(ellipse 60% 50% at 30% 40%, rgb(249 204 108 / 12%), transparent 70%),
+    radial-gradient(ellipse 50% 60% at 70% 60%, rgb(243 141 112 / 10%), transparent 70%);
+  background-size: 200% 200%, 200% 200%;
+  animation: nifl-fog 6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nifl-fog { animation: none; }
+}
+
+/* Motion: one easing, three durations, shared by every transition in the app. */
+:root {
+  --ease-nifl: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 180ms;
+  --dur-base: 420ms;
+  --dur-slow: 700ms;
+}
+
+/* A section arriving: rise a little, sharpen out of a blur. Stagger with style="--i: n". */
+@keyframes nifl-enter {
+  from { opacity: 0; transform: translateY(8px); filter: blur(6px); }
+}
+.nifl-enter {
+  animation: nifl-enter var(--dur-base) var(--ease-nifl) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* A result condensing out of the fog (new images, new versions). */
+@keyframes nifl-condense {
+  from { opacity: 0; transform: scale(1.03); filter: blur(14px) brightness(1.4); }
+}
+.nifl-condense { animation: nifl-condense var(--dur-slow) var(--ease-nifl) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nifl-enter, .nifl-condense { animation: none; }
 }

@@ -1,15 +1,22 @@
-import { notFound } from "next/navigation";
-import { StepRail } from "@/features/wizard/components/step-rail";
-import { getStepStates, projectExists } from "@/features/wizard/queries/project-steps";
+import { Suspense } from "react";
+import { ProjectHeader } from "@/features/wizard/components/project-header";
 
-export default async function ProjectLayout({ children, params }: LayoutProps<"/p/[id]">) {
+async function Header({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!(await projectExists(id))) notFound();
-  const steps = await getStepStates(id);
+  return <ProjectHeader projectId={id} />;
+}
+
+export default function ProjectLayout({ children, params }: LayoutProps<"/p/[id]">) {
   return (
-    <div className="flex flex-1">
-      <StepRail projectId={id} steps={steps} />
-      <div className="flex-1 p-6">{children}</div>
+    <div className="relative flex min-h-svh flex-col">
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[28rem] bg-[radial-gradient(ellipse_60%_100%_at_50%_0%,var(--glow),transparent)]"
+      />
+      <Suspense fallback={<div className="h-12 border-b" />}>
+        <Header params={params} />
+      </Suspense>
+      {children}
     </div>
   );
 }

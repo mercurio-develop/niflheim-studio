@@ -1,0 +1,48 @@
+{
+ "1": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": ""
+  }
+ },
+ "2": {
+  "class_type": "DownloadAndLoadFlorence2Model",
+  "inputs": {
+   "model": "MiaoshouAI/Florence-2-large-PromptGen-v2.0",
+   "precision": "fp16"
+  }
+ },
+ "3": {
+  "class_type": "Florence2Run",
+  "inputs": {
+   "image": [
+    "1",
+    0
+   ],
+   "florence2_model": [
+    "2",
+    0
+   ],
+   "text_input": "",
+   "task": "prompt_gen_tags",
+   "fill_mask": false,
+   "keep_model_loaded": false,
+   "max_new_tokens": 512,
+   "num_beams": 3,
+   "do_sample": false,
+   "output_mask_select": "",
+   "seed": 1
+  }
+ },
+ "4": {
+  "class_type": "SaveText",
+  "inputs": {
+   "text": [
+    "3",
+    2
+   ],
+   "filename_prefix": "nifl/tags",
+   "format": "txt"
+  }
+ }
+}
