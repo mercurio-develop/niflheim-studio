@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 // A page-wide particle field for long GPU waits, behind the content.
@@ -11,14 +11,18 @@ import { createPortal } from "react-dom";
 
 type P = { x: number; y: number; vx: number; vy: number; a: number; tx: number; ty: number };
 type Mode = "off" | "field" | "gather" | "burst";
+const noop = () => () => {};
 
 export function ParticleField({ active }: { active: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const mode = useRef<Mode>("off");
   const kick = useRef<(m: Mode) => void>(() => {});
+  // The canvas portals into <body>, which only exists in the browser: render it after hydration.
+  const mounted = useSyncExternalStore(noop, () => true, () => false);
 
   useEffect(() => {
-    const canvas = ref.current!;
+    const canvas = ref.current;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const css = getComputedStyle(document.documentElement);
@@ -135,14 +139,14 @@ export function ParticleField({ active }: { active: boolean }) {
       document.removeEventListener("pointerleave", leave);
       document.removeEventListener("visibilitychange", vis);
     };
-  }, []);
+  }, [mounted]);
 
   // Drive the phases from the job: start the field, or land it on the results when it ends.
   useEffect(() => {
     if (active && mode.current !== "field") kick.current("field");
     else if (!active && mode.current === "field") kick.current("gather");
-  }, [active]);
+  }, [active, mounted]);
 
-  if (typeof document === "undefined") return null;
+  if (!mounted) return null;
   return createPortal(<canvas ref={ref} aria-hidden className="pointer-events-none fixed inset-0 -z-[1]" />, document.body);
 }
