@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ArrowRight, Brush, CirclePlus, Eraser, Palette, Redo2, Replace, ScanSearch, Search, SplitSquareHorizontal, Trash2, Undo2, X } from "lucide-react";
+import { ArrowRight, Brush, CirclePlus, Eraser, Maximize2, Palette, Redo2, Replace, ScanSearch, Search, SplitSquareHorizontal, Trash2, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
+import { ImageViewer } from "@/components/image-viewer";
 import { LoadingDots } from "@/components/loading-dots";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import type { Box } from "@/lib/brush";
@@ -51,6 +52,7 @@ export function Editor(props: {
   const [partName, setPartName] = useState("");
   const [saving, setSaving] = useState(false);
   const [comparing, setComparing] = useState(false);
+  const [viewing, setViewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const selection = useRef<SelectionHandle>(null);
@@ -236,6 +238,17 @@ export function Editor(props: {
                 />
               </div>
             )}
+            {!loader && (
+              <button
+                type="button"
+                onClick={() => setViewing(true)}
+                aria-label="Open full screen to see details"
+                title="See details (full screen)"
+                className="absolute top-2 right-2 z-10 flex size-8 items-center justify-center rounded-md border bg-background/75 text-muted-foreground backdrop-blur transition-colors hover:text-foreground"
+              >
+                <Maximize2 className="size-4" />
+              </button>
+            )}
             {comparing && props.parentImage && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={file(props.parentImage)} alt="The version before" className="absolute inset-0 h-full w-full object-cover" />
@@ -251,6 +264,14 @@ export function Editor(props: {
               />
             )}
           </div>
+          {viewing && (
+            <ImageViewer
+              src={file(props.version.image)}
+              label={props.version.label}
+              dot={KIND_DOT[versionKind(props.version)]}
+              onClose={() => setViewing(false)}
+            />
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           {(["swap", "brush", "restyle", "mask"] as const).map(
             (k) => props.jobs[k]?.status === "error" && <p key={k} className="text-sm text-destructive">{props.jobs[k]!.error}</p>,
