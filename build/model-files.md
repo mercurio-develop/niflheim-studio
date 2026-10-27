@@ -16,9 +16,10 @@ read the model card before redistributing.
 | `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` | `loras/` | the Qwen graphs (4 steps, CFG 1) | lightx2v/Qwen-Image-Edit-2511-Lightning | Apache-2.0 |
 | `sam3.1_multiplex_fp16.safetensors` | `sam3/` (downloaded by ComfyUI-RMBG from 1038lab/sam3) | 01_parts (find a part by name) | facebook/sam3 (SAM 3.1) | SAM License (Meta; open weights, *check* terms) |
 | `MiaoshouAI/Florence-2-large-PromptGen-v2.0` | `LLM/` (downloaded by ComfyUI-Florence2) | 01_tags | MiaoshouAI | MIT (*check*) |
+| `moge_2_vitl_normal_fp16.safetensors` | `geometry_estimation/` | 02_moge (the set as a 3D stage: mesh and depth) | Comfy-Org (Ruicheng/moge-2-vitl-normal) | MIT (*check*) |
 
 Custom node packs: ComfyUI-RMBG (`SAM3Segment`), ComfyUI-Florence2 (`DownloadAndLoadFlorence2Model`,
 `Florence2Run`), ComfyUI-KJNodes (`GrowMaskWithBlur`). Everything else is core ComfyUI (v0.38+).
 
-Later stages add LTX-2.5 (LTX-2.x Community License: open weights, free under USD 10M revenue)
-and MoGe; they are listed here when their workflows land.
+02_set_paint reuses the Z-Image files above at 1344x768. Later stages add LTX-2.5 (LTX-2.x
+Community License: open weights, free under USD 10M revenue); listed here when its workflows land.

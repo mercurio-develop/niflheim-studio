@@ -1,4 +1,4 @@
-import { readFile, mkdir } from "node:fs/promises";
+import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Comfy } from "@comfyorg/sdk";
 
@@ -39,6 +39,25 @@ export async function runWorkflow(spec: RunSpec): Promise<string[]> {
   for (const [i, out] of job.getOutputs(spec.output).entries()) {
     const file = path.join(/* turbopackIgnore: true */ spec.outDir, `${String(i).padStart(2, "0")}.${spec.ext ?? "png"}`);
     await out.toFile(file);
+    files.push(file);
+  }
+  if (!files.length) files.push(...(await fromHistory(job.id, spec)));
+  return files;
+}
+
+// SaveGLB writes under a "3d" key, which the SDK's outputs leave out. ComfyUI's own history
+// has it (the proxy's job id is ComfyUI's prompt id), so those files are fetched from there.
+async function fromHistory(jobId: string, spec: RunSpec): Promise<string[]> {
+  const base = process.env.COMFYUI_URL ?? "http://127.0.0.1:8188";
+  const history = await (await fetch(`${base}/history/${jobId}`, { cache: "no-store" })).json();
+  const outputs: Record<string, { filename: string; subfolder: string; type: string }[]> = history[jobId]?.outputs?.[spec.output] ?? {};
+  const files: string[] = [];
+  for (const item of Object.values(outputs).flat()) {
+    if (!item?.filename) continue;
+    const res = await fetch(`${base}/view?${new URLSearchParams({ filename: item.filename, subfolder: item.subfolder, type: item.type })}`);
+    if (!res.ok) throw new Error(`ComfyUI output ${item.filename}: ${res.status}`);
+    const file = path.join(/* turbopackIgnore: true */ spec.outDir, `${String(files.length).padStart(2, "0")}.${spec.ext ?? "png"}`);
+    await writeFile(file, Buffer.from(await res.arrayBuffer()));
     files.push(file);
   }
   return files;

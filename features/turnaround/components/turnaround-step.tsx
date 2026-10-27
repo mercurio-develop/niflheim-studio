@@ -173,6 +173,16 @@ export function TurnaroundStep(props: {
           {!props.fresh && Object.keys(props.views).length > 0 && (
             <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made from an older version of the character. Generate again to update them.</p>
           )}
+          {/* The concept art the views are made from, large on top; every view below is painted new. */}
+          <figure className="nifl-enter flex flex-col items-center gap-2 rounded-xl border bg-card/40 p-4">
+            <button type="button" onClick={() => setViewing({ src: file(props.character), label: `Concept art · ${props.characterLabel}` })} aria-label="See the concept art full screen" className="overflow-hidden rounded-lg">
+              <FadeImage src={file(props.character)} alt="The concept art" className="max-h-[34rem] w-auto object-contain" />
+            </button>
+            <figcaption className="flex items-baseline gap-2 text-sm">
+              Concept art
+              <span className="font-mono text-[11px] text-muted-foreground">{props.characterLabel} · the source of every view</span>
+            </figcaption>
+          </figure>
           <ol className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {shown.map((v, i) => {
               const img = image(v.id);
