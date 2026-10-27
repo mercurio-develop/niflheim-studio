@@ -166,18 +166,20 @@ export async function swapPart(id: string, input: { part: string; change: string
 
 const BrushInput = z.object({
   mode: z.enum(["add", "remove"]),
-  thing: z.string().trim().min(2, "Say what to add or remove.").max(200),
+  thing: z.string().trim().max(200), // optional for remove: the strokes already say what
   // Bounding box of the strokes, in the image's own pixels.
   strokes: z.object({ x: z.number().min(0), y: z.number().min(0), width: z.number().positive(), height: z.number().positive() }),
 });
 
+// The crop is centred on the strokes, so "in the centre" points Qwen at what was painted.
 const brushPrompt = (mode: "add" | "remove", thing: string) =>
   mode === "add"
     ? `Add ${thing}. Keep everything else exactly the same, in the same art style and lighting.`
-    : `Remove ${thing} and fill the space with what would be behind it. Keep everything else exactly the same, in the same art style.`;
+    : `Remove ${thing || "the object in the centre of the image"} and fill the space with what would be behind it. Keep everything else exactly the same, in the same art style.`;
 
 export async function brushEdit(id: string, input: z.input<typeof BrushInput>) {
   const { mode, thing, strokes } = BrushInput.parse(input);
+  if (mode === "add" && thing.length < 2) throw new Error("Say what to add.");
   const p = await load(id);
   const at = p.character.current!;
   const version = currentVersion(p);
@@ -202,12 +204,12 @@ export async function brushEdit(id: string, input: z.input<typeof BrushInput>) {
       });
       if (!(await ctx.alive())) return; // cancelled after ComfyUI had already finished
       const q = await updateProject(id, (q) => {
-        q.character.versions.push({ image: rel(id, [image])[0], label: `${mode === "add" ? "+" : "−"} ${thing}`, parts: {}, tags: version.tags, parent: at });
+        q.character.versions.push({ image: rel(id, [image])[0], label: `${mode === "add" ? "+" : "−"} ${thing || "selection"}`, parts: {}, tags: version.tags, parent: at });
         q.character.current = q.character.versions.length - 1;
       });
       await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
     },
-    `${mode === "add" ? "Painting" : "Removing"} ${thing}`,
+    mode === "add" ? `Painting ${thing}` : `Removing ${thing || "the selection"}`,
   );
   done(id);
 }
@@ -250,6 +252,72 @@ export async function repaintSelection(id: string, form: FormData) {
     },
     `Repainting the ${what}`,
   );
+  done(id);
+}
+
+// Remove = inpainting: the selection is blanked inside a crop, Qwen removes the blank shape and
+// fills what was behind it, and only the selection's pixels are pasted back (01_remove).
+export async function removeSelection(id: string, form: FormData) {
+  const what = z.string().trim().max(40).parse(form.get("what") ?? "");
+  const strokes = BrushInput.shape.strokes.parse(JSON.parse(String(form.get("box") ?? "null")));
+  const mask = form.get("mask");
+  if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
+  const p = await load(id);
+  const at = p.character.current!;
+  const version = currentVersion(p);
+  const source = abs(id, version.image);
+  const box = cropBox(strokes, await pngSize(source));
+  const maskFile = abs(id, `character/selections/${stamp()}/mask.png`);
+  await mkdir(path.dirname(maskFile), { recursive: true });
+  await writeFile(maskFile, Buffer.from(await mask.arrayBuffer()));
+  const crop = (n: string): [string, string, number][] => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
+  await startJob(
+    id,
+    "brush",
+    async (ctx) => {
+      const [image] = await runWorkflow({
+        onSubmit: ctx.track,
+        workflow: "01_remove.api.json",
+        set: [
+          ["17", "prompt", "Remove the flat grey shape completely and fill the space with what would be behind it: the character's body, clothing and the plain background, in the same art style. Do not add any new object."],
+          ["22", "seed", newSeed()],
+          ...crop("4"),
+          ...crop("5"),
+          ["27", "x", box.x],
+          ["27", "y", box.y],
+        ],
+        images: [["1", source], ["2", maskFile]],
+        output: "28",
+        outDir: abs(id, `character/removes/${stamp()}`),
+      });
+      if (!(await ctx.alive())) return;
+      const q = await updateProject(id, (q) => {
+        q.character.versions.push({ image: rel(id, [image])[0], label: `− ${what || "selection"}`, parts: {}, tags: version.tags?.filter((t) => t !== what), parent: at });
+        q.character.current = q.character.versions.length - 1;
+      });
+      await tagVersion(id, q.character.current!, q.character.versions[q.character.current!].image, ctx);
+    },
+    `Removing ${what ? `the ${what}` : "the selection"}`,
+  );
+  done(id);
+}
+
+// A painted selection becomes a named part of this version, like the ones Florence-2 found.
+export async function savePart(id: string, form: FormData) {
+  const name = Part.parse(form.get("name"));
+  const mask = form.get("mask");
+  if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
+  const p = await load(id);
+  const at = p.character.current!;
+  currentVersion(p);
+  const file = abs(id, `character/masks/${stamp()}-${name.replace(/ /g, "-")}/00.png`);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, Buffer.from(await mask.arrayBuffer()));
+  await updateProject(id, (q) => {
+    const v = q.character.versions[at];
+    v.parts[name] = rel(id, [file])[0];
+    v.tags = [...(v.tags ?? []).filter((t) => t !== name), name];
+  });
   done(id);
 }
 

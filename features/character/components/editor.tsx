@@ -11,7 +11,7 @@ import type { Box } from "@/lib/brush";
 import type { Job, Version } from "@/lib/store";
 import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import { brushEdit, cancel, maskPart, redo, repaintSelection, restyleCurrent, undo } from "../actions/character";
+import { brushEdit, cancel, maskPart, redo, removeSelection, repaintSelection, restyleCurrent, savePart, undo } from "../actions/character";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
 
 const FALLBACK = ["hair", "face", "coat", "pants", "boots"];
@@ -36,6 +36,7 @@ export function Editor(props: {
   const [action, setAction] = useState<Action>("change");
   const [text, setText] = useState("");
   const [custom, setCustom] = useState("");
+  const [partName, setPartName] = useState("");
   const [comparing, setComparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -84,18 +85,33 @@ export function Editor(props: {
     return () => window.removeEventListener("keydown", onKey);
   }, [onKey]);
 
+  // Remove needs no words: the selection already says what goes.
+  const ready = !!box && (action === "remove" || text.trim().length >= 2);
+
+  const selectionForm = async () => {
+    const blob = await selection.current?.exportMask();
+    if (!blob || !box) throw new Error("Make a selection first.");
+    const form = new FormData();
+    form.set("mask", new File([blob], "mask.png", { type: "image/png" }));
+    form.set("box", JSON.stringify(box));
+    return form;
+  };
+
   const submit = () => {
-    if (!box || text.trim().length < 2) return;
+    if (!ready) return;
     if (action === "change") {
       act(async () => {
-        const blob = await selection.current?.exportMask();
-        if (!blob) throw new Error("Make a selection first.");
-        const form = new FormData();
-        form.set("mask", new File([blob], "mask.png", { type: "image/png" }));
+        const form = await selectionForm();
         form.set("change", text);
         form.set("what", part && !edited ? part : "selection");
         await repaintSelection(props.projectId, form);
         setText("");
+      });
+    } else if (action === "remove") {
+      act(async () => {
+        const form = await selectionForm();
+        form.set("what", part && !edited ? part : "");
+        await removeSelection(props.projectId, form);
       });
     } else {
       act(async () => {
@@ -110,7 +126,7 @@ export function Editor(props: {
     ["part", "Part", ScanSearch],
     ["add", "Brush +", Brush],
     ["erase", "Brush −", Eraser],
-    ["style", "Style", Palette],
+    ["style", "Restyle", Palette],
   ];
 
   return (
@@ -219,21 +235,25 @@ export function Editor(props: {
                     </button>
                   ))}
                 </div>
-                <input
-                  aria-label="What it should become"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder={
-                    action === "change"
-                      ? `${part && !edited ? `the ${part}` : "the selection"} becomes... a red leather coat`
-                      : action === "add"
-                        ? "a black raven perched on the shoulder"
-                        : "the shield"
-                  }
-                  className="min-w-40 flex-1 bg-transparent px-1 text-base outline-none placeholder:text-muted-foreground"
-                />
-                <Button type="submit" size="lg" disabled={busy || !box || text.trim().length < 2}>
-                  {pending && !running ? <LoadingDots /> : "Generate"}
+                {action === "remove" ? (
+                  <span className="flex-1 px-1 text-sm text-foreground">
+                    {box ? `Paint out ${part && !edited ? `the ${part}` : "the tinted area"} and fill in what is behind it` : "Select what to remove first"}
+                  </span>
+                ) : (
+                  <input
+                    aria-label={action === "change" ? "What it should become" : "What to add"}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder={
+                      action === "change"
+                        ? `${part && !edited ? `the ${part}` : "the selection"} becomes... a red leather coat`
+                        : "a black raven perched on the shoulder"
+                    }
+                    className="min-w-40 flex-1 bg-transparent px-1 text-base outline-none placeholder:text-muted-foreground"
+                  />
+                )}
+                <Button type="submit" size="lg" disabled={busy || !ready}>
+                  {pending && !running ? <LoadingDots /> : action === "remove" ? "Remove" : "Generate"}
                   <ArrowRight data-icon="inline-end" />
                 </Button>
               </div>
@@ -242,7 +262,9 @@ export function Editor(props: {
                   ? "select a part or paint with Brush + to choose what changes"
                   : action === "change"
                     ? "only the tinted area changes, pixel for pixel"
-                    : "changes stay inside a box around the selection"}
+                    : action === "add"
+                      ? "the new thing is painted around the selection; nothing outside its box changes"
+                      : "only the tinted area changes; fix the tint with Brush + / − first"}
               </p>
             </form>
           )}
@@ -332,6 +354,35 @@ export function Editor(props: {
                   <Search />
                 </Button>
               </form>
+              {box && (edited || !part) && (
+                <form
+                  className="flex flex-col gap-1.5 rounded-lg border border-dashed p-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const name = partName.trim().toLowerCase();
+                    if (name.length < 2) return;
+                    act(async () => {
+                      const form = await selectionForm();
+                      form.set("name", name);
+                      await savePart(props.projectId, form);
+                      setPart(name);
+                      setEdited(false);
+                      setPartName("");
+                      setTool("part");
+                    });
+                  }}
+                >
+                  <label htmlFor="part-name" className="text-xs text-muted-foreground">
+                    Save this selection as a part
+                  </label>
+                  <div className="flex gap-1.5">
+                    <Input id="part-name" value={partName} onChange={(e) => setPartName(e.target.value)} placeholder="e.g. scarf" />
+                    <Button type="submit" variant="outline" disabled={busy || partName.trim().length < 2}>
+                      Save
+                    </Button>
+                  </div>
+                </form>
+              )}
               {box && (
                 <Button
                   variant="ghost"

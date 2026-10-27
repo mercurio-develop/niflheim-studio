@@ -15,7 +15,7 @@ const ART: Record<string, string> = {
   "03-set": `A breathtaking misty nordic fishing village at dusk, wooden houses on stilts over dark mirror water, warm windows, towering mountains dissolving into fog, tiny ${HERO} on the pier.`,
   "04-style": `The same hooded lantern keeper painted four times side by side in four different art styles: anime cel shading, loose watercolour, pixel art and comic ink, each a vertical strip, colourful.`,
   "05-stage": `A dark void with a glowing holographic 3D stage of a village made of luminous points and wireframe, ${HERO} standing on a grid floor, a translucent camera frustum and dotted camera path circling the figure.`,
-  "06-vfx": `${HERO} at night in thick fog, raising the lantern as a storm of embers and sparks spirals upward around them, rain streaks, glowing magic particles, intense orange light against deep teal darkness.`,
+  "06-vfx": `${HERO} at night in thick fog, holding the lantern high as a roaring spiral of orange magical fire bursts out of the lantern and coils around them, flames and glowing embers swirling through the fog, intense firelight on the coat against deep teal darkness, the face in shadow under the hood.`,
   "07-shot": `A widescreen cinematic film still from behind: ${HERO} walks down a foggy wooden pier toward a distant lighthouse at night, anamorphic lens flare, shallow depth of field, film grain, letterbox framing.`,
   "08-export": `${HERO} and the village around them dissolving into millions of glowing coloured gaussian splat particles floating in a dark void, holographic point cloud, light trails orbiting the figure.`,
 };
