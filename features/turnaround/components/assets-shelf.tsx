@@ -50,9 +50,14 @@ export function AssetsShelf(props: { projectId: string; assets: Asset[]; jobs: R
             <li key={a.name} className="flex flex-col gap-2 rounded-xl border bg-card/40 p-2">
               <div className="relative grid grid-cols-5 gap-1.5">
                 <figure className="flex flex-col gap-1">
-                  <button type="button" onClick={() => props.onView(file(a.cutout ? a.image : a.source), `${a.name} · as found`)} className="overflow-hidden rounded-md border bg-card">
-                    <FadeImage src={file(a.cutout ? a.image : a.source)} alt={`${a.name} as found`} className="aspect-square w-full object-contain" />
-                  </button>
+                  {/* The object as cut out of the character; never the whole character when it was not found. */}
+                  {a.cutout ? (
+                    <button type="button" onClick={() => props.onView(file(a.image), `${a.name} · as found`)} className="overflow-hidden rounded-md border bg-card">
+                      <FadeImage src={file(a.image)} alt={`${a.name} as found`} className="aspect-square w-full object-contain" />
+                    </button>
+                  ) : (
+                    <div className="flex aspect-square items-center justify-center rounded-md border border-dashed bg-card/30 p-2 text-center text-[11px] text-muted-foreground">Not found. Refine its mask under Hide, then Generate again.</div>
+                  )}
                   <figcaption className="text-center font-mono text-[10px] text-muted-foreground">{a.cutout ? "found" : "not found"}</figcaption>
                 </figure>
                 {VIEWS.map((v) => {
