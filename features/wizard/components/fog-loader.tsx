@@ -16,12 +16,17 @@ export function FogLoader(props: {
   onCancel?: () => unknown;
 }) {
   const [cancelling, setCancelling] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  // null until mounted: the server and the first client render both show 0:00, then the clock runs.
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
+    const first = setTimeout(() => setNow(Date.now()), 0);
     const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
   }, []);
-  const elapsed = Math.max(0, (now - Date.parse(props.startedAt)) / 1000);
+  const elapsed = now === null ? 0 : Math.max(0, (now - Date.parse(props.startedAt)) / 1000);
   const over = elapsed > props.expected * 1.5;
 
   return (

@@ -7,13 +7,18 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60))
 
 // A GPU wait as one line in the page: what is happening, honest time, and Cancel.
 export function JobStatus(props: { message: string; startedAt: string; expected: number; onCancel?: () => unknown }) {
-  const [now, setNow] = useState(() => Date.now());
+  // null until mounted: the server and the first client render both show 0:00, then the clock runs.
+  const [now, setNow] = useState<number | null>(null);
   const [cancelling, setCancelling] = useState(false);
   useEffect(() => {
+    const first = setTimeout(() => setNow(Date.now()), 0);
     const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
   }, []);
-  const elapsed = Math.max(0, (now - Date.parse(props.startedAt)) / 1000);
+  const elapsed = now === null ? 0 : Math.max(0, (now - Date.parse(props.startedAt)) / 1000);
   return (
     <div role="status" aria-live="polite" className="nifl-enter flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
       <span className="flex items-center gap-2 font-medium text-foreground">
