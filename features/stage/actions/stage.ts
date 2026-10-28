@@ -11,7 +11,7 @@ import { getProject, projectDir, updateProject, type Project, type ViewId } from
 const abs = (id: string, file: string) => path.join(projectDir(id), file);
 const rel = (id: string, file: string) => path.relative(projectDir(id), file);
 const stamp = () => Date.now().toString(36);
-const done = (id: string) => revalidatePath(`/p/${id}/stage`);
+const done = (id: string) => revalidatePath(`/p/${id}/scene`);
 
 async function load(id: string): Promise<Project> {
   const p = await getProject(id);

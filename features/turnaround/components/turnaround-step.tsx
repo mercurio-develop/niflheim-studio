@@ -306,7 +306,7 @@ export function TurnaroundStep(props: {
       <NextBar
         back={{ href: `/p/${props.projectId}/character`, label: "Character" }}
         summary={complete ? `${shown.length} views of one character.` : anyRunning ? "Painting the views..." : "Generate the turnaround to continue."}
-        next={{ label: "Set", href: `/p/${props.projectId}/set`, disabled: !complete }}
+        next={{ label: "Scene", href: `/p/${props.projectId}/scene`, disabled: !complete }}
       />
     </>
   );
