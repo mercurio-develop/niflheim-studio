@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
 import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import type { Job, SetData } from "@/lib/store";
 import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -46,8 +47,23 @@ export function DescribeSection(props: { projectId: string; set: SetData | null;
   const earlier = (s?.paintings ?? []).filter((p) => !options.includes(p));
 
   return (
-    <section className="nifl-enter flex flex-col gap-5" style={{ "--i": 1 } as React.CSSProperties}>
-      <SectionTitle n="1" tone="bg-tone-yellow" title="Describe" line="Where does the shot happen? Paint it from a prompt, or upload your own painting." />
+    <Section
+      n="1"
+      tone="bg-tone-yellow"
+      title="Describe"
+      line="Where does the shot happen? Paint it from a prompt, or upload your own painting."
+      open={!s?.image || running}
+      summary={
+        s?.image && (
+          <>
+            <FadeImage src={file(s.image)} alt="The chosen painting" className="h-8 w-14 rounded-sm border object-cover" />
+            <span className="truncate text-xs">{s.prompt || "Your painting"} · open for another place</span>
+          </>
+        )
+      }
+      className="nifl-enter"
+      style={{ "--i": 1 } as React.CSSProperties}
+    >
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -200,6 +216,6 @@ export function DescribeSection(props: { projectId: string; set: SetData | null;
           </div>
         </div>
       )}
-    </section>
+    </Section>
   );
 }

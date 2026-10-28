@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
 import { ParticleField } from "@/components/particle-field";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { cancel, clearReference, generateConcepts, pickConcept, setReference } from "../actions/character";
 import { Composer, type ComposerValues } from "@/components/composer";
 import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 
 const label = (id: string) => STYLES.find((s) => s.id === id)?.label ?? id;
 
@@ -28,7 +29,6 @@ export function ConceptSection(props: {
   hasVersion: boolean;
   job?: Job;
 }) {
-  const [open, setOpen] = useState(!props.hasVersion);
   const perImage = props.reference ? 22 : 12; // seconds: a sketch is one Qwen edit per concept
   const [viewing, setViewing] = useState<number | null>(null); // index into sets; null = the current set
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +36,6 @@ export function ConceptSection(props: {
   const running = props.job?.status === "running";
   const busy = pending || running;
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
-  const expanded = open || running || !props.hasVersion;
 
   const all: (ConceptSet & { at: number | null })[] = [
     ...props.sets.map((s, i) => ({ ...s, at: i })),
@@ -57,35 +56,22 @@ export function ConceptSection(props: {
     });
   };
 
-  if (!expanded) {
-    return (
-      <section className="flex flex-wrap items-center gap-3">
-        <SectionTitle n="1" tone="bg-tone-yellow" title="Concept" />
-        <div className="flex items-center gap-1.5">
+  return (
+    <Section
+      n="1"
+      tone="bg-tone-yellow"
+      title="Concept"
+      line="Who are they, and what look? Choose how many concepts to paint."
+      open={!props.hasVersion || running}
+      summary={
+        <>
           {props.concepts.map((src, i) => (
             <FadeImage key={src} src={file(src)} alt={`Concept ${i + 1}`} className={cn("h-10 w-8 rounded-sm border object-cover", props.pickedImage === src ? "border-primary" : "opacity-40")} />
           ))}
-        </div>
-        <span className="hidden truncate text-xs text-muted-foreground sm:inline">{label(props.style)}</span>
-        <Button variant="outline" size="sm" className="ml-auto" onClick={() => setOpen(true)}>
-          <RefreshCw data-icon="inline-start" />
-          New concepts
-        </Button>
-      </section>
-    );
-  }
-
-  return (
-    <section className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-3">
-        <SectionTitle n="1" tone="bg-tone-yellow" title="Describe" line="Who are they, and what look? Choose how many concepts to paint." />
-        {props.hasVersion && !running && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} aria-label="Close and keep editing">
-            <X data-icon="inline-start" />
-            Close
-          </Button>
-        )}
-      </div>
+          <span className="truncate text-xs">{label(props.style)} · open for new concepts</span>
+        </>
+      }
+    >
       <Composer
         key={`${props.style}:${props.prompt}:${props.count}`}
         id="concept-prompt"
@@ -143,7 +129,6 @@ export function ConceptSection(props: {
                 start(async () => {
                   try {
                     await pickConcept(props.projectId, i, shown.at ?? undefined);
-                    setOpen(false);
                   } catch (err) {
                     setError((err as Error).message);
                   }
@@ -174,6 +159,6 @@ export function ConceptSection(props: {
       </div>
       {props.job?.status === "error" && <p className="text-sm text-destructive">Painting failed: {props.job.error}</p>}
       {props.job?.status === "cancelled" && <p className="text-sm text-muted-foreground">Painting cancelled.</p>}
-    </section>
+    </Section>
   );
 }

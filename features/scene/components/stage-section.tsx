@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Box, PaintBucket, PersonStanding, RefreshCw, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
-import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import type { Job, SetData, StageData } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -84,11 +84,16 @@ export function StageSection(props: {
           : "Pick a painting: MoGe reads it as depth and builds a 3D stage you can stand the character in.";
 
   return (
-    <section className="nifl-enter flex min-w-0 flex-col gap-3" style={{ "--i": 2 } as React.CSSProperties}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <SectionTitle n="2" tone="bg-tone-cyan" title="Stage" line={line} />
-        {s?.image && !building && !cutting && (
-          <div className="flex gap-1">
+    <Section
+      n="2"
+      tone="bg-tone-cyan"
+      title="Stage"
+      line={line}
+      summary={at ? `The character stands ${distance ? `${distance.toFixed(1)} m from the camera` : "on the stage"}, ${height.toFixed(2)} m tall` : fresh ? "Stage built" : "No stage yet"}
+      open={!!s?.image || building}
+      actions={
+        s?.image && !building && !cutting && (
+          <>
             {(oldCut || props.stageJob?.status === "error") && floor && (
               <Button variant="ghost" size="sm" onClick={() => run(() => cutOutCharacter(props.projectId))}>
                 <Scissors data-icon="inline-start" />
@@ -105,9 +110,12 @@ export function StageSection(props: {
               <RefreshCw data-icon="inline-start" />
               Rebuild
             </Button>
-          </div>
-        )}
-      </div>
+          </>
+        )
+      }
+      className="nifl-enter"
+      style={{ "--i": 2 } as React.CSSProperties}
+    >
       {building && props.setJob && <JobStatus message={props.setJob.detail ?? "Working"} startedAt={props.setJob.startedAt} expected={painting ? 30 : filling ? 260 : 10} onCancel={() => cancelSet(props.projectId)} />}
       {cutting && props.stageJob && <JobStatus message={props.stageJob.detail ?? "Cutting out the character"} startedAt={props.stageJob.startedAt} expected={10} onCancel={() => cancelStage(props.projectId)} />}
 
@@ -209,6 +217,6 @@ export function StageSection(props: {
       {props.setJob?.status === "error" && <p className="text-sm text-destructive">The stage failed: {props.setJob.error}</p>}
       {props.stageJob?.status === "error" && <p className="text-sm text-destructive">The cutout failed: {props.stageJob.error}</p>}
       {pending && !building && !cutting && at && <p className="font-mono text-[11px] text-muted-foreground">Saving…</p>}
-    </section>
+    </Section>
   );
 }

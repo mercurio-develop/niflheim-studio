@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Clapperboard, Eye, Map as MapIcon, Play, Square, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import { LoadingDots } from "@/components/loading-dots";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import { FPS, MOVES, frameCount, type CameraMove } from "@/lib/camera";
@@ -49,11 +49,16 @@ export function CameraSection(props: {
   }, [m.move, m.amount, m.seconds, m.ease]);
 
   return (
-    <section className="nifl-enter flex min-w-0 flex-col gap-3" style={{ "--i": 3 } as React.CSSProperties}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <SectionTitle n="3" tone="bg-tone-pink" title="Camera" line={props.ready ? "A move aimed at the character. Overview shows the path in the stage; Play flies it from the painting's view." : "Stand the character on the stage first: every move is aimed at them."} />
-        {props.ready && (
-          <div className="flex gap-1">
+    <Section
+      n="3"
+      tone="bg-tone-pink"
+      title="Camera"
+      line={props.ready ? "A move aimed at the character. Overview shows the path in the stage; Play flies it from the painting's view." : "Stand the character on the stage first: every move is aimed at them."}
+      summary={`${spec.label}${m.move === "static" ? "" : ` ${m.amount}${spec.unit}`} · ${m.seconds} s${m.ease ? " · eased" : ""}`}
+      open={props.ready}
+      actions={
+        props.ready && (
+          <>
             <Button variant="ghost" size="sm" aria-pressed={props.overview} onClick={() => props.onOverview(!props.overview)}>
               {props.overview ? <Eye data-icon="inline-start" /> : <MapIcon data-icon="inline-start" />}
               {props.overview ? "Painting view" : "Overview"}
@@ -62,10 +67,12 @@ export function CameraSection(props: {
               {props.playing ? <Square data-icon="inline-start" /> : <Play data-icon="inline-start" />}
               {props.playing ? "Stop" : "Play"}
             </Button>
-          </div>
-        )}
-      </div>
-
+          </>
+        )
+      }
+      className="nifl-enter"
+      style={{ "--i": 3 } as React.CSSProperties}
+    >
       {props.ready && (
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:max-w-xl">
           <span className="text-xs text-muted-foreground">Move</span>
@@ -162,6 +169,6 @@ export function CameraSection(props: {
         </p>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
-    </section>
+    </Section>
   );
 }

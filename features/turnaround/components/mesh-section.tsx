@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Box, Palette, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingDots } from "@/components/loading-dots";
-import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import type { Job, Mesh, MeshColourView } from "@/lib/store";
@@ -29,11 +29,15 @@ export function MeshSection(props: { projectId: string; mesh: Mesh | null; views
   const make = () => act(generateMesh);
 
   return (
-    <section className="flex flex-col gap-3">
-      <JobPoller running={running} />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <SectionTitle n="3" tone="bg-tone-cyan" title="3D model" line="The character in 3D, from the front, side and back views. Drag to turn it." />
-        <div className="flex items-center gap-1">
+    <Section
+      n="3"
+      tone="bg-tone-cyan"
+      title="3D model"
+      line="The character in 3D, from the front, side and back views. Drag to turn it."
+      summary={props.mesh ? (stale ? "Out of date: the front view changed" : "Made · open to turn it") : props.ready ? "No 3D model yet" : "Paint the front, side and back views first"}
+      open={running}
+      actions={
+        <>
           {recolour && (
             <Button variant="default" size="sm" disabled={props.locked || running || starting} onClick={() => act(colourMesh)}>
               <Palette data-icon="inline-start" />
@@ -46,8 +50,10 @@ export function MeshSection(props: { projectId: string; mesh: Mesh | null; views
               {props.mesh ? "Generate again" : "Generate 3D"}
             </Button>
           )}
-        </div>
-      </div>
+        </>
+      }
+    >
+      <JobPoller running={running} />
       <div className="relative mx-auto aspect-[7/9] w-full max-w-[32rem] overflow-hidden rounded-xl border bg-card">
         {props.mesh ? (
           <MeshViewer key={props.mesh.coloured ?? props.mesh.glb} url={`/api/files/${props.projectId}/${props.mesh.coloured ?? props.mesh.glb}`} className="absolute inset-0" />
@@ -72,6 +78,6 @@ export function MeshSection(props: { projectId: string; mesh: Mesh | null; views
       </div>
       {props.job?.status === "error" && <p className="text-sm text-destructive">The 3D model failed: {props.job.error}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
-    </section>
+    </Section>
   );
 }

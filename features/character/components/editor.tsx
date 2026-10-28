@@ -15,7 +15,7 @@ import { STYLES, styleById } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { KIND_DOT, versionKind } from "@/lib/versions";
 import { addSelection, cancel, maskPart, redo, removeSelection, repaintSelection, restyleCurrent, retryEdit, savePart, undo } from "../actions/character";
-import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
 
 const FALLBACK = ["hair", "face", "coat", "pants", "boots"];
@@ -191,8 +191,13 @@ export function Editor(props: {
   if (target !== "character") rail.pop(); // a view keeps the character's style
 
   return (
-    <section className="flex flex-col gap-3">
-      <SectionTitle n={props.title?.n ?? "2"} tone="bg-primary" title={props.title?.title ?? "Edit"} line={props.title?.line ?? "Pick a tool on the left, then set it and act in the card on the right."} />
+    <Section
+      n={props.title?.n ?? "2"}
+      tone="bg-primary"
+      title={props.title?.title ?? "Edit"}
+      line={props.title?.line ?? "Pick a tool on the left, then set it and act in the card on the right."}
+      summary={`${props.version.label} · open to change a part`}
+    >
       {/* Top bar: history and compare */}
       <div className="flex flex-wrap items-center gap-1.5">
         <Button variant="ghost" size="sm" disabled={busy || props.moves.undo === null} onClick={() => act(() => undo(props.projectId, target))} title="Undo (Ctrl/⌘ Z)">
@@ -544,6 +549,6 @@ export function Editor(props: {
           )}
         </div>
       </div>
-    </section>
+    </Section>
   );
 }

@@ -5,7 +5,7 @@ import { Check, CircleAlert, Play, RotateCcw, Square, Wand2 } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/loading-dots";
-import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import { KeyCapture } from "@/features/scene/components/key-capture";
 import type { StagePose } from "@/features/scene/components/stage-viewer";
 import { saveKeys } from "@/features/shot/actions/keyframes";
@@ -165,28 +165,33 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
   const label = (s: (typeof steps)[number]) => (s.kind === "export" ? "Put the reel together" : `${name(s.shot)} · ${s.kind === "keys" ? "keyframes" : s.kind === "take" ? `take ${s.n}` : "pick the best take"}`);
 
   return (
-    <section className="nifl-enter flex flex-col gap-3" style={{ "--i": 0 } as React.CSSProperties}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <SectionTitle n="0" tone="bg-tone-yellow" title="Autopilot" line="Say what happens in each shot and press Make the reel: keyframes, takes, the best take of each and the reel, one after another. Keep this page open while it runs." />
-        <div className="flex gap-1">
-          {driving && (
-            <Button size="sm" variant="ghost" onClick={() => ((stop.current = true), start(() => stopAutopilot(id)))}>
-              <Square data-icon="inline-start" />
-              Stop after this step
+    <Section n="0" tone="bg-tone-yellow" title="Autopilot" line="Say what happens in each shot and press Make the reel: keyframes, takes, the best take of each and the reel, one after another. Keep this page open while it runs."
+      summary={driving ? "Running…" : "Make the whole reel in one press"}
+      actions={
+        <>
+          <div className="flex gap-1">
+            {driving && (
+              <Button size="sm" variant="ghost" onClick={() => ((stop.current = true), start(() => stopAutopilot(id)))}>
+                <Square data-icon="inline-start" />
+                Stop after this step
+              </Button>
+            )}
+            {canResume && (
+              <Button size="sm" variant="outline" onClick={resume}>
+                <Play data-icon="inline-start" />
+                Resume
+              </Button>
+            )}
+            <Button size="sm" disabled={driving || !props.scene || !plan.some((p) => p.include)} onClick={make}>
+              {driving ? <LoadingDots /> : <Wand2 data-icon="inline-start" />}
+              Make the reel
             </Button>
-          )}
-          {canResume && (
-            <Button size="sm" variant="outline" onClick={resume}>
-              <Play data-icon="inline-start" />
-              Resume
-            </Button>
-          )}
-          <Button size="sm" disabled={driving || !props.scene || !plan.some((p) => p.include)} onClick={make}>
-            {driving ? <LoadingDots /> : <Wand2 data-icon="inline-start" />}
-            Make the reel
-          </Button>
-        </div>
-      </div>
+          </div>
+        </>
+      }
+      className="nifl-enter"
+      style={{ "--i": 0 } as React.CSSProperties}
+    >
       {!props.scene && <p className="text-sm text-muted-foreground">Build the scene and stand the character in it first.</p>}
 
       <div className="flex flex-col gap-2">
@@ -245,6 +250,6 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
       {capture && props.scene && <KeyCapture {...props.scene} poses={capture.poses} onDone={capture.done} onError={capture.fail} />}
-    </section>
+    </Section>
   );
 }

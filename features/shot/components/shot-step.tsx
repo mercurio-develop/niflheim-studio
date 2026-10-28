@@ -7,7 +7,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
-import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
@@ -38,18 +38,24 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
       <JobPoller running={running} />
       <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
-          <span className="font-mono text-xs text-muted-foreground">06 · Shot</span>
+          <span className="font-mono text-xs text-muted-foreground">04 · Shots</span>
           <h1 className="text-2xl font-semibold tracking-tight">Say what happens</h1>
         </div>
         <ShotTabs projectId={props.projectId} shots={props.shots} locked={running} />
 
-        <section className="nifl-enter flex flex-col gap-3" style={{ "--i": 1 } as React.CSSProperties}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <SectionTitle n="1" tone="bg-tone-pink" title="Keyframes" line="The scene's camera move, painted at its key frames. LTX follows them, so the set, the character and the camera stay put." />
-            <Link href={`/p/${props.projectId}/scene`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-              Change in Scene
-            </Link>
-          </div>
+        <Section n="1" tone="bg-tone-pink" title="Keyframes" line="The scene's camera move, painted at its key frames. LTX follows them, so the set, the character and the camera stay put."
+          summary={props.ready ? "Painted from the scene's camera move" : "Make them in Scene first"}
+          open={!takes.length}
+          actions={
+            <>
+              <Link href={`/p/${props.projectId}/scene`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                Change in Scene
+              </Link>
+            </>
+          }
+          className="nifl-enter"
+          style={{ "--i": 1 } as React.CSSProperties}
+        >
           {props.ready ? (
             <ol className="grid grid-cols-2 gap-2 sm:grid-cols-5">
               {props.keyframes!.keys.map((k, i) => (
@@ -62,10 +68,14 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           ) : (
             <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">No keyframes yet: in the Scene step, choose a camera move and press Make keyframes.</p>
           )}
-        </section>
+        </Section>
 
-        <section className="nifl-enter flex flex-col gap-3" style={{ "--i": 2 } as React.CSSProperties}>
-          <SectionTitle n="2" tone="bg-tone-yellow" title="What happens" line="What the character does during the move, in a few words: a look, a turn, a gesture. Only use what the keyframes show; anything they do not show (a lantern, a sword) appears out of nowhere. Add props in the Scene's keyframe note." />
+        <Section n="2" tone="bg-tone-yellow" title="What happens" line="What the character does during the move, in a few words: a look, a turn, a gesture. Only use what the keyframes show; anything they do not show (a lantern, a sword) appears out of nowhere. Add props in the Scene's keyframe note."
+          summary={props.shot?.action || "Say what the character does"}
+          open={!takes.length || running}
+          className="nifl-enter"
+          style={{ "--i": 2 } as React.CSSProperties}
+        >
           <form
             className="flex flex-col gap-3"
             onSubmit={(e) => {
@@ -94,10 +104,13 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </form>
-        </section>
+        </Section>
 
-        <section className="nifl-enter flex flex-col gap-3" style={{ "--i": 3 } as React.CSSProperties}>
-          <SectionTitle n="3" tone="bg-tone-cyan" title="Takes" line={takes.length ? "Pick the take the sequence uses. Every take stays here." : "Your takes appear here."} />
+        <Section n="3" tone="bg-tone-cyan" title="Takes" line={takes.length ? "Pick the take the sequence uses. Every take stays here." : "Your takes appear here."}
+          summary={takes.length ? `${takes.length} take${takes.length === 1 ? "" : "s"}${props.shot?.picked != null ? " · one picked" : ""}` : "No takes yet"}
+          className="nifl-enter"
+          style={{ "--i": 3 } as React.CSSProperties}
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             {running && props.job && (
               <div className="relative aspect-[768/448] overflow-hidden rounded-lg border">
@@ -130,7 +143,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           </div>
           {props.job?.status === "error" && <p className="text-sm text-destructive">The take failed: {props.job.error}</p>}
           {props.job?.status === "cancelled" && <p className="text-sm text-muted-foreground">Take cancelled.</p>}
-        </section>
+        </Section>
       </div>
       <NextBar
         back={{ href: `/p/${props.projectId}/scene`, label: "Scene" }}

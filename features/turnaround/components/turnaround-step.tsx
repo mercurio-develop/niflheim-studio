@@ -7,7 +7,7 @@ import { FadeImage } from "@/components/fade-image";
 import { ImageViewer } from "@/components/image-viewer";
 import { LoadingDots } from "@/components/loading-dots";
 import { ParticleField } from "@/components/particle-field";
-import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { JobStatus } from "@/features/wizard/components/job-status";
@@ -104,8 +104,16 @@ export function TurnaroundStep(props: {
         </div>
 
         {/* Settings: pose, what to leave out, which extra views */}
-        <section className="nifl-enter flex flex-col gap-4" style={{ "--i": 1 } as React.CSSProperties}>
-          <SectionTitle n="1" tone="bg-tone-yellow" title="Set up" line="Pose, what to leave out, and which views to paint." />
+        <Section
+          n="1"
+          tone="bg-tone-yellow"
+          title="Set up"
+          line="Pose, what to leave out, and which views to paint."
+          summary={props.options ? `${props.options.pose === "tpose" ? "T-pose" : "As designed"}${props.options.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}` : undefined}
+          open={!props.options || !Object.keys(props.views).length}
+          className="nifl-enter"
+          style={{ "--i": 1 } as React.CSSProperties}
+        >
           <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
             <span className="text-xs text-muted-foreground">Pose</span>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Pose">
@@ -172,13 +180,16 @@ export function TurnaroundStep(props: {
             </Button>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-        </section>
+        </Section>
 
         {/* Views */}
-        <section className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <SectionTitle n="2" tone="bg-primary" title="Views" line={props.options ? `Pose: ${props.options.pose === "tpose" ? "T-pose" : "as designed"}${props.options.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}` : "Nothing painted yet."} />
-          </div>
+        <Section
+          n="2"
+          tone="bg-primary"
+          title="Views"
+          line={props.options ? `Pose: ${props.options.pose === "tpose" ? "T-pose" : "as designed"}${props.options.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}` : "Nothing painted yet."}
+          summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted`}
+        >
           {running && job && <JobStatus message={job.detail ?? "Painting the views"} startedAt={job.startedAt} expected={shown.length * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, "turnaround")} />}
           {/* Turnarounds from before views were painted fresh have no options and no front. */}
           {Object.keys(props.views).length > 0 && (!props.options || !image("front")) ? (
@@ -253,7 +264,7 @@ export function TurnaroundStep(props: {
           </ol>
           {job?.status === "error" && <p className="text-sm text-destructive">Painting stopped: {job.error}</p>}
           {job?.status === "cancelled" && <p className="text-sm text-muted-foreground">Painting cancelled; the views made so far are kept.</p>}
-        </section>
+        </Section>
 
         {/* Fix one view with the character editor: Part / Paint, then Change, Add object or Remove */}
         {editing && !running && props.views[editing]?.versions[props.views[editing]!.current] && (() => {

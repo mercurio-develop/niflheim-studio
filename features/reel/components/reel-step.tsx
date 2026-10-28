@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, Clapperboard, Download } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { LoadingDots } from "@/components/loading-dots";
-import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import { NextBar } from "@/features/wizard/components/next-bar";
@@ -20,7 +20,7 @@ const JOINS: { id: Join; label: string }[] = [
   { id: "dip", label: "Dip to black" },
 ];
 
-// Step 07: the shots' picked takes in order, how each joins the next, and one MP4 of it all.
+// Step 05: the shots' picked takes in order, how each joins the next, and one MP4 of it all.
 // Shots without a picked take are listed but left out of the reel.
 export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Join[]; export: { video: string; seconds: number; current: boolean } | null; job?: Job; autopilot?: React.ReactNode }) {
   const [rows, setRows] = useState(props.rows);
@@ -53,13 +53,17 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
       <JobPoller running={running} />
       <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
-          <span className="font-mono text-xs text-muted-foreground">07 · Reel</span>
+          <span className="font-mono text-xs text-muted-foreground">05 · Reel</span>
           <h1 className="text-2xl font-semibold tracking-tight">Put the shots together</h1>
         </div>
         {props.autopilot}
 
-        <section className="nifl-enter flex flex-col gap-3" style={{ "--i": 1 } as React.CSSProperties}>
-          <SectionTitle n="1" tone="bg-tone-cyan" title="Order" line="Each shot's picked take, in the order the reel plays them, and how each one leads into the next." />
+        <Section n="1" tone="bg-tone-cyan" title="Order" line="Each shot's picked take, in the order the reel plays them, and how each one leads into the next."
+          summary={`${used.length} of ${rows.length} shots have a picked take`}
+          open={false}
+          className="nifl-enter"
+          style={{ "--i": 1 } as React.CSSProperties}
+        >
           <ol className="flex flex-col gap-2">
             {rows.map((r, i) => {
               const join = r.video && k >= 0 ? (joins[k] ?? "cut") : null;
@@ -102,16 +106,21 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
               );
             })}
           </ol>
-        </section>
+        </Section>
 
-        <section className="nifl-enter flex flex-col gap-3" style={{ "--i": 2 } as React.CSSProperties}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <SectionTitle n="2" tone="bg-tone-pink" title="Reel" line={used.length ? `${used.length} shot${used.length > 1 ? "s" : ""}, one MP4 with sound at 24 fps.` : "Pick a take in at least one shot."} />
-            <Button disabled={busy || !used.length} onClick={() => start(() => exportReel(props.projectId).then(() => setError(null), (e: Error) => setError(e.message)))}>
-              {pending && !running ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
-              {props.export ? "Export again" : "Export reel"}
-            </Button>
-          </div>
+        <Section n="2" tone="bg-tone-pink" title="Reel" line={used.length ? `${used.length} shot${used.length > 1 ? "s" : ""}, one MP4 with sound at 24 fps.` : "Pick a take in at least one shot."}
+          summary={props.export ? "Exported · open to watch it" : used.length ? "Ready to export" : "Pick a take in at least one shot"}
+          actions={
+            <>
+              <Button disabled={busy || !used.length} onClick={() => start(() => exportReel(props.projectId).then(() => setError(null), (e: Error) => setError(e.message)))}>
+                {pending && !running ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
+                {props.export ? "Export again" : "Export reel"}
+              </Button>
+            </>
+          }
+          className="nifl-enter"
+          style={{ "--i": 2 } as React.CSSProperties}
+        >
           {running && props.job && <JobStatus message={props.job.detail ?? "Putting the reel together"} startedAt={props.job.startedAt} expected={10} />}
           {props.export && !running && (
             <figure className={cn("flex flex-col gap-2", !props.export.current && "opacity-60")}>
@@ -127,7 +136,7 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
           )}
           {props.job?.status === "error" && <p className="text-sm text-destructive">The reel failed: {props.job.error}</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
-        </section>
+        </Section>
       </div>
       <NextBar back={{ href: `/p/${props.projectId}/shot`, label: "Shots" }} summary={props.export ? `Reel: ${props.export.seconds.toFixed(1)} s.` : "Export the reel to finish."} next={{ label: "Done", disabled: true }} />
     </>
