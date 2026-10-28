@@ -60,6 +60,10 @@ export function TurnaroundStep(props: {
     return s ? s.versions[s.current]?.image : undefined;
   };
   const complete = props.fresh && shown.every((v) => image(v.id));
+  // A Generate paints the views in order and says which one it is on ("Making the side view (3/6)");
+  // that view and every one after it still shows its old picture (or nothing) until it lands.
+  const painting = running ? Number(job?.detail?.match(/\((\d+)\/\d+\)/)?.[1] ?? 1) - 1 : -1;
+  const waiting = (i: number) => running && i >= painting;
   const changed = JSON.stringify(props.options) !== JSON.stringify(options);
   const chips = [...props.tags].sort((a, b) => Number(HELD.test(b)) - Number(HELD.test(a)));
   const fail = (e: Error) => setError(e.message);
@@ -202,7 +206,12 @@ export function TurnaroundStep(props: {
                     {img ? (
                       <FadeImage key={img} src={file(img)} alt={`${v.label} view`} className="aspect-[7/9] w-full object-cover" />
                     ) : (
-                      <div className={cn("flex aspect-[7/9] w-full items-center justify-center text-xs text-muted-foreground", running && "motion-safe:animate-pulse")}>{running ? "" : "Not painted yet"}</div>
+                      <div className={cn("flex aspect-[7/9] w-full items-center justify-center text-xs text-muted-foreground", waiting(i) && "nifl-loading")}>{waiting(i) ? "" : "Not painted yet"}</div>
+                    )}
+                    {img && waiting(i) && (
+                      <div aria-hidden className="absolute inset-0 flex items-center justify-center bg-background/55 text-primary backdrop-blur-[1px]">
+                        <LoadingDots className="scale-150" />
+                      </div>
                     )}
                     {img && !busy && (
                       <button
