@@ -45,6 +45,7 @@ export function TurnaroundStep(props: {
   const [editing, setEditing] = useState<ViewId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [starting, startGenerate] = useTransition(); // Generate pressed, the job not on the page yet
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const job = props.jobs.turnaround;
   const running = job?.status === "running";
@@ -63,7 +64,7 @@ export function TurnaroundStep(props: {
   // A Generate paints the views in order and says which one it is on ("Making the side view (3/6)");
   // that view and every one after it still shows its old picture (or nothing) until it lands.
   const painting = running ? Number(job?.detail?.match(/\((\d+)\/\d+\)/)?.[1] ?? 1) - 1 : -1;
-  const waiting = (i: number) => running && i >= painting;
+  const waiting = (i: number) => (starting && !running) || (running && i >= painting);
   const changed = JSON.stringify(props.options) !== JSON.stringify(options);
   const chips = [...props.tags].sort((a, b) => Number(HELD.test(b)) - Number(HELD.test(a)));
   const fail = (e: Error) => setError(e.message);
@@ -158,13 +159,13 @@ export function TurnaroundStep(props: {
             <Button
               size="lg"
               className="ml-auto"
-              disabled={anyRunning || pending}
+              disabled={anyRunning || pending || starting}
               onClick={() => {
                 setError(null);
-                start(() => generateTurnaround(props.projectId, options).catch(fail));
+                startGenerate(() => generateTurnaround(props.projectId, options).catch(fail));
               }}
             >
-              {pending && !running ? <LoadingDots /> : null}
+              {starting && !running ? <LoadingDots /> : null}
               {props.options ? "Generate again" : "Generate turnaround"}
             </Button>
           </div>
@@ -233,7 +234,7 @@ export function TurnaroundStep(props: {
                       {stack && stack.versions.length > 1 && <span className="font-mono text-[11px] text-muted-foreground">v{stack.current + 1}/{stack.versions.length}</span>}
                     </span>
                     <span className="flex items-center">
-                      <Button variant="ghost" size="sm" disabled={busy || fixing || running || pending || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id).catch(fail))}>
+                      <Button variant="ghost" size="sm" disabled={busy || fixing || running || pending || starting || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id).catch(fail))}>
                         <RefreshCw data-icon="inline-start" />
                         Again
                       </Button>
