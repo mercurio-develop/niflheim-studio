@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Clapperboard, Eye, Map as MapIcon, Play, Square, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Section } from "@/components/section";
+import { More, Section } from "@/components/section";
 import { LoadingDots } from "@/components/loading-dots";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import { FPS, MOVES, frameCount, type CameraMove } from "@/lib/camera";
@@ -122,7 +122,7 @@ export function CameraSection(props: {
       )}
 
       {props.ready && (
-        <div className="flex flex-col gap-3 border-t pt-3">
+        <More label="Render" summary={current ? "a depth video and a preview of this move" : "a depth video and a preview, not needed for the shot"} open={rendering}>
           <div className="flex flex-wrap items-center gap-3">
             <span className="font-mono text-[11px] text-muted-foreground">
               {current ? `Rendered: ${frames} frames, holes up to ${(worst * 100).toFixed(1)}% of a frame` : props.render ? "The move or the stage changed since the last render" : "~15 s · a depth video for the shot, and a preview"}
@@ -159,7 +159,7 @@ export function CameraSection(props: {
               ))}
             </div>
           )}
-        </div>
+        </More>
       )}
 
       {props.ready && props.outside > 0 && (

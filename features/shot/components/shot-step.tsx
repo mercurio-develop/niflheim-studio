@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Check, Clapperboard, Download } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
 import { Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
@@ -20,9 +19,9 @@ import { ShotTabs, type ShotTab } from "./shot-tabs";
 // mid-take (04_shot ACCEPT proof 6). Props go into the keyframes through the In the frame note.
 const EXAMPLES = ["slowly turns to look toward the camera", "looks around warily, the coat stirring in the wind", "takes a slow breath and glances down the street"];
 
-// Step 06: say what the character does; LTX-2.5 shoots the scene's camera move, guided by its
+// Step 03: make the keyframes, say what the character does; LTX-2.5 shoots the scene's camera move, guided by its
 // keyframes. Each take is kept; pick the one the sequence uses, or download it.
-export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; shots: ShotTab[] }) {
+export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; keysRunning: boolean; keyPanel: React.ReactNode; shots: ShotTab[] }) {
   const [action, setAction] = useState(props.shot?.action ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -35,7 +34,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
 
   return (
     <>
-      <JobPoller running={running} />
+      <JobPoller running={running || props.keysRunning} />
       <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
           <span className="font-mono text-xs text-muted-foreground">03 · Shots</span>
@@ -43,34 +42,23 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
         </div>
         <ShotTabs projectId={props.projectId} shots={props.shots} locked={running} />
 
-        <Section n="1" tone="bg-tone-pink" title="Keyframes" line="The scene's camera move, painted at its key frames. LTX follows them, so the set, the character and the camera stay put."
-          summary={props.ready ? "Painted from the scene's camera move" : "Make them in Scene first"}
-          open={!takes.length}
+        <Section n="1" tone="bg-tone-pink" title="Keyframes" line="The scene's camera move, painted at its key frames. LTX follows them, so the set, the character and the camera stay put. Say what should be in the frame (a held prop) in the note."
+          summary={props.ready ? `${props.keyframes!.keys.length} keyframes painted from the scene's camera move` : "Make the keyframes"}
+          open={!props.ready || !takes.length || props.keysRunning}
           actions={
             <>
               <Link href={`/p/${props.projectId}/scene`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                Change in Scene
+                Change the move in Scene
               </Link>
             </>
           }
           className="nifl-enter"
           style={{ "--i": 1 } as React.CSSProperties}
         >
-          {props.ready ? (
-            <ol className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {props.keyframes!.keys.map((k, i) => (
-                <li key={k} className="relative overflow-hidden rounded-md border">
-                  <FadeImage src={file(k!)} alt={`Keyframe at frame ${props.keyframes!.frames[i]}`} className="aspect-[768/448] w-full object-cover" />
-                  <span className="absolute bottom-1 left-1 rounded border bg-background/80 px-1 font-mono text-[10px] text-muted-foreground backdrop-blur">{props.keyframes!.frames[i]}</span>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">No keyframes yet: in the Scene step, choose a camera move and press Make keyframes.</p>
-          )}
+          {props.keyPanel}
         </Section>
 
-        <Section n="2" tone="bg-tone-yellow" title="What happens" line="What the character does during the move, in a few words: a look, a turn, a gesture. Only use what the keyframes show; anything they do not show (a lantern, a sword) appears out of nowhere. Add props in the Scene's keyframe note."
+        <Section n="2" tone="bg-tone-yellow" title="What happens" line="What the character does during the move, in a few words: a look, a turn, a gesture. Only use what the keyframes show; anything they do not show (a lantern, a sword) appears out of nowhere. Add props in the keyframes' note above."
           summary={props.shot?.action || "Say what the character does"}
           open={!takes.length || running}
           className="nifl-enter"

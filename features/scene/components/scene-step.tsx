@@ -3,9 +3,8 @@
 import { useMemo, useState } from "react";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
-import { KeyframesPanel } from "@/features/shot/components/keyframes";
 import { ShotTabs, type ShotTab } from "@/features/shot/components/shot-tabs";
-import { DEFAULT_MOVE, aim, inside, keyFrames, poses, renderKey, type CameraMove } from "@/lib/camera";
+import { DEFAULT_MOVE, aim, inside, poses, renderKey, type CameraMove } from "@/lib/camera";
 import type { CameraRender, Job, Keyframes, SetData, StageData } from "@/lib/store";
 import { CameraPath } from "./camera-path";
 import { CameraSection } from "./camera-section";
@@ -39,8 +38,6 @@ export function SceneStep(props: {
   const cam = fresh ? props.set!.stage!.fill?.camera : undefined;
   const ready = !!cam?.floor && !!at;
   const [move, setMove] = useState<CameraMove>(props.camera ?? DEFAULT_MOVE);
-  // The shot can start once every key is painted from today's move, placement and stage.
-  const keysReady = ready && !!props.keyframes?.keys.every(Boolean) && props.keyframes.key === renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh);
   const [overview, setOverview] = useState(false);
   const [playing, setPlaying] = useState(false);
   const path = useMemo(() => {
@@ -89,30 +86,11 @@ export function SceneStep(props: {
           renderKey={ready ? renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh) : null}
           job={props.stageJob}
         />
-        {ready && path && (
-          <KeyframesPanel
-            projectId={props.projectId}
-            keyframes={props.keyframes}
-            current={!!props.keyframes && props.keyframes.key === renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh)}
-            frames={keyFrames(move)}
-            job={props.keyJob}
-            move={move}
-            capture={{
-              mesh: `/api/files/${props.projectId}/${props.set!.stage!.fill!.mesh}`,
-              camera: cam!,
-              cutouts: Object.fromEntries(Object.entries(props.placement!.cutouts).map(([v, f]) => [v, `/api/files/${props.projectId}/${f}`])),
-              at: at!,
-              height: props.placement!.height,
-              turn: props.placement!.turn,
-              poses: keyFrames(move).map((f) => path.poses[f]),
-            }}
-          />
-        )}
       </div>
       <NextBar
         back={{ href: `/p/${props.projectId}/character`, label: "Character" }}
         summary={building || cutting ? ((building ? props.setJob : props.stageJob)?.detail ?? "Working...") : at && !props.moved ? `Standing in the set, ${props.placement!.height.toFixed(2)} m tall.` : fresh ? "Stand the character on the stage to continue." : "Paint or upload a set to continue."}
-        next={{ label: "Shots", href: `/p/${props.projectId}/shot`, disabled: !keysReady, hint: at && !keysReady ? "Make the keyframes first" : undefined }}
+        next={{ label: "Shots", href: `/p/${props.projectId}/shot`, disabled: !ready, hint: at && !ready ? "Choose a camera move first" : undefined }}
       />
     </>
   );
