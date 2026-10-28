@@ -21,11 +21,13 @@ export type RunSpec = {
   ext?: string; // file extension for outputs (default png)
   timeoutMs?: number;
   onSubmit?: (comfyJobId: string) => unknown; // so the job can be cancelled while it runs
+  edit?: (graph: Record<string, { class_type: string; inputs: Record<string, unknown> }>) => void; // reshape the graph before it is sent (e.g. one guide per keyframe)
 };
 
 export async function runWorkflow(spec: RunSpec): Promise<string[]> {
   const c = comfy();
   const graph = JSON.parse(await readFile(path.join(/* turbopackIgnore: true */ WORKFLOWS, spec.workflow), "utf8"));
+  spec.edit?.(graph);
   const wf = c.workflows.fromJson(graph);
   for (const [node, field, value] of spec.set ?? []) wf.setInput(node, field, value);
   for (const [node, file] of spec.images ?? []) wf.setInput(node, "image", c.assets.fromFile(file));

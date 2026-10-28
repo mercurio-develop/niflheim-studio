@@ -85,6 +85,11 @@ export type CameraRender = { depth: string; preview: string; holes: number[]; ke
 // to see in the frame. key: the camera render key (lib/camera.ts renderKey) they were made from.
 export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)[]; prompt: string; note: string; seed: number; key: string; at: string };
 
+// The shot: what happens, and the LTX-2.5 takes of it (MP4 with audio, 768x448, the camera move's
+// 8n+1 frames at 24 fps), each guided by the keyframes it was made from (keys: Keyframes.at).
+export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string };
+export type Shot = { action: string; negative: string; takes: Take[]; picked?: number };
+
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
 
@@ -116,6 +121,7 @@ export type Project = {
   camera?: CameraMove; // the scene's camera move (lib/camera.ts), aimed at the placed character
   cameraRender?: CameraRender; // the move rendered along its path, for the shot
   keyframes?: Keyframes; // the shot's keyframes along the camera move
+  shot?: Shot; // LTX-2.5 takes of the scene
   jobs: Record<string, Job>;
 };
 
