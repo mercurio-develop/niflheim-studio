@@ -29,23 +29,21 @@ function sceneKey(p: Project) {
   return renderKey(p.camera, p.stage.at, p.stage.height, fill.mesh);
 }
 
-// Key 0: keep everything, add nothing (a key that invents things makes the take invent them),
-// light the character into the place, clean the smears. The note is the one thing that may be added.
+// Every key is the capture repainted on its own with one strict prompt and one seed: keep
+// everything, add nothing, fill the stage's black holes. No character description: naming "a
+// lantern keeper" made Qwen add a lantern, and a key that invents things makes the take invent
+// them. Matching keys to key 0 collapsed the camera move (04_shot ACCEPT proof 5: method M, camera
+// travel 10 px, worst pop-in 5.8, no frame over the line). The note is the one thing that may be added.
 function keyPrompt(p: Project, note: string) {
   const style = styleById(p.set?.style || p.character.style).phrase;
   return [
-    `Keep everything in this picture exactly where it is and add nothing new. Make it one finished frame, ${style}:`,
-    `light ${p.character.prompt} so they belong in the scene, with a soft shadow on the ground, and clean up smeared or broken patches and black holes at the edges. Same character, same clothes, same objects.`,
+    "Keep everything in this picture exactly where it is and add nothing new: no new objects, nothing in the hands that is not already there.",
+    `Make it one finished frame, ${style}: light the character so they belong in the scene with a soft shadow on the ground, repaint smeared, jagged or broken patches cleanly, and fill any black holes at the edges with the scene around them. Same camera framing.`,
     note,
   ]
     .filter(Boolean)
     .join(" ");
 }
-
-// Every other key is matched to the painted key 0 (a second image), so all keys share one look
-// and the take has nothing to morph between (04_shot ACCEPT proof 3: pop-ins 8.0 -> 4.0).
-const MATCH =
-  "Repaint picture 1 to match picture 2 exactly: the same lighting, colours, materials, style and the same character with the same clothes and what they carry. Keep picture 1's camera framing, layout and the character's position and size. Add nothing that is not in picture 1 or picture 2. Clean up smeared or broken patches and black holes at the edges.";
 
 const Key = z.instanceof(File).refine((f) => f.type === "image/jpeg" && f.size < 900 * 1024, "Each key must be a JPEG under 900 KB.");
 const Note = z.string().trim().max(300);
@@ -72,34 +70,18 @@ export async function saveKeys(id: string, form: FormData, rawNote: unknown) {
   done(id);
 }
 
-// Repaint keys as one job, about 30 s each: key 0 with 01_edit and its own prompt, every other key
-// with 03_keyframe_match against the painted key 0. Repainting key 0 repaints them all, since the
-// others follow it; a re-roll takes a new seed.
+// Repaint the given keys with 01_edit (Qwen-Image-Edit 2511 + Lightning, about 30 s each) as one
+// job; every key uses the saved prompt and seed, a re-rolled one a new seed.
 async function refine(id: string, which: number[], reroll = false) {
   const p = await load(id);
   const k = p.keyframes;
   if (!k) throw new Error("Make the keyframes first.");
-  const keys = which.includes(0) ? k.raw.map((_, i) => i) : which;
   await startJob(id, "keyframes", async (ctx) => {
-    // The painted key 0 the others match: today's, unless key 0 is being repainted too.
-    let first: string | null = keys[0] === 0 ? null : k.keys[0];
-    for (const [n, i] of keys.entries()) {
-      await ctx.progress(`Painting key ${n + 1} of ${keys.length}`);
-      const s = reroll ? seed() : k.seed;
+    for (const [n, i] of which.entries()) {
+      await ctx.progress(`Painting key ${n + 1} of ${which.length}`);
       const outDir = path.join(path.dirname(abs(id, k.raw[i])), `key-${String(k.frames[i]).padStart(3, "0")}-${Date.now().toString(36)}`);
-      const [image] =
-        i === 0
-          ? await runWorkflow({ workflow: "01_edit.api.json", onSubmit: ctx.track, set: [["17", "prompt", k.prompt], ["22", "seed", s]], images: [["1", abs(id, k.raw[0])]], output: "28", outDir })
-          : await runWorkflow({
-              workflow: "03_keyframe_match.api.json",
-              onSubmit: ctx.track,
-              set: [["17", "prompt", MATCH], ["22", "seed", s]],
-              images: [["1", abs(id, k.raw[i])], ["2", abs(id, first!)]],
-              output: "28",
-              outDir,
-            });
+      const [image] = await runWorkflow({ workflow: "01_edit.api.json", onSubmit: ctx.track, set: [["17", "prompt", k.prompt], ["22", "seed", reroll ? seed() : k.seed]], images: [["1", abs(id, k.raw[i])]], output: "28", outDir });
       if (!(await ctx.alive())) return;
-      if (i === 0) first = rel(id, image);
       await updateProject(id, (q) => {
         if (q.keyframes?.raw[i] === k.raw[i]) q.keyframes.keys[i] = rel(id, image);
       });
@@ -111,7 +93,6 @@ export async function rerollKey(id: string, rawIndex: unknown) {
   const i = z.number().int().min(0).max(8).parse(rawIndex);
   const p = await load(id);
   if (!p.keyframes?.raw[i]) throw new Error("No such key.");
-  if (i > 0 && !p.keyframes.keys[0]) throw new Error("Paint the first key first: the others follow it.");
   await refine(id, [i], true);
   done(id);
 }

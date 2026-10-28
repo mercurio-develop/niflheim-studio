@@ -16,7 +16,9 @@ import { cn } from "@/lib/utils";
 import { cancelShot, pickTake, renderTake } from "../actions/shot";
 import { ShotTabs, type ShotTab } from "./shot-tabs";
 
-const EXAMPLES = ["slowly turns to face the camera and raises the lantern", "looks around warily, then walks forward", "kneels, picks something up from the ground and studies it"];
+// Actions that only use what is in the keyframes: a prop the keys do not show makes LTX conjure it
+// mid-take (04_shot ACCEPT proof 6). Props go into the keyframes through the In the frame note.
+const EXAMPLES = ["slowly turns to look toward the camera", "looks around warily, the coat stirring in the wind", "takes a slow breath and glances down the street"];
 
 // Step 06: say what the character does; LTX-2.5 shoots the scene's camera move, guided by its
 // keyframes. Each take is kept; pick the one the sequence uses, or download it.
@@ -63,7 +65,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
         </section>
 
         <section className="nifl-enter flex flex-col gap-3" style={{ "--i": 2 } as React.CSSProperties}>
-          <SectionTitle n="2" tone="bg-tone-yellow" title="What happens" line="What the character does during the move, in a few words. The camera, the place and the look are added for you." />
+          <SectionTitle n="2" tone="bg-tone-yellow" title="What happens" line="What the character does during the move, in a few words: a look, a turn, a gesture. Only use what the keyframes show; anything they do not show (a lantern, a sword) appears out of nowhere. Add props in the Scene's keyframe note." />
           <form
             className="flex flex-col gap-3"
             onSubmit={(e) => {
@@ -71,7 +73,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
               run(() => renderTake(props.projectId, { action }));
             }}
           >
-            <Textarea value={action} onChange={(e) => setAction(e.target.value)} rows={2} placeholder="slowly turns to face the camera and raises the lantern" className="resize-none text-base" aria-label="What happens" />
+            <Textarea value={action} onChange={(e) => setAction(e.target.value)} rows={2} placeholder="slowly turns to look toward the camera" className="resize-none text-base" aria-label="What happens" />
             {!action && (
               <div className="-mt-1 flex flex-wrap gap-1.5">
                 {EXAMPLES.map((x) => (
