@@ -73,13 +73,19 @@ export function placementStale(p: Project): "turnaround" | "set" | null {
   return null;
 }
 
+// The scene: a stage built from the chosen painting, and the character placed on it. Stale when
+// the painting changed since the stage was built, or the placement no longer fits (lib above).
+function sceneState(p: Project): StepState {
+  if (!p.set?.stage || !p.stage?.at) return "todo";
+  return p.set.stage.image !== p.set.image || placementStale(p) ? "stale" : "done";
+}
+
 export function stepStates(p: Project): Partial<Record<StepSlug, StepState>> {
   const t = p.turnaround;
   const allViews = !!t && viewsFor(t.options).every((v) => t.views[v.id]?.versions.length);
   return {
     character: p.character.doneAt ? "done" : "todo",
     turnaround: !allViews ? "todo" : t!.source === characterImage(p) ? "done" : "stale",
-    set: !p.set?.stage ? "todo" : p.set.stage.image === p.set.image ? "done" : "stale",
-    stage: !p.stage?.at ? "todo" : placementStale(p) ? "stale" : "done",
+    scene: sceneState(p),
   };
 }

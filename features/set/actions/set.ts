@@ -15,7 +15,7 @@ import { SET_STYLES, composeSetPrompt, fillPlace } from "../prompt";
 const rel = (id: string, file: string) => path.relative(projectDir(id), file);
 const abs = (id: string, file: string) => path.join(projectDir(id), file);
 const stamp = () => Date.now().toString(36);
-const done = (id: string) => revalidatePath(`/p/${id}/set`);
+const done = (id: string) => revalidatePath(`/p/${id}/scene`);
 
 const Prompt = z.string().trim().min(3, "Describe the place in a few words.").max(600);
 const Image = z.string().regex(/^set\/[\w./-]+\.(png|jpg|webp)$/);
@@ -151,5 +151,5 @@ export async function finishSet(id: string) {
   const p = await load(id);
   if (!p.set?.stage || p.set.stage.image !== p.set.image) throw new Error("Build the stage first.");
   if (!p.set.stage.fill?.camera?.floor) throw new Error("The stage needs its floor: wait for the fill, or Rebuild.");
-  redirect(`/p/${id}/stage`);
+  redirect(`/p/${id}/scene`);
 }
