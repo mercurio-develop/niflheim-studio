@@ -34,6 +34,7 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
   const { onChange } = props;
 
   useEffect(() => {
+    last.current = null; // a stroke never carries over onto another image
     const img = new Image();
     img.onload = () => setNatural({ w: img.naturalWidth, h: img.naturalHeight });
     img.src = props.src;
@@ -149,9 +150,19 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
       }),
   }), [render, report]);
 
-  const at = (e: React.PointerEvent): [number, number] => {
-    const r = view.current!.getBoundingClientRect();
-    return [((e.clientX - r.left) / r.width) * view.current!.width, ((e.clientY - r.top) / r.height) * view.current!.height];
+  // From the canvas the event came from, not view.current: React empties that ref while the
+  // canvas is swapped (a new image), and a stroke's next move would read null (2026-10-27).
+  const at = (e: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
+    const c = e.currentTarget, r = c.getBoundingClientRect();
+    return [((e.clientX - r.left) / r.width) * c.width, ((e.clientY - r.top) / r.height) * c.height];
+  };
+  // A stroke ends on release, and also when the pointer is cancelled or loses capture, or the
+  // next move would keep painting with no button down.
+  const endStroke = () => {
+    if (!last.current) return;
+    last.current = null;
+    report();
+    props.onPaint?.();
   };
   // Painting adds to the selection only; erasing takes from the selection and the part alike.
   const paint = (from: [number, number], to: [number, number]) => {
@@ -182,9 +193,12 @@ export const SelectionCanvas = forwardRef<SelectionHandle, {
       }}
       onPointerMove={(e) => {
         if (!last.current) return;
+        if (!e.buttons) return endStroke();
         const p = at(e); paint(last.current, p); last.current = p;
       }}
-      onPointerUp={() => { if (last.current) { last.current = null; report(); props.onPaint?.(); } }}
+      onPointerUp={endStroke}
+      onPointerCancel={endStroke}
+      onLostPointerCapture={endStroke}
     />
   );
 });
