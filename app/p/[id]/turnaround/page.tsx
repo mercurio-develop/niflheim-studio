@@ -26,6 +26,7 @@ async function Turnaround({ params }: { params: Promise<{ id: string }> }) {
         views={t?.views ?? {}}
         fresh={t?.source === character}
         assets={project.assets ?? []}
+        mesh={project.mesh ?? null}
         jobs={project.jobs}
       />
     </main>

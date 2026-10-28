@@ -64,6 +64,14 @@ export type StageFill = { mesh: string; cameras: string; views: string[]; holes:
 // moves the floor, so a different current fill makes the placement out of date.
 export type StageData = { source: string; cutouts: Partial<Record<ViewId, string>>; at?: [number, number, number]; height: number; turn: number; fill?: string };
 
+// The character as a 3D model (Hunyuan3D-2 MV from the front, side and back views). front: the
+// front view image the shape was made from; a new front makes it out of date. coloured: the same
+// mesh with vertex colours projected from the views (scripts/mesh_colour.py); colours: the view
+// images they came from, so a fixed view offers "Colour again". Kept beside the turnaround, not
+// in it, so a new Generate of the views does not lose it.
+export type MeshColourView = "front" | "side" | "back" | "threequarter";
+export type Mesh = { glb: string; front: string; at: string; coloured?: string; colours?: Partial<Record<MeshColourView, string>> };
+
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
 
@@ -89,6 +97,7 @@ export type Project = {
     views: Partial<Record<ViewId, ViewStack>>; // each view keeps its own versions, like the character
   };
   assets?: Asset[]; // objects hidden from the turnaround, kept to be made on their own later
+  mesh?: Mesh; // the character in 3D, made from the turnaround views
   set?: SetData;
   stage?: StageData;
   jobs: Record<string, Job>;
