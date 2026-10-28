@@ -16,6 +16,8 @@ import type { StageCamera } from "@/lib/stage-fill";
 // "floor..." are the ground: only they take a click, which is where the character stands.
 // "Guide" shades the geometry instead of the painting, with a 1 m grid on the floor, so a
 // stretched face or a step in the ground shows at once.
+// "Overview" leaves the painting's view for one from above and behind it, so the camera's path
+// (drawn by the children) can be seen; the orbit limits do not apply there.
 const FOG = "#0d0c0b";
 
 export type StagePoint = [number, number, number];
@@ -42,7 +44,7 @@ function useLook(scene: THREE.Object3D, look: StageLook) {
   for (const [m, mat] of painted) m.material = look === "painting" ? mat : m.name.startsWith("floor") ? floor : guide;
 }
 
-function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look: StageLook; onFloor?: (p: StagePoint) => void; children?: React.ReactNode }) {
+function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look: StageLook; overview?: boolean; onFloor?: (p: StagePoint) => void; children?: React.ReactNode }) {
   const { scene } = useGLTF(props.url);
   useLook(scene, props.look);
   const view = useMemo(() => {
@@ -88,15 +90,32 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
   const azimuth = Math.atan2(offset.x, offset.z);
   const polar = Math.acos(THREE.MathUtils.clamp(offset.y / offset.length(), -1, 1));
   const orbit = ORBIT[props.filled ? "filled" : "plain"];
+  // Above and behind the painting's camera, to one side, looking between it and its look point.
+  const over = useMemo(() => {
+    const back = view.position.clone().sub(view.target).setY(0).normalize();
+    const side = new THREE.Vector3(back.z, 0, -back.x);
+    const position = view.position.clone().addScaledVector(back, view.middle * 0.55).addScaledVector(side, view.middle * 0.45).add(new THREE.Vector3(0, view.middle * 0.8, 0));
+    return { position, target: view.position.clone().lerp(view.target, 0.6) };
+  }, [view]);
   const click = (e: ThreeEvent<MouseEvent>) => {
     // A drag to orbit ends in a click too: only a press that barely moved places anything.
     if (!props.onFloor || !e.object.name.startsWith("floor") || e.delta > 4) return;
     e.stopPropagation();
     props.onFloor([e.point.x, e.point.y, e.point.z]);
   };
+  if (props.overview)
+    return (
+      <>
+        <PerspectiveCamera key="over-camera" makeDefault fov={50} near={0.05} far={view.far * 2} position={over.position} />
+        <hemisphereLight args={["#ffffff", "#3a3631", 1.2]} />
+        <primitive object={scene} />
+        {props.children}
+        <OrbitControls key="over-orbit" makeDefault target={over.target} maxPolarAngle={Math.PI * 0.48} minDistance={1} maxDistance={view.middle * 4} rotateSpeed={0.5} enableDamping />
+      </>
+    );
   return (
     <>
-      <PerspectiveCamera makeDefault fov={view.fov} near={0.05} far={view.far} position={view.position} quaternion={view.quaternion} />
+      <PerspectiveCamera key="home-camera" makeDefault fov={view.fov} near={0.05} far={view.far} position={view.position} quaternion={view.quaternion} />
       {!props.filled && props.look === "painting" && <fog attach="fog" args={[FOG, view.far * 0.225, view.far * 0.525]} />}
       {props.look === "guide" && (
         <>
@@ -108,6 +127,7 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
       <primitive object={scene} onClick={click} />
       {props.children}
       <OrbitControls
+        key="home-orbit"
         makeDefault
         target={view.target}
         minAzimuthAngle={azimuth - orbit.yaw}
@@ -124,13 +144,13 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
   );
 }
 
-export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; onFloor?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
+export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; overview?: boolean; onFloor?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
   return (
     <div className={props.className} style={{ background: FOG }}>
       <Canvas dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
         <color attach="background" args={[FOG]} />
         <Suspense fallback={null}>
-          <Mesh url={props.mesh} camera={props.camera} filled={props.filled} look={props.look ?? "painting"} onFloor={props.onFloor}>
+          <Mesh url={props.mesh} camera={props.camera} filled={props.filled} look={props.look ?? "painting"} overview={props.overview} onFloor={props.onFloor}>
             {props.children}
           </Mesh>
         </Suspense>

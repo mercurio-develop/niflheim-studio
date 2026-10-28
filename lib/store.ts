@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import type { StageCamera } from "./stage-fill";
+import type { CameraMove } from "./camera";
 
 // Projects live on disk: data/projects/<id>/project.json, step results beside it.
 // Image paths in a project are relative to its folder and served by /api/files/<id>/<path>.
@@ -72,6 +73,12 @@ export type StageData = { source: string; cutouts: Partial<Record<ViewId, string
 export type MeshColourView = "front" | "side" | "back" | "threequarter";
 export type Mesh = { glb: string; front: string; at: string; coloured?: string; colours?: Partial<Record<MeshColourView, string>> };
 
+// The scene's camera move rendered through the filled stage (scripts/stage_path.py): a depth video
+// for LTX to follow and a colour preview, both 832x480 at 24 fps; holes: the share of each frame
+// the stage does not cover. key: the move, placement and stage it was rendered from, so a change
+// to any of them shows it is out of date.
+export type CameraRender = { depth: string; preview: string; holes: number[]; key: string; at: string };
+
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
 
@@ -100,6 +107,8 @@ export type Project = {
   mesh?: Mesh; // the character in 3D, made from the turnaround views
   set?: SetData;
   stage?: StageData;
+  camera?: CameraMove; // the scene's camera move (lib/camera.ts), aimed at the placed character
+  cameraRender?: CameraRender; // the move rendered along its path, for the shot
   jobs: Record<string, Job>;
 };
 

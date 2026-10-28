@@ -25,11 +25,14 @@ export function StageSection(props: {
   moved: boolean; // the set was rebuilt or refilled since the character was placed
   setJob?: Job;
   stageJob?: Job;
+  overview?: boolean; // show the stage from above, for the camera path
+  layer?: React.ReactNode; // drawn in the viewer: the camera path
 }) {
   const s = props.set;
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const building = props.setJob?.status === "running";
-  const cutting = props.stageJob?.status === "running";
+  // The stage job also renders the camera move; that one shows in the Camera section.
+  const cutting = props.stageJob?.status === "running" && props.stageJob.detail !== "Rendering the camera move";
   const fresh = !!s?.stage && s.stage.image === s.image;
   const filled = fresh ? s!.stage!.fill : undefined;
   const floor = !!filled?.camera?.floor; // only a levelled stage takes the character
@@ -116,10 +119,12 @@ export function StageSection(props: {
             camera={filled?.camera}
             filled={!!filled}
             look={look}
+            overview={props.overview}
             onFloor={ready ? setAt : undefined}
             className="absolute inset-0"
           >
             {ready && at && <CharacterCard cutouts={Object.fromEntries(Object.entries(props.placement!.cutouts).map(([v, f]) => [v, file(f!)]))} at={at} height={height} turn={turn} />}
+            {props.layer}
           </StageViewer>
         ) : s?.image ? (
           <FadeImage src={file(s.image)} alt="The chosen painting" className={cn("absolute inset-0 size-full object-cover", building && "opacity-60")} />
@@ -134,7 +139,7 @@ export function StageSection(props: {
           </div>
         )}
         {building && s?.image && !fresh && <div aria-hidden className="nifl-loading pointer-events-none absolute inset-0 bg-transparent" />}
-        {ready && (!at || props.moved) && (
+        {ready && !props.overview && (!at || props.moved) && (
           <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3">
             <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-center text-sm backdrop-blur">
               <PersonStanding className="size-4 shrink-0 text-primary" />
