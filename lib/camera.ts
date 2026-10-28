@@ -129,3 +129,13 @@ export function c2w(p: Pose): number[][] {
 // whose key differs from today's is out of date.
 export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string) =>
   [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh].join("|");
+
+// The frames the shot is guided at: every 32nd frame of the move and its last (97 frames: 0, 32,
+// 64, 96), as LTX-2.5 kept a move continuous with guides that close (04_shot proof 2).
+export function keyFrames(m: CameraMove): number[] {
+  const n = frameCount(m.seconds);
+  const out: number[] = [];
+  for (let f = 0; f < n; f += 32) out.push(f);
+  if (out.at(-1) !== n - 1) out.push(n - 1);
+  return out;
+}

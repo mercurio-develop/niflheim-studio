@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
-import { Canvas, type ThreeEvent } from "@react-three/fiber";
+import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import type { StageCamera } from "@/lib/stage-fill";
@@ -16,6 +16,8 @@ import type { StageCamera } from "@/lib/stage-fill";
 // "floor..." are the ground: only they take a click, which is where the character stands.
 // "Guide" shades the geometry instead of the painting, with a 1 m grid on the floor, so a
 // stretched face or a step in the ground shows at once.
+// "pose" puts the camera at one fixed pose (no orbit), for capturing keyframes; onDrawn fires once
+// the stage and everything in it has loaded and been drawn a few times.
 // "Overview" leaves the painting's view for one from above and behind it, so the camera's path
 // (drawn by the children) can be seen; the orbit limits do not apply there.
 const FOG = "#0d0c0b";
@@ -44,7 +46,23 @@ function useLook(scene: THREE.Object3D, look: StageLook) {
   for (const [m, mat] of painted) m.material = look === "painting" ? mat : m.name.startsWith("floor") ? floor : guide;
 }
 
-function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look: StageLook; overview?: boolean; onFloor?: (p: StagePoint) => void; children?: React.ReactNode }) {
+export type StagePose = { position: StagePoint; target: StagePoint };
+
+// A camera fixed at one pose, looking at its target; tells when a few frames have been drawn.
+function PoseCamera(props: { pose: StagePose; fov: number; far: number; onDrawn?: (canvas: HTMLCanvasElement) => void }) {
+  const gl = useThree((s) => s.gl);
+  const drawn = useRef(0);
+  const key = props.pose.position.join() + props.pose.target.join();
+  useEffect(() => void (drawn.current = 0), [key]);
+  useFrame(({ camera }) => {
+    camera.position.set(...props.pose.position);
+    camera.lookAt(...props.pose.target);
+    if (++drawn.current === 6) props.onDrawn?.(gl.domElement);
+  });
+  return <PerspectiveCamera makeDefault fov={props.fov} near={0.05} far={props.far} position={props.pose.position} />;
+}
+
+function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look: StageLook; overview?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; children?: React.ReactNode }) {
   const { scene } = useGLTF(props.url);
   useLook(scene, props.look);
   const view = useMemo(() => {
@@ -103,6 +121,14 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
     e.stopPropagation();
     props.onFloor([e.point.x, e.point.y, e.point.z]);
   };
+  if (props.pose)
+    return (
+      <>
+        <PoseCamera pose={props.pose} fov={view.fov} far={view.far} onDrawn={props.onDrawn} />
+        <primitive object={scene} />
+        {props.children}
+      </>
+    );
   if (props.overview)
     return (
       <>
@@ -144,13 +170,13 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
   );
 }
 
-export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; overview?: boolean; onFloor?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
+export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; overview?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
   return (
     <div className={props.className} style={{ background: FOG }}>
       <Canvas dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
         <color attach="background" args={[FOG]} />
         <Suspense fallback={null}>
-          <Mesh url={props.mesh} camera={props.camera} filled={props.filled} look={props.look ?? "painting"} overview={props.overview} onFloor={props.onFloor}>
+          <Mesh url={props.mesh} camera={props.camera} filled={props.filled} look={props.look ?? "painting"} overview={props.overview} pose={props.pose} onDrawn={props.onDrawn} onFloor={props.onFloor}>
             {props.children}
           </Mesh>
         </Suspense>
