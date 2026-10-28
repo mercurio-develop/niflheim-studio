@@ -167,8 +167,7 @@ export function ConceptSection(props: {
           ) : (
             <div
               key={i}
-              className={cn("aspect-[7/9] rounded-lg border bg-card/30 backdrop-blur-[1px]", running && "motion-safe:animate-pulse border-primary/20")}
-              style={running ? { animationDelay: `${i * 120}ms` } : undefined}
+              className={cn("aspect-[7/9] rounded-lg border bg-card/30 backdrop-blur-[1px]", running && "nifl-loading border-primary/20")}
             />
           ),
         )}
