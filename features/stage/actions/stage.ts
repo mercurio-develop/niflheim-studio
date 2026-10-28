@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob } from "@/lib/jobs";
+import { currentFill } from "@/lib/progress";
 import { getProject, projectDir, updateProject, type Project, type ViewId } from "@/lib/store";
 
 const abs = (id: string, file: string) => path.join(projectDir(id), file);
@@ -58,7 +59,9 @@ export async function placeCharacter(id: string, raw: unknown) {
   const place = Placement.parse(raw);
   await updateProject(id, (q) => {
     if (!q.stage) throw new Error("Cut out the character first.");
-    Object.assign(q.stage, place);
+    // A new spot is placed on today's set; a height or turn change alone keeps the set it was placed on.
+    const spot = !q.stage.fill || !q.stage.at || place.at.some((x, i) => x !== q.stage!.at![i]);
+    Object.assign(q.stage, place, spot ? { fill: currentFill(q)?.mesh } : {});
   });
   done(id);
 }

@@ -59,6 +59,20 @@ export const characterImage = (p: Project) =>
 // done = finished and still matches what came before it; stale = made from an older character.
 export type StepState = "done" | "stale" | "todo";
 
+// The filled stage the user stands the character on: the fill of the chosen painting's stage.
+export const currentFill = (p: Project) => (p.set?.stage && p.set.stage.image === p.set.image ? p.set.stage.fill : undefined);
+
+// Why a placement no longer fits: the turnaround front changed (cut out again) or the set was
+// rebuilt or refilled since it was placed (place again). Placements from before stage.fill are
+// taken as they were.
+export function placementStale(p: Project): "turnaround" | "set" | null {
+  const s = p.stage;
+  if (!s) return null;
+  if (s.source !== viewImage(p, "front")) return "turnaround";
+  if (s.at && s.fill && s.fill !== currentFill(p)?.mesh) return "set";
+  return null;
+}
+
 export function stepStates(p: Project): Partial<Record<StepSlug, StepState>> {
   const t = p.turnaround;
   const allViews = !!t && viewsFor(t.options).every((v) => t.views[v.id]?.versions.length);
@@ -66,6 +80,6 @@ export function stepStates(p: Project): Partial<Record<StepSlug, StepState>> {
     character: p.character.doneAt ? "done" : "todo",
     turnaround: !allViews ? "todo" : t!.source === characterImage(p) ? "done" : "stale",
     set: !p.set?.stage ? "todo" : p.set.stage.image === p.set.image ? "done" : "stale",
-    stage: !p.stage?.at ? "todo" : p.stage.source === p.turnaround?.views.front?.versions[p.turnaround.views.front.current]?.image ? "done" : "stale",
+    stage: !p.stage?.at ? "todo" : placementStale(p) ? "stale" : "done",
   };
 }
