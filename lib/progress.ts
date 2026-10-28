@@ -66,5 +66,6 @@ export function stepStates(p: Project): Partial<Record<StepSlug, StepState>> {
     character: p.character.doneAt ? "done" : "todo",
     turnaround: !allViews ? "todo" : t!.source === characterImage(p) ? "done" : "stale",
     set: !p.set?.stage ? "todo" : p.set.stage.image === p.set.image ? "done" : "stale",
+    stage: !p.stage?.at ? "todo" : p.stage.source === p.turnaround?.views.front?.versions[p.turnaround.views.front.current]?.image ? "done" : "stale",
   };
 }

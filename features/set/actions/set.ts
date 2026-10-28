@@ -150,5 +150,6 @@ export async function cancelSet(id: string) {
 export async function finishSet(id: string) {
   const p = await load(id);
   if (!p.set?.stage || p.set.stage.image !== p.set.image) throw new Error("Build the stage first.");
+  if (!p.set.stage.fill?.camera?.floor) throw new Error("The stage needs its floor: wait for the fill, or Rebuild.");
   redirect(`/p/${id}/stage`);
 }

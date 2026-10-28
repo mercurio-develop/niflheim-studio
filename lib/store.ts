@@ -56,6 +56,13 @@ export type SetData = {
 // the floor step (2026-10-27) have none and are shown as they were.
 export type StageFill = { mesh: string; cameras: string; views: string[]; holes: { before: number; after: number }; camera?: StageCamera };
 
+// The character standing in the set (step 05). cutouts: each turnaround view with its background
+// removed (02_cutout), cut from `source` (the front image at the time; a new front makes them
+// stale). at: where they stand in the levelled stage (metres, floor y = 0), height: their height
+// in metres, turn: which way they face in degrees (0 = towards the painting's camera, positive
+// towards screen right).
+export type StageData = { source: string; cutouts: Partial<Record<ViewId, string>>; at?: [number, number, number]; height: number; turn: number };
+
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
 
@@ -82,6 +89,7 @@ export type Project = {
   };
   assets?: Asset[]; // objects hidden from the turnaround, kept to be made on their own later
   set?: SetData;
+  stage?: StageData;
   jobs: Record<string, Job>;
 };
 
