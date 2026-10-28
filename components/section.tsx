@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { SectionTitle } from "@/components/section-title";
 import { cn } from "@/lib/utils";
@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 // A step's section: numbered title, its line when open, a one-line summary when folded.
 // `open` is where work is due: the section opens again whenever it turns true (a job starts,
 // nothing picked yet); the user can still fold or open it by hand in between.
+// id: an anchor for SectionNav, which opens the section before scrolling to it.
 export function Section(props: {
+  id?: string;
   n: string;
   tone: string;
   title: string;
@@ -28,9 +30,15 @@ export function Section(props: {
     setOpen(due);
   }
   const body = useId();
+  useEffect(() => {
+    if (!props.id) return;
+    const show = (e: Event) => (e as CustomEvent<string>).detail === props.id && setOpen(true);
+    window.addEventListener(OPEN_SECTION, show);
+    return () => window.removeEventListener(OPEN_SECTION, show);
+  }, [props.id]);
 
   return (
-    <section className={cn("flex min-w-0 flex-col gap-3", props.className)} style={props.style}>
+    <section id={props.id} className={cn("flex min-w-0 scroll-mt-20 flex-col gap-3", props.className)} style={props.style}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <button
           type="button"
@@ -55,6 +63,9 @@ export function Section(props: {
     </section>
   );
 }
+
+// SectionNav asks a section to open with this window event (detail: the section's id).
+export const OPEN_SECTION = "nifl:open-section";
 
 // Options and experiments a step does not need for its one job: folded until asked for.
 // `open` works like Section's: it opens again whenever it turns true.

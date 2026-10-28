@@ -2,6 +2,7 @@ import type { Project } from "@/lib/store";
 import { historyMoves } from "@/lib/history";
 import { characterImage, viewsFor } from "@/lib/progress";
 import { TurnaroundSections } from "@/features/turnaround/components/turnaround-step";
+import { SectionNav } from "@/components/section-nav";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
 import { finishCharacter } from "../actions/character";
@@ -25,8 +26,20 @@ export function CharacterStep({ project }: { project: Project }) {
 
   return (
     <>
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
         <JobPoller running={polling} />
+        <SectionNav
+          items={[
+            { id: "concept", n: "1", title: "Concept", tone: "bg-tone-yellow" },
+            ...(version
+              ? [
+                  { id: "edit", n: "2", title: "Edit", tone: "bg-primary" },
+                  { id: "turnaround", n: "3", title: "Turnaround", tone: "bg-tone-lilac" },
+                  { id: "model", n: "4", title: "3D model", tone: "bg-tone-cyan" },
+                ]
+              : []),
+          ]}
+        />
         <div className="flex min-w-0 flex-col gap-10">
           <div className="nifl-enter flex flex-col gap-1">
             <span className="font-mono text-xs text-muted-foreground">01 · Character</span>
@@ -54,6 +67,7 @@ export function CharacterStep({ project }: { project: Project }) {
             <div className="nifl-enter" style={{ "--i": 2 } as React.CSSProperties}>
               <Editor
                 key={c.current}
+                id="edit"
                 open={!Object.keys(views).length}
                 projectId={project.id}
                 version={version}

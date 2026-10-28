@@ -34,6 +34,7 @@ export function AssetsShelf(props: { projectId: string; assets: Asset[]; jobs: R
   if (!props.assets.length) return null;
   return (
     <Section
+      id="assets"
       n="5"
       tone="bg-tone-pink"
       title="Assets"

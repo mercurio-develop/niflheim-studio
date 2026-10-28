@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Box, Palette, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Box, Download, Palette, RefreshCw } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { LoadingDots } from "@/components/loading-dots";
 import { Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
@@ -30,6 +30,7 @@ export function MeshSection(props: { projectId: string; mesh: Mesh | null; views
 
   return (
     <Section
+      id="model"
       n="4"
       tone="bg-tone-cyan"
       title="3D model"
@@ -43,6 +44,12 @@ export function MeshSection(props: { projectId: string; mesh: Mesh | null; views
               <Palette data-icon="inline-start" />
               {props.mesh?.coloured ? "Colour again" : "Colour it"}
             </Button>
+          )}
+          {props.mesh && (
+            <a href={`/api/files/${props.projectId}/${props.mesh.coloured ?? props.mesh.glb}`} download={`character${props.mesh.coloured ? "-coloured" : ""}.glb`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              <Download data-icon="inline-start" />
+              Download GLB
+            </a>
           )}
           {(props.mesh || props.ready) && (
             <Button variant={props.mesh && !stale ? "ghost" : "default"} size="sm" disabled={!props.ready || props.locked || running || starting} onClick={make}>

@@ -94,6 +94,7 @@ export function TurnaroundSections(props: {
     <>
       <ParticleField active={running} />
       <Section
+        id="turnaround"
         n="3"
         tone="bg-tone-lilac"
         title="Turnaround"

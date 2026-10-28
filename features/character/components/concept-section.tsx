@@ -58,6 +58,7 @@ export function ConceptSection(props: {
 
   return (
     <Section
+      id="concept"
       n="1"
       tone="bg-tone-yellow"
       title="Concept"

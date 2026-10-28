@@ -36,6 +36,7 @@ export function Editor(props: {
   projectId: string;
   target?: string;
   title?: { n: string; title: string; line: string };
+  id?: string; // anchor for the step's section nav
   open?: boolean; // where work is due; the Character step folds Edit once the turnaround exists
   version: Version;
   parentImage: string | null;
@@ -195,6 +196,7 @@ export function Editor(props: {
 
   return (
     <Section
+      id={props.id}
       n={props.title?.n ?? "2"}
       tone="bg-primary"
       title={props.title?.title ?? "Edit"}
