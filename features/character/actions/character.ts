@@ -446,6 +446,32 @@ export async function savePart(id: string, form: FormData, rawTarget = "characte
 // Restyle the chosen character, not new concepts: same design and pose, another look.
 export async function restyleCurrent(id: string, rawStyle: string) {
   const style = styleById(StyleId.parse(rawStyle));
+  await repaintWhole(
+    id,
+    style,
+    `Repaint this exact character as ${style.phrase}. Keep the same design, outfit, proportions, pose and the plain background; colours and rendering follow the new style.`,
+    `Style: ${style.label}`,
+    `Repainting as ${style.label}`,
+  );
+}
+
+// Rebuild: after edits, each changed or added part can look a little different from the rest (each
+// edit is its own close-up). One pass over the whole picture in the character's own style makes it
+// read as one painting again. A new version: Undo brings the edited one back.
+export async function rebuildStyle(id: string) {
+  const style = styleById((await load(id)).character.style ?? "painterly");
+  await repaintWhole(
+    id,
+    style,
+    `Repaint this exact character as one consistent picture in ${style.phrase}: every part, including any that look newer or different, drawn with the same shapes, line work, shading, level of detail and lighting as the whole. Keep the same design, outfit, colours, proportions, pose and the plain background; change nothing else.`,
+    `Rebuilt · ${style.label}`,
+    `Rebuilding in one ${style.label.toLowerCase()} style`,
+  );
+}
+
+// The whole picture through 01_edit as a new version made from the current one; it becomes the
+// character's style.
+async function repaintWhole(id: string, style: ReturnType<typeof styleById>, prompt: string, label: string, detail: string) {
   const p = await load(id);
   const at = p.character.current!;
   const version = currentVersion(p.character);
@@ -457,7 +483,7 @@ export async function restyleCurrent(id: string, rawStyle: string) {
         onSubmit: ctx.track,
         workflow: "01_edit.api.json",
         set: [
-          ["17", "prompt", `Repaint this exact character as ${style.phrase}. Keep the same design, outfit, proportions, pose and the plain background; colours and rendering follow the new style.`],
+          ["17", "prompt", prompt],
           ["22", "seed", newSeed()],
         ],
         images: [["1", abs(id, version.image)]],
@@ -466,12 +492,12 @@ export async function restyleCurrent(id: string, rawStyle: string) {
       });
       if (!(await ctx.alive())) return;
       await updateProject(id, (q) => {
-        q.character.versions.push({ image: rel(id, [image])[0], label: `Style: ${style.label}`, parts: {}, tags: version.tags, parent: at });
+        q.character.versions.push({ image: rel(id, [image])[0], label, parts: {}, tags: version.tags, parent: at });
         q.character.current = q.character.versions.length - 1;
         q.character.style = style.id; // later edits and the style chips follow the new look
       });
     },
-    `Repainting as ${style.label}`,
+    detail,
   );
   done(id);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ArrowRight, Brush, CirclePlus, Eraser, Maximize2, Palette, Redo2, RefreshCw, Replace, ScanSearch, Search, SplitSquareHorizontal, Trash2, Undo2, X } from "lucide-react";
+import { ArrowRight, Brush, CirclePlus, Eraser, Layers, Maximize2, Palette, Redo2, RefreshCw, Replace, ScanSearch, Search, SplitSquareHorizontal, Trash2, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +14,7 @@ import type { Job, Version } from "@/lib/store";
 import { STYLES, styleById } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { KIND_DOT, versionKind } from "@/lib/versions";
-import { addSelection, cancel, maskPart, redo, removeSelection, repaintSelection, restyleCurrent, retryEdit, savePart, undo } from "../actions/character";
+import { addSelection, cancel, maskPart, redo, removeSelection, repaintSelection, rebuildStyle, restyleCurrent, retryEdit, savePart, undo } from "../actions/character";
 import { Section } from "@/components/section";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
 
@@ -212,6 +212,12 @@ export function Editor(props: {
           <Redo2 data-icon="inline-start" />
           Redo
         </Button>
+        {target === "character" && props.version.edit && (
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => act(() => rebuildStyle(props.projectId))} title="Repaint the whole character in one style, so edited parts match the rest">
+            <Layers data-icon="inline-start" />
+            Rebuild in one style
+          </Button>
+        )}
         {props.version.edit && props.version.parent !== undefined && (
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => act(() => retryEdit(props.projectId, target))} title="Run this change again from the version before, with a new seed">
             <RefreshCw data-icon="inline-start" />
