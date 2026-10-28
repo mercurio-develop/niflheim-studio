@@ -34,7 +34,7 @@ export function AssetsShelf(props: { projectId: string; assets: Asset[]; jobs: R
   if (!props.assets.length) return null;
   return (
     <Section
-      n="4"
+      n="5"
       tone="bg-tone-pink"
       title="Assets"
       line="Objects you hid, kept as their own parts. Paint their views when you need them."

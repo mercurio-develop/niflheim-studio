@@ -7,11 +7,9 @@ import { FadeImage } from "@/components/fade-image";
 import { ImageViewer } from "@/components/image-viewer";
 import { LoadingDots } from "@/components/loading-dots";
 import { ParticleField } from "@/components/particle-field";
-import { Section } from "@/components/section";
+import { More, Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
-import { JobPoller } from "@/features/wizard/components/job-poller";
 import { JobStatus } from "@/features/wizard/components/job-status";
-import { NextBar } from "@/features/wizard/components/next-bar";
 import { Editor } from "@/features/character/components/editor";
 import { stackMoves } from "@/lib/history";
 import { VIEWS, viewsFor } from "@/lib/progress";
@@ -29,7 +27,9 @@ const HELD = /(sword|dagger|axe|spear|staff|wand|bow|shield|gun|lantern|book|umb
 const PER_VIEW = 25; // seconds for one Qwen edit, warm
 const EDIT_JOBS = ["mask", "swap", "tags", "brush"] as const; // the editor's jobs, per view: "view:side:brush"
 
-export function TurnaroundStep(props: {
+// Sections 3-5 of the Character step: the turnaround (set up, views, fixing a view), the 3D model and
+// the assets. The Character step polls the jobs and owns the Next bar.
+export function TurnaroundSections(props: {
   projectId: string;
   character: string; // current character image
   characterLabel: string;
@@ -55,14 +55,13 @@ export function TurnaroundStep(props: {
   const editJobs = (v: ViewId) => Object.fromEntries(EDIT_JOBS.map((k) => [k, props.jobs[`view:${v}:${k}`]]));
   const editBusy = (v: ViewId) => EDIT_JOBS.some((k) => props.jobs[`view:${v}:${k}`]?.status === "running" && k !== "tags");
   const assetJob = (name: string) => props.jobs[`asset:${name.replace(/ /g, "-")}`];
-  const anyRunning = running || (["hide-masks", "assets", "replicate"] as const).some((k) => props.jobs[k]?.status === "running") || VIEWS.some((v) => viewJob(v.id)?.status === "running" || editBusy(v.id) || props.jobs[`view:${v.id}:tags`]?.status === "running") || props.assets.some((a) => assetJob(a.name)?.status === "running");
+  const anyRunning = running || (["hide-masks", "assets", "replicate"] as const).some((k) => props.jobs[k]?.status === "running") || VIEWS.some((v) => viewJob(v.id)?.status === "running" || editBusy(v.id)) || props.assets.some((a) => assetJob(a.name)?.status === "running");
   const wanted = viewsFor(options);
   const shown = viewsFor(props.options ?? options);
   const image = (v: ViewId) => {
     const s = props.views[v];
     return s ? s.versions[s.current]?.image : undefined;
   };
-  const complete = props.fresh && shown.every((v) => image(v.id));
   // A Generate paints the views in order and says which one it is on ("Making the side view (3/6)");
   // that view and every one after it still shows its old picture (or nothing) until it lands.
   const painting = running ? Number(job?.detail?.match(/\((\d+)\/\d+\)/)?.[1] ?? 1) - 1 : -1;
@@ -90,30 +89,21 @@ export function TurnaroundStep(props: {
   const chip = (on: boolean, tone = "border-primary bg-primary text-primary-foreground") =>
     cn("rounded-full border px-2.5 py-0.5 text-xs transition-colors", on ? tone : "text-muted-foreground hover:border-ring/60 hover:text-foreground");
 
+  const none = !Object.keys(props.views).length;
   return (
     <>
-      <JobPoller running={anyRunning} />
       <ParticleField active={running} />
-      <div className="flex flex-col gap-8">
-        <div className="nifl-enter flex flex-col gap-1">
-          <span className="font-mono text-xs text-muted-foreground">02 · Turnaround</span>
-          <h1 className="text-2xl font-semibold tracking-tight">Every side of your character</h1>
-          <p className="text-sm text-muted-foreground">
-            Made from <span className="text-foreground">{props.characterLabel}</span>. All views are painted fresh from it, so later shots and the 3D model see one character.
-          </p>
-        </div>
-
-        {/* Settings: pose, what to leave out, which extra views */}
-        <Section
-          n="1"
-          tone="bg-tone-yellow"
-          title="Set up"
-          line="Pose, what to leave out, and which views to paint."
-          summary={props.options ? `${props.options.pose === "tpose" ? "T-pose" : "As designed"}${props.options.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}` : undefined}
-          open={!props.options || !Object.keys(props.views).length}
-          className="nifl-enter"
-          style={{ "--i": 1 } as React.CSSProperties}
-        >
+      <Section
+        n="3"
+        tone="bg-tone-lilac"
+        title="Turnaround"
+        line={`Every side of ${props.characterLabel}, painted fresh from it, so later shots and the 3D model see one character.`}
+        summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted${props.options ? ` · ${props.options.pose === "tpose" ? "T-pose" : "as designed"}` : ""}${props.options?.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}`}
+        open={none || running || !props.fresh}
+        className="nifl-enter"
+        style={{ "--i": 3 } as React.CSSProperties}
+      >
+        <More label="Set up" summary={`${options.pose === "tpose" ? "T-pose" : "As designed"}${options.hide.length ? ` · without ${options.hide.join(", ")}` : ""}${options.extras.length ? ` · + ${options.extras.join(", ")}` : ""}`} open={none}>
           <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
             <span className="text-xs text-muted-foreground">Pose</span>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Pose">
@@ -161,7 +151,8 @@ export function TurnaroundStep(props: {
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-3 border-t pt-3">
+        </More>
+          <div className="flex items-center gap-3">
             <span className="font-mono text-[11px] text-muted-foreground">
               {wanted.length} views · ~{Math.round((wanted.length * PER_VIEW) / 10) * 10} s
               {props.options && changed ? " · settings changed" : ""}
@@ -180,16 +171,6 @@ export function TurnaroundStep(props: {
             </Button>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-        </Section>
-
-        {/* Views */}
-        <Section
-          n="2"
-          tone="bg-primary"
-          title="Views"
-          line={props.options ? `Pose: ${props.options.pose === "tpose" ? "T-pose" : "as designed"}${props.options.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}` : "Nothing painted yet."}
-          summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted`}
-        >
           {running && job && <JobStatus message={job.detail ?? "Painting the views"} startedAt={job.startedAt} expected={shown.length * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, "turnaround")} />}
           {/* Turnarounds from before views were painted fresh have no options and no front. */}
           {Object.keys(props.views).length > 0 && (!props.options || !image("front")) ? (
@@ -197,16 +178,6 @@ export function TurnaroundStep(props: {
           ) : !props.fresh && Object.keys(props.views).length > 0 && (
             <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made from an older version of the character. Generate again to update them.</p>
           )}
-          {/* The concept art the views are made from, large on top; every view below is painted new. */}
-          <figure className="nifl-enter flex flex-col items-center gap-2 rounded-xl border bg-card/40 p-4">
-            <button type="button" onClick={() => setViewing({ src: file(props.character), label: `Concept art · ${props.characterLabel}` })} aria-label="See the concept art full screen" className="overflow-hidden rounded-lg">
-              <FadeImage src={file(props.character)} alt="The concept art" className="max-h-[34rem] w-auto object-contain" />
-            </button>
-            <figcaption className="flex items-baseline gap-2 text-sm">
-              Concept art
-              <span className="font-mono text-[11px] text-muted-foreground">{props.characterLabel} · the source of every view</span>
-            </figcaption>
-          </figure>
           <ol className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {shown.map((v, i) => {
               const img = image(v.id);
@@ -264,7 +235,6 @@ export function TurnaroundStep(props: {
           </ol>
           {job?.status === "error" && <p className="text-sm text-destructive">Painting stopped: {job.error}</p>}
           {job?.status === "cancelled" && <p className="text-sm text-muted-foreground">Painting cancelled; the views made so far are kept.</p>}
-        </Section>
 
         {/* Fix one view with the character editor: Part / Paint, then Change, Add object or Remove */}
         {editing && !running && props.views[editing]?.versions[props.views[editing]!.current] && (() => {
@@ -301,6 +271,7 @@ export function TurnaroundStep(props: {
             </div>
           );
         })()}
+      </Section>
 
         <MeshSection
           projectId={props.projectId}
@@ -312,13 +283,7 @@ export function TurnaroundStep(props: {
         />
 
         {ASSETS && <AssetsShelf projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={running} onView={(src, label) => setViewing({ src, label })} />}
-      </div>
       {viewing && <ImageViewer src={viewing.src} label={viewing.label} onClose={() => setViewing(null)} />}
-      <NextBar
-        back={{ href: `/p/${props.projectId}/character`, label: "Character" }}
-        summary={complete ? `${shown.length} views of one character.` : anyRunning ? "Painting the views..." : "Generate the turnaround to continue."}
-        next={{ label: "Scene", href: `/p/${props.projectId}/scene`, disabled: !complete }}
-      />
     </>
   );
 }

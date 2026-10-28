@@ -57,8 +57,15 @@ export function Section(props: {
 }
 
 // Options and experiments a step does not need for its one job: folded until asked for.
-export function More(props: { label?: string; summary?: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+// `open` works like Section's: it opens again whenever it turns true.
+export function More(props: { label?: string; summary?: string; open?: boolean; children: React.ReactNode }) {
+  const due = props.open ?? false;
+  const [open, setOpen] = useState(due);
+  const [lastDue, setLastDue] = useState(due);
+  if (due !== lastDue) {
+    setLastDue(due);
+    setOpen(due);
+  }
   const body = useId();
   return (
     <div className="flex min-w-0 flex-col gap-3 border-t pt-3">

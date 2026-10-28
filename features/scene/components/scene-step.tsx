@@ -53,7 +53,7 @@ export function SceneStep(props: {
       <JobPoller running={building || stageBusy || props.keyJob?.status === "running"} />
       <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
-          <span className="font-mono text-xs text-muted-foreground">03 · Scene</span>
+          <span className="font-mono text-xs text-muted-foreground">02 · Scene</span>
           <h1 className="text-2xl font-semibold tracking-tight">Build the place, stand them in it</h1>
         </div>
         <DescribeSection projectId={props.projectId} set={props.set} style={props.style} job={props.setJob} locked={stageBusy} />
@@ -110,7 +110,7 @@ export function SceneStep(props: {
         )}
       </div>
       <NextBar
-        back={{ href: `/p/${props.projectId}/turnaround`, label: "Turnaround" }}
+        back={{ href: `/p/${props.projectId}/character`, label: "Character" }}
         summary={building || cutting ? ((building ? props.setJob : props.stageJob)?.detail ?? "Working...") : at && !props.moved ? `Standing in the set, ${props.placement!.height.toFixed(2)} m tall.` : fresh ? "Stand the character on the stage to continue." : "Paint or upload a set to continue."}
         next={{ label: "Shots", href: `/p/${props.projectId}/shot`, disabled: !keysReady, hint: at && !keysReady ? "Make the keyframes first" : undefined }}
       />

@@ -30,7 +30,7 @@ export function MeshSection(props: { projectId: string; mesh: Mesh | null; views
 
   return (
     <Section
-      n="3"
+      n="4"
       tone="bg-tone-cyan"
       title="3D model"
       line="The character in 3D, from the front, side and back views. Drag to turn it."

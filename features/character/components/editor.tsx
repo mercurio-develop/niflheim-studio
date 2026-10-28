@@ -36,6 +36,7 @@ export function Editor(props: {
   projectId: string;
   target?: string;
   title?: { n: string; title: string; line: string };
+  open?: boolean; // where work is due; the Character step folds Edit once the turnaround exists
   version: Version;
   parentImage: string | null;
   moves: { undo: number | null; redo: number | null };
@@ -199,6 +200,7 @@ export function Editor(props: {
       title={props.title?.title ?? "Edit"}
       line={props.title?.line ?? "Pick a tool on the left, then set it and act in the card on the right."}
       summary={`${props.version.label} · open to change a part`}
+      open={props.open}
     >
       {/* Top bar: history and compare */}
       <div className="flex flex-wrap items-center gap-1.5">

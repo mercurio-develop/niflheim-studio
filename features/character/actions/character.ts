@@ -510,5 +510,5 @@ export async function finishCharacter(id: string) {
     if (p.character.current === null) throw new Error("Pick a concept first.");
     p.character.doneAt = new Date().toISOString();
   });
-  redirect(`/p/${id}/turnaround`);
+  redirect(`/p/${id}/scene`);
 }

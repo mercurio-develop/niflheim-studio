@@ -23,7 +23,7 @@ const rel = (id: string, f: string) => path.relative(projectDir(id), f);
 const seed = () => Math.floor(Math.random() * 2 ** 31);
 const stamp = () => Date.now().toString(36);
 const slug = (name: string) => name.replace(/ /g, "-");
-const done = (id: string) => revalidatePath(`/p/${id}/turnaround`);
+const done = (id: string) => revalidatePath(`/p/${id}/character`); // the turnaround lives on the Character step
 const label = (v: ViewId) => VIEWS.find((x) => x.id === v)!.label;
 
 // One Qwen edit for one view; the result becomes that view's newest version.

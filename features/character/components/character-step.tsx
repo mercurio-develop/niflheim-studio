@@ -1,5 +1,7 @@
 import type { Project } from "@/lib/store";
 import { historyMoves } from "@/lib/history";
+import { characterImage, viewsFor } from "@/lib/progress";
+import { TurnaroundSections } from "@/features/turnaround/components/turnaround-step";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
 import { finishCharacter } from "../actions/character";
@@ -13,7 +15,13 @@ export function CharacterStep({ project }: { project: Project }) {
   const moves = historyMoves(project);
   // Part tags load in the background: only the part chips wait for them, the rest keeps working.
   const polling = Object.values(jobs).some((j) => j.status === "running");
-  const anyRunning = Object.entries(jobs).some(([k, j]) => k !== "tags" && j.status === "running");
+  const anyRunning = Object.entries(jobs).some(([k, j]) => k !== "tags" && !k.endsWith(":tags") && j.status === "running");
+  // The turnaround is part of this step: Next waits for every view, painted from this version.
+  const image = characterImage(project);
+  const t = project.turnaround;
+  const views = t?.views ?? {};
+  const fresh = !!image && t?.source === image;
+  const complete = fresh && !!t && viewsFor(t.options).every((v) => t.views[v.id]?.versions.length);
 
   return (
     <>
@@ -46,6 +54,7 @@ export function CharacterStep({ project }: { project: Project }) {
             <div className="nifl-enter" style={{ "--i": 2 } as React.CSSProperties}>
               <Editor
                 key={c.current}
+                open={!Object.keys(views).length}
                 projectId={project.id}
                 version={version}
                 parentImage={moves.parent === null ? null : c.versions[moves.parent].image}
@@ -55,13 +64,29 @@ export function CharacterStep({ project }: { project: Project }) {
               />
             </div>
           )}
+
+          {version && image && (
+            <TurnaroundSections
+              projectId={project.id}
+              character={image}
+              characterLabel={version.label}
+              tags={version.tags ?? []}
+              parts={version.parts}
+              options={t?.options ?? null}
+              views={views}
+              fresh={fresh}
+              assets={project.assets ?? []}
+              mesh={project.mesh ?? null}
+              jobs={jobs}
+            />
+          )}
         </div>
 
         <VersionsSidebar projectId={project.id} versions={c.versions} current={c.current} busy={anyRunning} />
       </div>
       <NextBar
-        summary={version ? <><span className="font-mono text-xs">v{c.current! + 1}</span> · {version.label}</> : "Pick a concept to continue"}
-        next={{ label: "Character done", hint: "next: turnaround", disabled: !version || anyRunning, onNext: finishCharacter.bind(null, project.id) }}
+        summary={!version ? "Pick a concept to continue" : complete ? <><span className="font-mono text-xs">v{c.current! + 1}</span> · {version.label} · every side painted</> : "Generate the turnaround to continue"}
+        next={{ label: "Scene", disabled: !complete || anyRunning, onNext: finishCharacter.bind(null, project.id) }}
       />
     </>
   );

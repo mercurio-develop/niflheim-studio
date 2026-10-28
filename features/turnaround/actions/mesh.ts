@@ -12,7 +12,7 @@ import { getProject, projectDir, updateProject, type MeshColourView, type Projec
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const rel = (id: string, f: string) => path.relative(projectDir(id), f);
-const done = (id: string) => revalidatePath(`/p/${id}/turnaround`);
+const done = (id: string) => revalidatePath(`/p/${id}/character`); // the turnaround lives on the Character step
 const run = promisify(execFile);
 const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
 const SCRIPT = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "mesh_colour.py");

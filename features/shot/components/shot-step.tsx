@@ -38,7 +38,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
       <JobPoller running={running} />
       <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
-          <span className="font-mono text-xs text-muted-foreground">04 · Shots</span>
+          <span className="font-mono text-xs text-muted-foreground">03 · Shots</span>
           <h1 className="text-2xl font-semibold tracking-tight">Say what happens</h1>
         </div>
         <ShotTabs projectId={props.projectId} shots={props.shots} locked={running} />
