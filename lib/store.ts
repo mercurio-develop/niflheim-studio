@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import type { StageCamera } from "./stage-fill";
+import type { CameraMove } from "./camera";
 
 // Projects live on disk: data/projects/<id>/project.json, step results beside it.
 // Image paths in a project are relative to its folder and served by /api/files/<id>/<path>.
@@ -60,8 +61,9 @@ export type StageFill = { mesh: string; cameras: string; views: string[]; holes:
 // removed (02_cutout), cut from `source` (the front image at the time; a new front makes them
 // stale). at: where they stand in the levelled stage (metres, floor y = 0), height: their height
 // in metres, turn: which way they face in degrees (0 = towards the painting's camera, positive
-// towards screen right).
-export type StageData = { source: string; cutouts: Partial<Record<ViewId, string>>; at?: [number, number, number]; height: number; turn: number };
+// towards screen right). fill: the filled stage mesh `at` was placed on; a rebuilt or refilled set
+// moves the floor, so a different current fill makes the placement out of date.
+export type StageData = { source: string; cutouts: Partial<Record<ViewId, string>>; at?: [number, number, number]; height: number; turn: number; fill?: string };
 
 // The character as a 3D model (Hunyuan3D-2 MV from the front, side and back views). front: the
 // front view image the shape was made from; a new front makes it out of date. coloured: the same
@@ -70,6 +72,12 @@ export type StageData = { source: string; cutouts: Partial<Record<ViewId, string
 // in it, so a new Generate of the views does not lose it.
 export type MeshColourView = "front" | "side" | "back" | "threequarter";
 export type Mesh = { glb: string; front: string; at: string; coloured?: string; colours?: Partial<Record<MeshColourView, string>> };
+
+// The scene's camera move rendered through the filled stage (scripts/stage_path.py): a depth video
+// for LTX to follow and a colour preview, both 832x480 at 24 fps; holes: the share of each frame
+// the stage does not cover. key: the move, placement and stage it was rendered from, so a change
+// to any of them shows it is out of date.
+export type CameraRender = { depth: string; preview: string; holes: number[]; key: string; at: string };
 
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
@@ -99,6 +107,8 @@ export type Project = {
   mesh?: Mesh; // the character in 3D, made from the turnaround views
   set?: SetData;
   stage?: StageData;
+  camera?: CameraMove; // the scene's camera move (lib/camera.ts), aimed at the placed character
+  cameraRender?: CameraRender; // the move rendered along its path, for the shot
   jobs: Record<string, Job>;
 };
 
