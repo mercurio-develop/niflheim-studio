@@ -9,8 +9,8 @@ import { runWorkflow } from "@/lib/comfy";
 import { fillStage } from "@/lib/stage-fill";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { getProject, projectDir, updateProject, type Project } from "@/lib/store";
-import { styleById } from "@/lib/styles";
 import { REFERENCE_TYPES, StyleId, referenceError } from "@/features/character/schemas";
+import { SET_STYLES, composeSetPrompt, fillPlace } from "../prompt";
 
 const rel = (id: string, file: string) => path.relative(projectDir(id), file);
 const abs = (id: string, file: string) => path.join(projectDir(id), file);
@@ -26,35 +26,34 @@ async function load(id: string): Promise<Project> {
   return p;
 }
 
-// A wide establishing shot with an open floor in front, so there is somewhere to stand the
-// character and MoGe gets a clear ground plane. No people: the character is placed later.
-const setPrompt = (prompt: string, style: string) =>
-  `Concept painting of ${prompt}. Wide establishing shot, eye-level camera, an open floor in the foreground, depth into the distance, no people, no characters. ${styleById(style).phrase}, cinematic light.`;
+const Count = z.union([z.literal(2), z.literal(4)]);
 
-// Paint one set (Z-Image Turbo, 1344x768) and pick it; the stage is built from it right away.
-export async function paintSet(id: string, rawPrompt: string, rawStyle: string) {
+// Paint 2 or 4 options of the set (Z-Image Turbo, 1344x768, one batch: option i is seed + i)
+// from the composed stage prompt (features/set/prompt.ts). Picking one builds its stage, since a
+// weak painting cannot be rescued by the fill. sameSeed repaints with the last seed, to see
+// what a change of words does.
+export async function paintSet(id: string, rawPrompt: string, rawStyle: string, options: { count?: number; sameSeed?: boolean } = {}) {
   const prompt = Prompt.parse(rawPrompt);
   const style = StyleId.parse(rawStyle);
-  await load(id);
-  const seed = Math.floor(Math.random() * 2 ** 31);
+  const p = await load(id);
+  const count = Count.parse(options.count ?? p.set?.count ?? 4);
+  const seed = options.sameSeed && p.set?.seed !== undefined ? p.set.seed : Math.floor(Math.random() * 2 ** 31);
   await startJob(id, "set", async (ctx) => {
-    const [file] = await runWorkflow({
+    const files = await runWorkflow({
       onSubmit: ctx.track,
       workflow: "02_set_paint.api.json",
-      set: [["5", "text", setPrompt(prompt, style)], ["8", "seed", seed]],
+      set: [["5", "text", composeSetPrompt(prompt, style).text], ["8", "seed", seed], ["7", "batch_size", count]],
       output: "10",
-      outDir: abs(id, `set/paint/${seed}`),
+      outDir: abs(id, `set/paint/${seed}-${stamp()}`),
     });
     if (!(await ctx.alive())) return;
-    const image = rel(id, file);
+    const images = files.map((f) => rel(id, f));
     await updateProject(id, (q) => {
       const s = (q.set ??= { prompt, style, paintings: [] });
-      Object.assign(s, { prompt, style, image });
-      s.paintings.push(image);
+      Object.assign(s, { prompt, style, seed, count, options: images });
+      s.paintings.push(...images);
     });
-    await ctx.progress("Building the 3D stage");
-    await buildStage(id, image, ctx);
-  }, "Painting the set");
+  }, `Painting ${count} sets`);
   done(id);
 }
 
@@ -120,8 +119,9 @@ async function fill(id: string, ctx: JobCtx) {
   const r = await fillStage({
     image: abs(id, stage.image),
     mesh: abs(id, stage.mesh),
-    place: p.set!.prompt,
-    style: p.set!.prompt ? styleById(p.set!.style).phrase : "", // an upload's style is unknown
+    // The place with its light kept; an upload has no words, so the fill keeps to the picture.
+    place: fillPlace(p.set!.prompt),
+    style: p.set!.prompt ? (SET_STYLES[p.set!.style as keyof typeof SET_STYLES] ?? SET_STYLES.painterly).phrase : "",
     dir: abs(id, `${path.dirname(path.dirname(stage.mesh))}/fill/${stamp()}`),
     track: ctx.track,
     alive: ctx.alive,
