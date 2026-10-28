@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
+import type { StageCamera } from "./stage-fill";
 
 // Projects live on disk: data/projects/<id>/project.json, step results beside it.
 // Image paths in a project are relative to its folder and served by /api/files/<id>/<path>.
@@ -48,7 +49,9 @@ export type SetData = {
   stage?: { image: string; mesh: string; depth: string; fill?: StageFill };
 };
 
-export type StageFill = { mesh: string; cameras: string; views: string[]; holes: { before: number; after: number } };
+// camera: the painting's camera in the levelled stage (floor at y = 0, metres); fills made before
+// the floor step (2026-10-27) have none and are shown as they were.
+export type StageFill = { mesh: string; cameras: string; views: string[]; holes: { before: number; after: number }; camera?: StageCamera };
 
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };

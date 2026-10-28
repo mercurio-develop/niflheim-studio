@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Box, ImageUp, PaintBucket, RefreshCw } from "lucide-react";
+import { Box, ImageUp, PaintBucket, PersonStanding, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
@@ -14,7 +14,7 @@ import type { Job, SetData } from "@/lib/store";
 import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { cancelSet, finishSet, paintSet, pickSet, rebuildStage, refillStage, uploadSet } from "../actions/set";
-import { StageViewer } from "./stage-viewer";
+import { StageViewer, StandIn, type StageLook, type StagePoint } from "./stage-viewer";
 
 const EXAMPLES = ["a misty ruined stone courtyard at dusk, broken columns, an arched gateway", "a neon-lit rainy alley in a cyberpunk city at night", "a sunlit forest clearing with giant roots and drifting pollen"];
 
@@ -26,6 +26,8 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
   const [style, setStyle] = useState(s?.style || props.style);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [look, setLook] = useState<StageLook>("painting");
+  const [standAt, setStandAt] = useState<StagePoint | null>(null);
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const running = props.job?.status === "running";
   const busy = pending || running;
@@ -39,6 +41,8 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
   const painting = running && props.job?.detail === "Painting the set";
   const filling = running && !!props.job?.detail?.startsWith("Filling");
   const filled = fresh ? s!.stage!.fill : undefined;
+  // Only a levelled stage (with a floor) takes the stand-in; older fills are shown as they were.
+  const floor = !!filled?.camera?.floor;
 
   return (
     <>
@@ -150,7 +154,7 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
 
         <section className="nifl-enter flex min-w-0 flex-col gap-3" style={{ "--i": 2 } as React.CSSProperties}>
           <div className="flex items-start justify-between gap-3">
-            <SectionTitle n="2" tone="bg-tone-cyan" title="The stage" line={filled ? "Drag to look around, scroll to move in. What the painting does not show was painted in from nearby cameras." : fresh ? "Drag to look around, scroll to move in. Fog covers what the painting does not show." : "MoGe reads the painting as depth and builds a 3D stage."} />
+            <SectionTitle n="2" tone="bg-tone-cyan" title="The stage" line={floor ? "Drag to look around, scroll to move in, click the floor to stand a 1.7 m figure there. Guide shows the shapes and a 1 m grid." : filled ? "Drag to look around, scroll to move in. What the painting does not show was painted in from nearby cameras." : fresh ? "Drag to look around, scroll to move in. Fog covers what the painting does not show." : "MoGe reads the painting as depth and builds a 3D stage."} />
             {s?.image && !running && (
               <div className="flex gap-1">
                 {fresh && (
@@ -167,11 +171,21 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
             )}
           </div>
           {running && props.job && (
-            <JobStatus message={props.job.detail ?? "Working"} startedAt={props.job.startedAt} expected={painting ? 30 : filling ? 120 : 10} onCancel={() => cancelSet(props.projectId)} />
+            <JobStatus message={props.job.detail ?? "Working"} startedAt={props.job.startedAt} expected={painting ? 30 : filling ? 260 : 10} onCancel={() => cancelSet(props.projectId)} />
           )}
           <div className="relative aspect-[7/4] overflow-hidden rounded-lg border">
             {fresh ? (
-              <StageViewer key={filled?.mesh ?? s!.stage!.mesh} mesh={file(filled?.mesh ?? s!.stage!.mesh)} filled={!!filled} className="absolute inset-0" />
+              <StageViewer
+                key={filled?.mesh ?? s!.stage!.mesh}
+                mesh={file(filled?.mesh ?? s!.stage!.mesh)}
+                camera={filled?.camera}
+                filled={!!filled}
+                look={look}
+                onFloor={floor ? setStandAt : undefined}
+                className="absolute inset-0"
+              >
+                {floor && standAt && <StandIn at={standAt} />}
+              </StageViewer>
             ) : s?.image ? (
               <FadeImage src={file(s.image)} alt="The chosen painting" className={cn("absolute inset-0 size-full object-cover", running && "opacity-60 motion-safe:animate-pulse")} />
             ) : (
@@ -182,7 +196,22 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
             )}
           </div>
           {fresh && (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {filled && (
+                <div className="flex items-center gap-1.5" role="group" aria-label="How the stage is shown">
+                  {(["painting", "guide"] as const).map((x) => (
+                    <button key={x} type="button" aria-pressed={look === x} className={chip(look === x)} onClick={() => setLook(x)}>
+                      {x === "painting" ? "Painting" : "Guide"}
+                    </button>
+                  ))}
+                  {floor && (
+                    <span className="ml-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <PersonStanding className="size-3.5" />
+                      {standAt ? `${Math.hypot(standAt[0], standAt[2]).toFixed(1)} m from the camera` : "click the floor"}
+                    </span>
+                  )}
+                </div>
+              )}
               <span className="text-xs text-muted-foreground">Depth</span>
               <FadeImage src={file(s!.stage!.depth)} alt="Depth map of the set" className="h-14 rounded border" />
               {!!filled?.views.length && (

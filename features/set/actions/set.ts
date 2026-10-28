@@ -121,6 +121,7 @@ async function fill(id: string, ctx: JobCtx) {
     image: abs(id, stage.image),
     mesh: abs(id, stage.mesh),
     place: p.set!.prompt,
+    style: p.set!.prompt ? styleById(p.set!.style).phrase : "", // an upload's style is unknown
     dir: abs(id, `${path.dirname(path.dirname(stage.mesh))}/fill/${stamp()}`),
     track: ctx.track,
     alive: ctx.alive,
@@ -129,7 +130,7 @@ async function fill(id: string, ctx: JobCtx) {
   if (!r || !(await ctx.alive())) return;
   await updateProject(id, (q) => {
     if (q.set?.stage?.mesh !== stage.mesh) return; // rebuilt meanwhile
-    q.set.stage.fill = { mesh: rel(id, r.mesh), cameras: rel(id, r.cameras), views: r.views.map((v) => rel(id, v.filled)), holes: r.holes };
+    q.set.stage.fill = { mesh: rel(id, r.mesh), cameras: rel(id, r.cameras), views: r.views.map((v) => rel(id, v.filled)), holes: r.holes, camera: r.camera };
   });
 }
 
