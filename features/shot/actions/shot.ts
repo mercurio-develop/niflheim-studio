@@ -1,16 +1,34 @@
 "use server";
 
 import path from "node:path";
+import { homedir } from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { frameCount } from "@/lib/camera";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob } from "@/lib/jobs";
-import { getProject, projectDir, updateProject, type Project } from "@/lib/store";
+import { getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { DEFAULT_NEGATIVE, middleImageNode, shapeShot } from "../graph";
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
+const run = promisify(execFile);
+const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
+const SCORE = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "score_take.py");
+
+// How a take moves and whether things pop in (scripts/score_take.py, a few seconds); a take that
+// cannot be scored is kept without one.
+async function scoreTake(file: string): Promise<TakeScore | undefined> {
+  try {
+    const { stdout } = await run(PYTHON, ["-I", SCORE, file], { maxBuffer: 1 << 20 });
+    const s = JSON.parse(stdout) as { camera_travel_px: number; popin_frames: number; popin_max: number };
+    return { travel: s.camera_travel_px, popins: s.popin_frames, worst: s.popin_max };
+  } catch {
+    return undefined;
+  }
+}
 const done = (id: string) => revalidatePath(`/p/${id}/shot`);
 
 
@@ -62,8 +80,10 @@ export async function renderTake(id: string, raw: unknown) {
     });
     if (!video) throw new Error("LTX made no video.");
     if (!(await ctx.alive())) return;
+    await ctx.progress("Checking the take");
+    const score = await scoreTake(video);
     await updateProject(id, (q) => {
-      const take = { video: path.relative(projectDir(id), video), action, seed, frames: length, keys: k.at, seconds: p.camera!.seconds, at: new Date().toISOString() };
+      const take = { video: path.relative(projectDir(id), video), action, seed, frames: length, keys: k.at, seconds: p.camera!.seconds, at: new Date().toISOString(), score };
       q.shot = { action, negative, ...q.shot, takes: [...(q.shot?.takes ?? []), take] };
     });
   }, "Shooting the take");

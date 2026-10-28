@@ -109,7 +109,13 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                 <video src={file(t.video)} controls loop playsInline preload="metadata" className="aspect-[768/448] w-full rounded-md bg-black" />
                 <figcaption className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="min-w-0 flex-1 truncate" title={t.action}>
-                    <span className="font-mono">Take {i + 1}</span> · {t.action}
+                    <span className="font-mono">Take {i + 1}</span>
+                    {t.score && (
+                      <span className="font-mono" title="Camera travel (px of flow) and frames where something pops in, from scripts/score_take.py">
+                        {" "}· moves {t.score.travel.toFixed(0)} px · {t.score.popins} pop-in{t.score.popins === 1 ? "" : "s"}
+                      </span>
+                    )}{" "}
+                    · {t.action}
                   </span>
                   <a href={file(t.video)} download={`take-${i + 1}.mp4`} className={buttonVariants({ variant: "ghost", size: "sm" })} aria-label={`Download take ${i + 1}`}>
                     <Download className="size-3.5" />

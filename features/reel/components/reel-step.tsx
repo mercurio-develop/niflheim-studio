@@ -22,7 +22,7 @@ const JOINS: { id: Join; label: string }[] = [
 
 // Step 07: the shots' picked takes in order, how each joins the next, and one MP4 of it all.
 // Shots without a picked take are listed but left out of the reel.
-export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Join[]; export: { video: string; seconds: number; current: boolean } | null; job?: Job }) {
+export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Join[]; export: { video: string; seconds: number; current: boolean } | null; job?: Job; autopilot?: React.ReactNode }) {
   const [rows, setRows] = useState(props.rows);
   const [joins, setJoins] = useState<Join[]>(props.joins);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +56,7 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
           <span className="font-mono text-xs text-muted-foreground">07 · Reel</span>
           <h1 className="text-2xl font-semibold tracking-tight">Put the shots together</h1>
         </div>
+        {props.autopilot}
 
         <section className="nifl-enter flex flex-col gap-3" style={{ "--i": 1 } as React.CSSProperties}>
           <SectionTitle n="1" tone="bg-tone-cyan" title="Order" line="Each shot's picked take, in the order the reel plays them, and how each one leads into the next." />
