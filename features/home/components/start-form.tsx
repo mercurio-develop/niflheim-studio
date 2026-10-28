@@ -35,7 +35,7 @@ export function StartForm() {
       <Composer
         id="prompt"
         large
-        defaults={{ prompt: "", style: "painterly", count: 4 }}
+        defaults={{ prompt: EXAMPLES[0], style: "painterly", count: 4 }} // starts on the demo's troll; clear it for the examples
         reference={preview}
         onReference={(f) => choose(f)}
         onClearReference={() => choose(null)}
