@@ -1,5 +1,6 @@
 "use client";
 
+import { SectionNav } from "@/components/section-nav";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Clapperboard, Download } from "lucide-react";
@@ -51,14 +52,16 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
   return (
     <>
       <JobPoller running={running} />
-      <div className="flex min-w-0 flex-col gap-10">
+      <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)]">
+        <SectionNav items={[{ id: "autopilot", n: "1", title: "Autopilot", tone: "bg-tone-yellow" }, { id: "order", n: "2", title: "Order", tone: "bg-tone-cyan" }, { id: "reel", n: "3", title: "Reel", tone: "bg-tone-pink" }]} />
+        <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
           <span className="font-mono text-xs text-muted-foreground">04 · Reel</span>
           <h1 className="text-2xl font-semibold tracking-tight">Put the shots together</h1>
         </div>
         {props.autopilot}
 
-        <Section n="1" tone="bg-tone-cyan" title="Order" line="Each shot's picked take, in the order the reel plays them, and how each one leads into the next."
+        <Section id="order" n="2" tone="bg-tone-cyan" title="Order" line="Each shot's picked take, in the order the reel plays them, and how each one leads into the next."
           summary={`${used.length} of ${rows.length} shots have a picked take`}
           open={false}
           className="nifl-enter"
@@ -108,7 +111,7 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
           </ol>
         </Section>
 
-        <Section n="2" tone="bg-tone-pink" title="Reel" line={used.length ? `${used.length} shot${used.length > 1 ? "s" : ""}, one MP4 with sound at 24 fps.` : "Pick a take in at least one shot."}
+        <Section id="reel" n="3" tone="bg-tone-pink" title="Reel" line={used.length ? `${used.length} shot${used.length > 1 ? "s" : ""}, one MP4 with sound at 24 fps.` : "Pick a take in at least one shot."}
           summary={props.export ? "Exported · open to watch it" : used.length ? "Ready to export" : "Pick a take in at least one shot"}
           actions={
             <>
@@ -137,6 +140,7 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
           {props.job?.status === "error" && <p className="text-sm text-destructive">The reel failed: {props.job.error}</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
         </Section>
+        </div>
       </div>
       <NextBar back={{ href: `/p/${props.projectId}/shot`, label: "Shots" }} summary={props.export ? `Reel: ${props.export.seconds.toFixed(1)} s.` : "Export the reel to finish."} next={{ label: "Done", disabled: true }} />
     </>

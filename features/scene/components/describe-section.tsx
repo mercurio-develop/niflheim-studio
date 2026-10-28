@@ -48,6 +48,7 @@ export function DescribeSection(props: { projectId: string; set: SetData | null;
 
   return (
     <Section
+      id="describe"
       n="1"
       tone="bg-tone-yellow"
       title="Describe"

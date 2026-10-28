@@ -165,7 +165,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
   const label = (s: (typeof steps)[number]) => (s.kind === "export" ? "Put the reel together" : `${name(s.shot)} · ${s.kind === "keys" ? "keyframes" : s.kind === "take" ? `take ${s.n}` : "pick the best take"}`);
 
   return (
-    <Section n="0" tone="bg-tone-yellow" title="Autopilot" line="Say what happens in each shot and press Make the reel: keyframes, takes, the best take of each and the reel, one after another. Keep this page open while it runs."
+    <Section id="autopilot" n="1" tone="bg-tone-yellow" title="Autopilot" line="Say what happens in each shot and press Make the reel: keyframes, takes, the best take of each and the reel, one after another. Keep this page open while it runs."
       summary={driving ? "Running…" : "Make the whole reel in one press"}
       actions={
         <>

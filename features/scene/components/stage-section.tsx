@@ -85,6 +85,7 @@ export function StageSection(props: {
 
   return (
     <Section
+      id="stage"
       n="2"
       tone="bg-tone-cyan"
       title="Stage"

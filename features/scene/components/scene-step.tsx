@@ -1,5 +1,6 @@
 "use client";
 
+import { SectionNav } from "@/components/section-nav";
 import { useMemo, useState } from "react";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
@@ -48,7 +49,9 @@ export function SceneStep(props: {
   return (
     <>
       <JobPoller running={building || stageBusy || props.keyJob?.status === "running"} />
-      <div className="flex min-w-0 flex-col gap-10">
+      <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)]">
+        <SectionNav items={[{ id: "describe", n: "1", title: "Describe", tone: "bg-tone-yellow" }, { id: "stage", n: "2", title: "Stage", tone: "bg-tone-cyan" }, { id: "camera", n: "3", title: "Camera", tone: "bg-tone-pink" }]} />
+        <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
           <span className="font-mono text-xs text-muted-foreground">02 · Scene</span>
           <h1 className="text-2xl font-semibold tracking-tight">Build the place, stand them in it</h1>
@@ -86,6 +89,7 @@ export function SceneStep(props: {
           renderKey={ready ? renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh) : null}
           job={props.stageJob}
         />
+        </div>
       </div>
       <NextBar
         back={{ href: `/p/${props.projectId}/character`, label: "Character" }}

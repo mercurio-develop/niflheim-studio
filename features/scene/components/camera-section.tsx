@@ -50,6 +50,7 @@ export function CameraSection(props: {
 
   return (
     <Section
+      id="camera"
       n="3"
       tone="bg-tone-pink"
       title="Camera"

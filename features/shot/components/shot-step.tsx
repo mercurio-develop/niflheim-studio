@@ -1,5 +1,6 @@
 "use client";
 
+import { SectionNav } from "@/components/section-nav";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Check, Clapperboard, Download } from "lucide-react";
@@ -35,14 +36,16 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
   return (
     <>
       <JobPoller running={running || props.keysRunning} />
-      <div className="flex min-w-0 flex-col gap-10">
+      <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)]">
+        <SectionNav items={[{ id: "keyframes", n: "1", title: "Keyframes", tone: "bg-tone-pink" }, { id: "action", n: "2", title: "What happens", tone: "bg-tone-yellow" }, { id: "takes", n: "3", title: "Takes", tone: "bg-tone-cyan" }]} />
+        <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
           <span className="font-mono text-xs text-muted-foreground">03 · Shots</span>
           <h1 className="text-2xl font-semibold tracking-tight">Say what happens</h1>
         </div>
         <ShotTabs projectId={props.projectId} shots={props.shots} locked={running} />
 
-        <Section n="1" tone="bg-tone-pink" title="Keyframes" line="The scene's camera move, painted at its key frames. LTX follows them, so the set, the character and the camera stay put. Say what should be in the frame (a held prop) in the note."
+        <Section id="keyframes" n="1" tone="bg-tone-pink" title="Keyframes" line="The scene's camera move, painted at its key frames. LTX follows them, so the set, the character and the camera stay put. Say what should be in the frame (a held prop) in the note."
           summary={props.ready ? `${props.keyframes!.keys.length} keyframes painted from the scene's camera move` : "Make the keyframes"}
           open={!props.ready || !takes.length || props.keysRunning}
           actions={
@@ -58,7 +61,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           {props.keyPanel}
         </Section>
 
-        <Section n="2" tone="bg-tone-yellow" title="What happens" line="What the character does during the move, in a few words: a look, a turn, a gesture. Only use what the keyframes show; anything they do not show (a lantern, a sword) appears out of nowhere. Add props in the keyframes' note above."
+        <Section id="action" n="2" tone="bg-tone-yellow" title="What happens" line="What the character does during the move, in a few words: a look, a turn, a gesture. Only use what the keyframes show; anything they do not show (a lantern, a sword) appears out of nowhere. Add props in the keyframes' note above."
           summary={props.shot?.action || "Say what the character does"}
           open={!takes.length || running}
           className="nifl-enter"
@@ -94,7 +97,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           </form>
         </Section>
 
-        <Section n="3" tone="bg-tone-cyan" title="Takes" line={takes.length ? "Pick the take the sequence uses. Every take stays here." : "Your takes appear here."}
+        <Section id="takes" n="3" tone="bg-tone-cyan" title="Takes" line={takes.length ? "Pick the take the sequence uses. Every take stays here." : "Your takes appear here."}
           summary={takes.length ? `${takes.length} take${takes.length === 1 ? "" : "s"}${props.shot?.picked != null ? " · one picked" : ""}` : "No takes yet"}
           className="nifl-enter"
           style={{ "--i": 3 } as React.CSSProperties}
@@ -132,6 +135,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           {props.job?.status === "error" && <p className="text-sm text-destructive">The take failed: {props.job.error}</p>}
           {props.job?.status === "cancelled" && <p className="text-sm text-muted-foreground">Take cancelled.</p>}
         </Section>
+        </div>
       </div>
       <NextBar
         back={{ href: `/p/${props.projectId}/scene`, label: "Scene" }}
