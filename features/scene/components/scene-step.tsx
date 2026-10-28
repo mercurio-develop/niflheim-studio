@@ -46,6 +46,8 @@ export function SceneStep(props: {
     const ps = poses(cam!, aim(cam!, at, props.placement!.height), move);
     return { poses: ps, inside: ps.map((p) => inside(cam!, p.position)) };
   }, [ready, cam, at, props.placement, move]);
+  // Play and Overview happen in the stage viewer: bring it into view.
+  const toStage = () => document.getElementById("stage")?.scrollIntoView({ behavior: "smooth", block: "start" });
   return (
     <>
       <JobPoller running={building || stageBusy || props.keyJob?.status === "running"} />
@@ -68,7 +70,6 @@ export function SceneStep(props: {
           overview={ready && overview}
           layer={path && <CameraPath poses={path.poses} inside={path.inside} overview={overview} playing={playing} onDone={() => setPlaying(false)} />}
         />
-        {ready && <ShotTabs projectId={props.projectId} shots={props.shots} locked={stageBusy || props.keyJob?.status === "running"} />}
         <CameraSection
           projectId={props.projectId}
           move={move}
@@ -81,9 +82,14 @@ export function SceneStep(props: {
           onOverview={(on) => {
             setPlaying(false);
             setOverview(on);
+            if (on) toStage();
           }}
           playing={playing}
-          onPlay={setPlaying}
+          onPlay={(on) => {
+            setPlaying(on);
+            if (on) toStage();
+          }}
+          tabs={ready && <ShotTabs projectId={props.projectId} shots={props.shots} locked={stageBusy || props.keyJob?.status === "running"} />}
           ready={ready}
           render={props.cameraRender}
           renderKey={ready ? renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh) : null}

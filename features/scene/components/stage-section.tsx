@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Box, PaintBucket, PersonStanding, RefreshCw, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
-import { Section } from "@/components/section";
+import { More, Section } from "@/components/section";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import type { Job, SetData, StageData } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -195,9 +195,8 @@ export function StageSection(props: {
       )}
 
       {fresh && (
-        <details className="text-xs text-muted-foreground">
-          <summary className="cursor-pointer select-none hover:text-foreground">How the stage was built</summary>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
+        <More label="How the stage was built" summary="depth and the painted views">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span>Depth</span>
             <FadeImage src={file(s!.stage!.depth)} alt="Depth map of the set" className="h-14 rounded border" />
             {!!filled?.views.length && (
@@ -211,7 +210,7 @@ export function StageSection(props: {
               </>
             )}
           </div>
-        </details>
+        </More>
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}

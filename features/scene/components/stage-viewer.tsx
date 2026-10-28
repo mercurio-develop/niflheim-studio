@@ -2,7 +2,9 @@
 
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera, useGLTF } from "@react-three/drei";
+import { OrbitControls, PerspectiveCamera, useGLTF, useProgress } from "@react-three/drei";
+import { LoadingDots } from "@/components/loading-dots";
+import { cn } from "@/lib/utils";
 import * as THREE from "three";
 import type { StageCamera } from "@/lib/stage-fill";
 
@@ -170,9 +172,22 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
   );
 }
 
+// While the stage mesh downloads the canvas is only fog: say so.
+function StageLoading() {
+  const { active, progress } = useProgress();
+  if (!active) return null;
+  return (
+    <div aria-live="polite" className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+      <LoadingDots />
+      Loading the stage{progress > 0 ? ` · ${Math.round(progress)}%` : ""}
+    </div>
+  );
+}
+
 export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; overview?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
   return (
-    <div className={props.className} style={{ background: FOG }}>
+    <div className={cn("relative", props.className)} style={{ background: FOG }}>
+      <StageLoading />
       <Canvas dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
         <color attach="background" args={[FOG]} />
         <Suspense fallback={null}>

@@ -28,6 +28,7 @@ export function CameraSection(props: {
   render: CameraRender | null;
   renderKey: string | null; // today's move, placement and stage, to tell an old render
   job?: Job; // the stage job, which renders run under
+  tabs?: React.ReactNode; // the scene's shots: each has its own move
 }) {
   const m = props.move;
   const spec = MOVES.find((x) => x.id === m.move)!;
@@ -74,6 +75,7 @@ export function CameraSection(props: {
       className="nifl-enter"
       style={{ "--i": 3 } as React.CSSProperties}
     >
+      {props.tabs}
       {props.ready && (
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:max-w-xl">
           <span className="text-xs text-muted-foreground">Move</span>
