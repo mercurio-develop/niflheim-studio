@@ -11,12 +11,14 @@ export function CharacterStep({ project }: { project: Project }) {
   const { character: c, jobs } = project;
   const version = c.current === null ? null : c.versions[c.current];
   const moves = historyMoves(project);
-  const anyRunning = Object.values(jobs).some((j) => j.status === "running");
+  // Part tags load in the background: only the part chips wait for them, the rest keeps working.
+  const polling = Object.values(jobs).some((j) => j.status === "running");
+  const anyRunning = Object.entries(jobs).some(([k, j]) => k !== "tags" && j.status === "running");
 
   return (
     <>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto]">
-        <JobPoller running={anyRunning} />
+        <JobPoller running={polling} />
         <div className="flex min-w-0 flex-col gap-10">
           <div className="nifl-enter flex flex-col gap-1">
             <span className="font-mono text-xs text-muted-foreground">01 · Character</span>
