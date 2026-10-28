@@ -21,7 +21,8 @@ export const MOVES: { id: MoveId; label: string; line: string; unit: string; min
   { id: "crane", label: "Crane", line: "Rises while looking at them. Negative sinks.", unit: "m", min: -1, max: 2, step: 0.05, value: 0.5 },
   { id: "track", label: "Track", line: "Slides sideways, keeping them in frame. Negative goes left.", unit: "m", min: -2, max: 2, step: 0.05, value: 0.8 },
 ];
-export const DEFAULT_MOVE: CameraMove = { move: "push", amount: 1.2, seconds: 5, ease: true };
+// 4 s = 97 frames: the length LTX-2.5 shot best on 16 GB (04_shot ACCEPT: 768x448, 97 frames).
+export const DEFAULT_MOVE: CameraMove = { move: "push", amount: 1.2, seconds: 4, ease: true };
 
 // Where the stage holds up, around the point the painting's camera looks at (the viewer's ORBIT
 // for a filled stage): yaw either side, up and down, and how near and far.
