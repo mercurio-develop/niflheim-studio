@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
 import { KeyframesPanel } from "@/features/shot/components/keyframes";
+import { ShotTabs, type ShotTab } from "@/features/shot/components/shot-tabs";
 import { DEFAULT_MOVE, aim, inside, keyFrames, poses, renderKey, type CameraMove } from "@/lib/camera";
 import type { CameraRender, Job, Keyframes, SetData, StageData } from "@/lib/store";
 import { CameraPath } from "./camera-path";
@@ -26,6 +27,7 @@ export function SceneStep(props: {
   cameraRender: CameraRender | null;
   keyframes: Keyframes | null;
   keyJob?: Job;
+  shots: ShotTab[]; // the scene's shots; the camera below is the active one's
   setJob?: Job;
   stageJob?: Job;
 }) {
@@ -66,6 +68,7 @@ export function SceneStep(props: {
           overview={ready && overview}
           layer={path && <CameraPath poses={path.poses} inside={path.inside} overview={overview} playing={playing} onDone={() => setPlaying(false)} />}
         />
+        {ready && <ShotTabs projectId={props.projectId} shots={props.shots} locked={stageBusy || props.keyJob?.status === "running"} />}
         <CameraSection
           projectId={props.projectId}
           move={move}
