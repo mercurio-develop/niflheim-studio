@@ -87,7 +87,9 @@ export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)
 
 // The shot: what happens, and the LTX-2.5 takes of it (MP4 with audio, 768x448, the camera move's
 // 8n+1 frames at 24 fps), each guided by the keyframes it was made from (keys: Keyframes.at).
-export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string };
+// score: scripts/score_take.py on arrival: camera travel (px of flow), pop-in frames and worst spike.
+export type TakeScore = { travel: number; popins: number; worst: number };
+export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore };
 export type Shot = { action: string; negative: string; takes: Take[]; picked?: number };
 
 // One shot of the scene: its name, and (while not active) its move, render, keyframes and takes.
@@ -108,6 +110,12 @@ export function allShots(p: Project): (ShotRef & ShotData & { active: boolean })
 // dip through black); export: the last MP4 made (scripts/reel.py) and what it was made from (key).
 export type Join = "cut" | "fade" | "dip";
 export type Reel = { order: string[]; joins: Join[]; export?: { video: string; seconds: number; key: string; at: string } };
+
+// Autopilot: per shot what happens and how many takes; the steps it runs in order (keyframes, the
+// takes, the pick, then the reel), each with its state, so a reopened page resumes where it stopped.
+export type AutopilotShot = { shot: string; include: boolean; action: string; takes: number };
+export type AutopilotStep = { shot: string; kind: "keys" | "take" | "pick" | "export"; n?: number; status: "todo" | "running" | "done" | "error"; error?: string };
+export type Autopilot = { plan: AutopilotShot[]; join: Join; steps: AutopilotStep[]; state: "idle" | "running" | "done" | "error" | "stopped"; at: string };
 
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
@@ -147,6 +155,7 @@ export type Project = {
   activeShot?: string;
   stash?: Record<string, ShotData>;
   reel?: Reel; // the picked takes put together
+  autopilot?: Autopilot; // the reel made in one press
   jobs: Record<string, Job>;
 };
 
