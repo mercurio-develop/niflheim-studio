@@ -129,7 +129,7 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
           {error && <p className="text-sm text-destructive">{error}</p>}
         </section>
       </div>
-      <NextBar back={{ href: `/p/${props.projectId}/shot`, label: "Shot" }} summary={props.export ? `Reel: ${props.export.seconds.toFixed(1)} s.` : "Export the reel to finish."} next={{ label: "Done", disabled: true }} />
+      <NextBar back={{ href: `/p/${props.projectId}/shot`, label: "Shots" }} summary={props.export ? `Reel: ${props.export.seconds.toFixed(1)} s.` : "Export the reel to finish."} next={{ label: "Done", disabled: true }} />
     </>
   );
 }

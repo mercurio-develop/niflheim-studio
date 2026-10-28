@@ -112,7 +112,7 @@ export function SceneStep(props: {
       <NextBar
         back={{ href: `/p/${props.projectId}/turnaround`, label: "Turnaround" }}
         summary={building || cutting ? ((building ? props.setJob : props.stageJob)?.detail ?? "Working...") : at && !props.moved ? `Standing in the set, ${props.placement!.height.toFixed(2)} m tall.` : fresh ? "Stand the character on the stage to continue." : "Paint or upload a set to continue."}
-        next={{ label: "Shot", href: `/p/${props.projectId}/shot`, disabled: !keysReady, hint: at && !keysReady ? "Make the keyframes first" : undefined }}
+        next={{ label: "Shots", href: `/p/${props.projectId}/shot`, disabled: !keysReady, hint: at && !keysReady ? "Make the keyframes first" : undefined }}
       />
     </>
   );

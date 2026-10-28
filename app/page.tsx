@@ -43,7 +43,7 @@ export default function Home() {
         </section>
 
         <section className="flex w-full flex-col gap-4">
-          <h2 className="text-sm text-muted-foreground">Seven steps. Each one saved, swappable, re-runnable.</h2>
+          <h2 className="text-sm text-muted-foreground">Five steps. Each one saved, swappable, re-runnable.</h2>
           <Pipeline />
         </section>
       </main>

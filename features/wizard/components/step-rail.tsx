@@ -8,14 +8,16 @@ import { cn } from "@/lib/utils";
 // (accent ring + pulse), next (hollow). The accent line fills up to the current step.
 export function StepRail(props: { projectId: string; active: StepSlug; states: Partial<Record<StepSlug, StepState>> }) {
   const at = STEPS.findIndex((s) => s.slug === props.active);
+  // The line runs from the first dot's centre to the last's: half a column in from each side.
+  const inset = 50 / STEPS.length;
   return (
     <nav aria-label="Steps" className="nifl-enter -mx-4 -mt-3 overflow-x-auto px-4 pt-6 pb-2">
-      <ol className="relative flex min-w-[52rem] items-start">
-        <div aria-hidden className="absolute top-[1.125rem] right-[6.25%] left-[6.25%] h-0.5 rounded-full bg-border" />
+      <ol className="relative flex min-w-[34rem] items-start">
+        <div aria-hidden className="absolute top-[1.125rem] h-0.5 rounded-full bg-border" style={{ left: `${inset}%`, right: `${inset}%` }} />
         <div
           aria-hidden
-          className="absolute top-[1.125rem] left-[6.25%] h-0.5 rounded-full bg-primary transition-[width] duration-700 ease-out"
-          style={{ width: `${(at / (STEPS.length - 1)) * 87.5}%` }}
+          className="absolute top-[1.125rem] h-0.5 rounded-full bg-primary transition-[width] duration-700 ease-out"
+          style={{ left: `${inset}%`, width: `${(at / (STEPS.length - 1)) * (100 - 2 * inset)}%` }}
         />
         {STEPS.map((s, i) => {
           const state = props.states[s.slug] ?? "todo";
