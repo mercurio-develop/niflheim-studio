@@ -63,6 +63,11 @@ export type StageFill = { mesh: string; cameras: string; views: string[]; holes:
 // towards screen right).
 export type StageData = { source: string; cutouts: Partial<Record<ViewId, string>>; at?: [number, number, number]; height: number; turn: number };
 
+// The character as a 3D model (Hunyuan3D-2 MV from the front, side and back views; no texture
+// yet). front: the front view image it was made from; a new front makes it out of date. Kept
+// beside the turnaround, not in it, so a new Generate of the views does not lose it.
+export type Mesh = { glb: string; front: string; at: string };
+
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
 
@@ -88,6 +93,7 @@ export type Project = {
     views: Partial<Record<ViewId, ViewStack>>; // each view keeps its own versions, like the character
   };
   assets?: Asset[]; // objects hidden from the turnaround, kept to be made on their own later
+  mesh?: Mesh; // the character in 3D, made from the turnaround views
   set?: SetData;
   stage?: StageData;
   jobs: Record<string, Job>;

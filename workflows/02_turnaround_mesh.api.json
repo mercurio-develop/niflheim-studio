@@ -1,0 +1,215 @@
+{
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "70",
+        0
+      ],
+      "seed": 42,
+      "steps": 20,
+      "cfg": 4,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": [
+        "78",
+        0
+      ],
+      "negative": [
+        "65",
+        1
+      ],
+      "latent_image": [
+        "66",
+        0
+      ],
+      "denoise": 1
+    }
+  },
+  "51": {
+    "class_type": "CLIPVisionEncode",
+    "inputs": {
+      "clip_vision": [
+        "54",
+        1
+      ],
+      "image": [
+        "56",
+        0
+      ],
+      "crop": "none"
+    }
+  },
+  "54": {
+    "class_type": "ImageOnlyCheckpointLoader",
+    "inputs": {
+      "ckpt_name": "hunyuan3d-dit-v2-mv-turbo_fp16.safetensors"
+    }
+  },
+  "56": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "front.png"
+    },
+    "_meta": {
+      "title": "Front view"
+    }
+  },
+  "61": {
+    "class_type": "VAEDecodeHunyuan3D",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "54",
+        2
+      ],
+      "num_chunks": 8000,
+      "octree_resolution": 256
+    }
+  },
+  "65": {
+    "class_type": "Hunyuan3Dv2ConditioningMultiView",
+    "inputs": {
+      "front": [
+        "51",
+        0
+      ],
+      "left": [
+        "86",
+        0
+      ],
+      "back": [
+        "81",
+        0
+      ],
+      "right": [
+        "88",
+        0
+      ]
+    }
+  },
+  "66": {
+    "class_type": "EmptyLatentHunyuan3Dv2",
+    "inputs": {
+      "resolution": 3072,
+      "batch_size": 1
+    }
+  },
+  "67": {
+    "class_type": "SaveGLB",
+    "inputs": {
+      "mesh": [
+        "83",
+        0
+      ],
+      "filename_prefix": "nifl/turnaround-mesh"
+    }
+  },
+  "70": {
+    "class_type": "ModelSamplingAuraFlow",
+    "inputs": {
+      "model": [
+        "54",
+        0
+      ],
+      "shift": 1
+    }
+  },
+  "78": {
+    "class_type": "FluxGuidance",
+    "inputs": {
+      "conditioning": [
+        "65",
+        0
+      ],
+      "guidance": 3.5
+    }
+  },
+  "81": {
+    "class_type": "CLIPVisionEncode",
+    "inputs": {
+      "clip_vision": [
+        "54",
+        1
+      ],
+      "image": [
+        "82",
+        0
+      ],
+      "crop": "none"
+    }
+  },
+  "82": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "back.png"
+    },
+    "_meta": {
+      "title": "Back view"
+    }
+  },
+  "83": {
+    "class_type": "VoxelToMesh",
+    "inputs": {
+      "voxel": [
+        "61",
+        0
+      ],
+      "algorithm": "surface net",
+      "threshold": 0.6
+    }
+  },
+  "85": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "left.png"
+    },
+    "_meta": {
+      "title": "Side view (left)"
+    }
+  },
+  "86": {
+    "class_type": "CLIPVisionEncode",
+    "inputs": {
+      "clip_vision": [
+        "54",
+        1
+      ],
+      "image": [
+        "85",
+        0
+      ],
+      "crop": "none"
+    }
+  },
+  "88": {
+    "class_type": "CLIPVisionEncode",
+    "inputs": {
+      "clip_vision": [
+        "54",
+        1
+      ],
+      "image": [
+        "89",
+        0
+      ],
+      "crop": "none"
+    }
+  },
+  "89": {
+    "class_type": "ImageFlip",
+    "inputs": {
+      "image": [
+        "85",
+        0
+      ],
+      "flip_method": "y-axis: horizontally"
+    },
+    "_meta": {
+      "title": "Right = side mirrored"
+    }
+  }
+}
