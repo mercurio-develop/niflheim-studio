@@ -16,7 +16,7 @@ import { CharacterCard } from "./character-card";
 // Step 05: stand the character in the set. The levelled stage from step 03 (floor y = 0, metres),
 // the character as a card cut from the turnaround: click the floor to put them there, then set
 // their height and which way they face. Every change is saved; the shot (07) starts from here.
-export function StageStep(props: { projectId: string; fill: StageFill & { camera: NonNullable<StageFill["camera"]> }; stage: StageData | null; front: string; job?: Job }) {
+export function StageStep(props: { projectId: string; fill: StageFill & { camera: NonNullable<StageFill["camera"]> }; stage: StageData | null; front: string; moved?: boolean; job?: Job }) {
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const running = props.job?.status === "running";
   const stale = !!props.stage && props.stage.source !== props.front;
@@ -79,11 +79,11 @@ export function StageStep(props: { projectId: string; fill: StageFill & { camera
             <StageViewer mesh={file(props.fill.mesh)} camera={props.fill.camera} filled look={look} onFloor={ready ? setAt : undefined} className="absolute inset-0">
               {ready && at && <CharacterCard cutouts={Object.fromEntries(Object.entries(props.stage!.cutouts).map(([v, f]) => [v, file(f!)]))} at={at} height={height} turn={turn} />}
             </StageViewer>
-            {ready && !at && (
+            {ready && (!at || props.moved) && (
               <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
                 <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-sm backdrop-blur">
                   <PersonStanding className="size-4 text-primary" />
-                  Click the floor to stand them there
+                  {at ? "The set changed since you placed them: click the floor to stand them again" : "Click the floor to stand them there"}
                 </span>
               </div>
             )}

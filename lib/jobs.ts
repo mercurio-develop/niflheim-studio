@@ -11,12 +11,21 @@ import { getProject, updateProject, type Project } from "./store";
 // progress(): update the line the UI shows while a multi-step job runs ("Making the side view (3/6)").
 export type JobCtx = { track: (comfyJobId: string) => Promise<unknown>; alive: () => Promise<boolean>; progress: (detail: string) => Promise<unknown> };
 
+// Jobs that change the same thing never run at once: building the set moves the floor the
+// character is cut out to stand on, so set and stage share one scene lock.
+const SHARED: Record<string, { keys: string[]; busy: string }> = {
+  set: { keys: ["stage"], busy: "The character is being cut out; wait for it or cancel it first." },
+  stage: { keys: ["set"], busy: "The set is being built; wait for it or cancel it first." },
+};
+
 export async function startJob(projectId: string, key: string, work: (ctx: JobCtx) => Promise<void>, detail?: string) {
   // Each run gets its own id, so a late finish (or failure) of a cancelled run never
   // overwrites the run that replaced it under the same key.
   const run = randomUUID();
   await updateProject(projectId, (p) => {
     if (p.jobs[key]?.status === "running") throw new Error(`${key} is already running`);
+    const shared = SHARED[key];
+    if (shared?.keys.some((k) => p.jobs[k]?.status === "running")) throw new Error(shared.busy);
     p.jobs[key] = { status: "running", startedAt: new Date().toISOString(), run, ...(detail ? { detail } : {}) };
   });
   const mine = (p: Project) => p.jobs[key]?.run === run;

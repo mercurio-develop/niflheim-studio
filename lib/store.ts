@@ -60,8 +60,9 @@ export type StageFill = { mesh: string; cameras: string; views: string[]; holes:
 // removed (02_cutout), cut from `source` (the front image at the time; a new front makes them
 // stale). at: where they stand in the levelled stage (metres, floor y = 0), height: their height
 // in metres, turn: which way they face in degrees (0 = towards the painting's camera, positive
-// towards screen right).
-export type StageData = { source: string; cutouts: Partial<Record<ViewId, string>>; at?: [number, number, number]; height: number; turn: number };
+// towards screen right). fill: the filled stage mesh `at` was placed on; a rebuilt or refilled set
+// moves the floor, so a different current fill makes the placement out of date.
+export type StageData = { source: string; cutouts: Partial<Record<ViewId, string>>; at?: [number, number, number]; height: number; turn: number; fill?: string };
 
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
