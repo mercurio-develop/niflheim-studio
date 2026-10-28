@@ -123,3 +123,8 @@ export function c2w(p: Pose): number[][] {
     [0, 0, 0, 1],
   ];
 }
+
+// What a camera render was made from: the move, where the character stands and the stage. A render
+// whose key differs from today's is out of date.
+export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string) =>
+  [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh].join("|");

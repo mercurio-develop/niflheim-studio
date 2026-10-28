@@ -19,3 +19,20 @@ console.log(`5 s = ${frameCount(5)} frames; character at ${p.stage?.at?.map((x: 
 for (const m of MOVES) console.log(check({ ...DEFAULT_MOVE, move: m.id, amount: m.value }));
 console.log(check({ ...DEFAULT_MOVE, move: "arc", amount: 40 }));
 console.log(check({ ...DEFAULT_MOVE, move: "track", amount: -2 }));
+
+// With --render: the default push-in rendered along its path (scripts/stage_path.py), timed.
+if (process.argv.includes("--render")) {
+  const { writeFileSync, mkdirSync } = await import("node:fs");
+  const { execFileSync } = await import("node:child_process");
+  const { homedir } = await import("node:os");
+  const { c2w } = await import("../lib/camera.ts");
+  const out = path.join(process.cwd(), "data", "proof", "stage-path", id);
+  mkdirSync(out, { recursive: true });
+  const ps = poses(cam, target, DEFAULT_MOVE);
+  writeFileSync(path.join(out, "poses.json"), JSON.stringify(ps.map(c2w)));
+  const dir = path.join(process.cwd(), "data", "projects", id, path.dirname(p.set.stage.fill.mesh));
+  const python = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
+  const t0 = performance.now();
+  const res = execFileSync(python, ["-I", "scripts/stage_path.py", "--dir", dir, "--poses", path.join(out, "poses.json"), "--fov", String(cam.fov), "--out", out], { encoding: "utf8" });
+  console.log(`render: ${((performance.now() - t0) / 1000).toFixed(1)}s`, res.trim());
+}

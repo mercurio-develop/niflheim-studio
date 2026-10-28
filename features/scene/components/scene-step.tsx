@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
-import { DEFAULT_MOVE, aim, inside, poses, type CameraMove } from "@/lib/camera";
-import type { Job, SetData, StageData } from "@/lib/store";
+import { DEFAULT_MOVE, aim, inside, poses, renderKey, type CameraMove } from "@/lib/camera";
+import type { CameraRender, Job, SetData, StageData } from "@/lib/store";
 import { CameraPath } from "./camera-path";
 import { CameraSection } from "./camera-section";
 import { DescribeSection } from "./describe-section";
@@ -22,11 +22,13 @@ export function SceneStep(props: {
   front: string | null;
   moved: boolean;
   camera: CameraMove | null; // the saved move
+  cameraRender: CameraRender | null;
   setJob?: Job;
   stageJob?: Job;
 }) {
   const building = props.setJob?.status === "running";
-  const cutting = props.stageJob?.status === "running";
+  const cutting = props.stageJob?.status === "running" && props.stageJob.detail !== "Rendering the camera move";
+  const stageBusy = props.stageJob?.status === "running";
   const at = props.placement?.at;
   const fresh = !!props.set?.stage && props.set.stage.image === props.set.image;
   const cam = fresh ? props.set!.stage!.fill?.camera : undefined;
@@ -41,13 +43,13 @@ export function SceneStep(props: {
   }, [ready, cam, at, props.placement, move]);
   return (
     <>
-      <JobPoller running={building || cutting} />
+      <JobPoller running={building || stageBusy} />
       <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
           <span className="font-mono text-xs text-muted-foreground">03 · Scene</span>
           <h1 className="text-2xl font-semibold tracking-tight">Build the place, stand them in it</h1>
         </div>
-        <DescribeSection projectId={props.projectId} set={props.set} style={props.style} job={props.setJob} locked={cutting} />
+        <DescribeSection projectId={props.projectId} set={props.set} style={props.style} job={props.setJob} locked={stageBusy} />
         <StageSection
           projectId={props.projectId}
           set={props.set}
@@ -75,6 +77,9 @@ export function SceneStep(props: {
           playing={playing}
           onPlay={setPlaying}
           ready={ready}
+          render={props.cameraRender}
+          renderKey={ready ? renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh) : null}
+          job={props.stageJob}
         />
       </div>
       <NextBar

@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Eye, Map as MapIcon, Play, Square, TriangleAlert } from "lucide-react";
+import { Clapperboard, Eye, Map as MapIcon, Play, Square, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SectionTitle } from "@/components/section-title";
+import { LoadingDots } from "@/components/loading-dots";
+import { JobStatus } from "@/features/wizard/components/job-status";
 import { FPS, MOVES, frameCount, type CameraMove } from "@/lib/camera";
-import { saveCamera } from "../actions/camera";
+import type { CameraRender, Job } from "@/lib/store";
+import { renderCamera, saveCamera } from "../actions/camera";
 import { chip } from "./chip";
 
 // Step 3 of the scene: the camera move, aimed at the character. Pick a move, tune how far and how
 // long; the path shows in the stage above (Overview), Play flies it, and frames that leave the
-// space the stage holds are counted. Saved a moment after the last change.
+// space the stage holds are counted. Saved a moment after the last change. Render makes the depth
+// video the shot follows, and a colour preview of what the stage gives along the path.
 export function CameraSection(props: {
   projectId: string;
   move: CameraMove;
@@ -21,12 +25,19 @@ export function CameraSection(props: {
   playing: boolean;
   onPlay: (on: boolean) => void;
   ready: boolean; // a character stands on the stage
+  render: CameraRender | null;
+  renderKey: string | null; // today's move, placement and stage, to tell an old render
+  job?: Job; // the stage job, which renders run under
 }) {
   const m = props.move;
   const spec = MOVES.find((x) => x.id === m.move)!;
   const frames = frameCount(m.seconds);
   const [error, setError] = useState<string | null>(null);
-  const [, start] = useTransition();
+  const [starting, start] = useTransition();
+  const rendering = props.job?.status === "running" && props.job.detail === "Rendering the camera move";
+  const busy = props.job?.status === "running";
+  const current = !!props.render && props.render.key === props.renderKey;
+  const worst = props.render ? Math.max(...props.render.holes) : 0;
   const set = (patch: Partial<CameraMove>) => props.onMove({ ...m, ...patch });
 
   const first = useRef(true);
@@ -100,6 +111,47 @@ export function CameraSection(props: {
               {frames} frames at {FPS} fps
             </span>
           </div>
+        </div>
+      )}
+
+      {props.ready && (
+        <div className="flex flex-col gap-3 border-t pt-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-mono text-[11px] text-muted-foreground">
+              {current ? `Rendered: ${frames} frames, holes up to ${(worst * 100).toFixed(1)}% of a frame` : props.render ? "The move or the stage changed since the last render" : "~15 s · a depth video for the shot, and a preview"}
+            </span>
+            <Button
+              size="sm"
+              variant={current ? "ghost" : "default"}
+              className="ml-auto"
+              disabled={busy || starting}
+              onClick={() =>
+                start(async () => {
+                  setError(null);
+                  try {
+                    await saveCamera(props.projectId, m);
+                    await renderCamera(props.projectId);
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
+                })
+              }
+            >
+              {starting && !busy ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
+              {current ? "Render again" : "Render"}
+            </Button>
+          </div>
+          {rendering && props.job && <JobStatus message="Rendering the camera move" startedAt={props.job.startedAt} expected={15} />}
+          {props.render && !rendering && (
+            <div className={`grid gap-3 sm:grid-cols-2 ${current ? "" : "opacity-50"}`}>
+              {(["preview", "depth"] as const).map((k) => (
+                <figure key={k} className="flex flex-col gap-1">
+                  <video key={props.render![k]} src={`/api/files/${props.projectId}/${props.render![k]}`} autoPlay loop muted playsInline className="aspect-[832/480] w-full rounded-md border bg-black" />
+                  <figcaption className="text-xs text-muted-foreground">{k === "preview" ? "What the stage gives along the path (holes black)" : "Depth the shot follows (near is white)"}</figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

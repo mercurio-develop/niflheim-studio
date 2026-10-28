@@ -31,7 +31,8 @@ export function StageSection(props: {
   const s = props.set;
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const building = props.setJob?.status === "running";
-  const cutting = props.stageJob?.status === "running";
+  // The stage job also renders the camera move; that one shows in the Camera section.
+  const cutting = props.stageJob?.status === "running" && props.stageJob.detail !== "Rendering the camera move";
   const fresh = !!s?.stage && s.stage.image === s.image;
   const filled = fresh ? s!.stage!.fill : undefined;
   const floor = !!filled?.camera?.floor; // only a levelled stage takes the character

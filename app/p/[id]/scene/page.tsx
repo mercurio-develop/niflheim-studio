@@ -21,6 +21,7 @@ async function Scene({ params }: { params: Promise<{ id: string }> }) {
         front={viewImage(project, "front")}
         moved={placementStale(project) === "set"}
         camera={project.camera ?? null}
+        cameraRender={project.cameraRender ?? null}
         setJob={project.jobs.set}
         stageJob={project.jobs.stage}
       />
