@@ -1,14 +1,15 @@
 """Colour the turnaround's 3D model from its views. Hunyuan3D-2 MV gives shape only; the front,
 side and back views (the right is the side mirrored) are projected onto the mesh, orthographic and
 depth-tested, and blended by how squarely each vertex faces each view. Vertices no view sees (under
-the arms, the soles) take their neighbours' colour. Which way the model faces is found by trying
-the four camera layouts and keeping the one where the views agree most.
+the arms, the soles) take their neighbours' colour. Hunyuan's model faces +z; which side the side
+view was painted from is found by matching its silhouette, which is not mirror-symmetric (nose,
+toes).
 
 The three-quarter view, when given, fills the diagonals the straight views miss (inside the arms,
-coat folds); it and its mirror are placed on whichever diagonal agrees with the front and side.
+coat folds); it and its mirror go on whichever diagonal matches its silhouette.
 
 Usage: mesh_colour.py IN.glb OUT.glb FRONT.png SIDE.png BACK.png [THREEQUARTER.png|-] [PREVIEW.png]
-Prints JSON: {"glb", "seen" (share of vertices a view saw), "front", "side", "error"}."""
+Prints JSON: {"glb", "seen" (share of vertices a view saw), "side", "threequarter", "fit"}."""
 import json
 import sys
 
@@ -32,11 +33,11 @@ def figure(im):
     return im, fg, (xs.min(), ys.min(), xs.max(), ys.max())
 
 
-def cameras(sf, ss, tq=0):
-    """The views' camera directions. sf: the front camera on +z (1) or -z (-1); ss: the side camera
-    on +x (1) or -x (-1). Back and right sit opposite them. tq: the three-quarter camera between the
-    front and the side (1) or the front and the right (-1); its mirror takes the other diagonal."""
-    f, sd = np.array([0, 0, sf], float), np.array([ss, 0, 0], float)
+def cameras(ss, tq=0):
+    """The views' camera directions: front on +z, back opposite. ss: the side camera on +x (1) or
+    -x (-1); right sits opposite it. tq: the three-quarter camera between the front and the side
+    (1) or the front and the right (-1); its mirror takes the other diagonal."""
+    f, sd = np.array([0, 0, 1.0]), np.array([ss, 0, 0], float)
     cams = {"front": f, "back": -f, "side": sd, "right": -sd}
     if tq:
         cams["threequarter"] = (f + tq * sd) / np.sqrt(2)
@@ -74,18 +75,18 @@ def sample(v, n, view, cam):
     return im[iy, ix], facing * seen * fg[iy, ix]
 
 
-def disagreement(per):
-    """Mean colour difference where a front/back view and a side view both see a vertex: lowest
-    when the cameras are where they really were."""
-    errs = []
-    pairs = [(a, b) for a in ("front", "back") for b in ("side", "right")]
-    pairs += [(a, b) for a in ("threequarter", "threequarter-mirror") for b in ("front", "side", "right") if a in per]
-    for a, b in pairs:
-            (ca, wa), (cb, wb) = per[a], per[b]
-            both = (wa > 0.05) & (wb > 0.05)
-            if both.sum() > 200:
-                errs.append(np.abs(ca[both] - cb[both]).mean())
-    return float(np.mean(errs)) if errs else 1.0
+def overlap(v, view, cam, size=96):
+    """How well the mesh's silhouette from `cam` matches the figure in `view` (IoU, both fitted to
+    a size x size box)."""
+    _, fg, (x0, y0, x1, y1) = view
+    u, up, _ = project(v, cam)
+    mesh = np.zeros((size, size), bool)
+    mx = ((u - u.min()) / (np.ptp(u) or 1) * (size - 1)).astype(int)
+    my = ((up.max() - up) / (np.ptp(up) or 1) * (size - 1)).astype(int)
+    mesh[my, mx] = True
+    ys, xs = np.mgrid[0:size, 0:size]
+    fig = fg[(y0 + ys * (y1 - y0) / (size - 1)).astype(int), (x0 + xs * (x1 - x0) / (size - 1)).astype(int)]
+    return float((mesh & fig).sum() / max((mesh | fig).sum(), 1))
 
 
 def fill(mesh, c, known, passes=40):
@@ -106,10 +107,10 @@ def fill(mesh, c, known, passes=40):
     return c
 
 
-def preview(mesh, c, sf, ss, out):
+def preview(mesh, c, ss, out):
     """Front, side and back of the coloured vertices (point splats), for proofs."""
     v, tiles, H, W = mesh.vertices, [], 480, 300
-    cams = cameras(sf, ss)
+    cams = cameras(ss)
     for cam in (cams["front"], cams["side"], cams["back"]):
         u, up, d = project(v, cam)
         k = (H - 20) / np.ptp(up)
@@ -132,37 +133,28 @@ def main():
     side_im = load(side)
     views = {"front": figure(load(front)), "back": figure(load(back)),
              "side": figure(side_im), "right": figure(side_im[:, ::-1].copy())}
-    best = None
-    for sf in (1, -1):
-        for ss in (1, -1):
-            per = {k: sample(v, n, views[k], cam) for k, cam in cameras(sf, ss).items()}
-            err = disagreement(per)
-            if best is None or err < best[0]:
-                best = (err, sf, ss, per)
-    err, sf, ss, per = best
+    fit = {t: overlap(v, views["side"], cameras(t)["side"]) for t in (1, -1)}
+    ss = max(fit, key=fit.get)
     tq = 0
     if quarter:
         q = load(quarter)
         views["threequarter"], views["threequarter-mirror"] = figure(q), figure(q[:, ::-1].copy())
-        tries = []
-        for t in (1, -1):
-            cams = cameras(sf, ss, t)
-            extra = {k: sample(v, n, views[k], cams[k]) for k in ("threequarter", "threequarter-mirror")}
-            tries.append((disagreement({**per, **extra}), t, extra))
-        err, tq, extra = min(tries, key=lambda x: x[0])
-        per = {**per, **extra}
+        tq = max((1, -1), key=lambda t: overlap(v, views["threequarter"], cameras(ss, t)["threequarter"]))
+    per = {k: sample(v, n, views[k], cam) for k, cam in cameras(ss, tq).items()}
     acc = sum(col * wt[:, None] for col, wt in per.values())
     weight = sum(wt for _, wt in per.values())
     known = weight > 1e-4
     c = np.zeros_like(acc)
     c[known] = acc[known] / weight[known, None]
     c = np.clip(fill(mesh, c, known), 0, 1)
-    rgba = np.concatenate([c, np.ones((len(c), 1))], 1)
+    # glTF vertex colours are linear; the views are sRGB.
+    lin = np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+    rgba = np.concatenate([lin, np.ones((len(c), 1))], 1)
     mesh.visual = trimesh.visual.ColorVisuals(mesh, vertex_colors=(rgba * 255).astype(np.uint8))
     mesh.export(out)
     if len(sys.argv) > 7:
-        preview(mesh, c, sf, ss, sys.argv[7])
-    print(json.dumps({"glb": out, "seen": round(float(known.mean()), 3), "front": sf, "side": ss, "threequarter": tq, "error": round(err, 4)}))
+        preview(mesh, c, ss, sys.argv[7])
+    print(json.dumps({"glb": out, "seen": round(float(known.mean()), 3), "side": ss, "threequarter": tq, "fit": {"side": round(fit[ss], 3), "flipped": round(fit[-ss], 3)}}))
 
 
 if __name__ == "__main__":
