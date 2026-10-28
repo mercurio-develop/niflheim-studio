@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Box, ImageUp, PaintBucket, PersonStanding, RefreshCw } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { Box, ImageUp, PaintBucket, PersonStanding, RefreshCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
@@ -14,16 +14,26 @@ import type { Job, SetData } from "@/lib/store";
 import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { cancelSet, finishSet, paintSet, pickSet, rebuildStage, refillStage, uploadSet } from "../actions/set";
+import { composeSetPrompt } from "../prompt";
 import { StageViewer, StandIn, type StageLook, type StagePoint } from "./stage-viewer";
 
-const EXAMPLES = ["a misty ruined stone courtyard at dusk, broken columns, an arched gateway", "a neon-lit rainy alley in a cyberpunk city at night", "a sunlit forest clearing with giant roots and drifting pollen"];
+// Each example names the ground, then near, middle and far: what makes a good stage.
+const EXAMPLES = [
+  { label: "ruined courtyard", text: "a misty ruined stone courtyard at dusk: cracked flagstones with moss in front, broken columns and arches along the sides, an arched gateway far away in the fog" },
+  { label: "rainy alley", text: "a narrow rainy alley at night: wet cobbles and puddles in front, shuttered shops and pipes along the walls, a glowing street far down the alley" },
+  { label: "dark forest path", text: "a dark forest at night: a dirt path with roots and ferns in front, huge pine trunks on both sides, the path fading into mist far away" },
+];
 
 // Step 03, laid out like the steps before it: describe the place on top (or upload your own
-// painting), the paintings made so far, then the 3D stage MoGe builds from the chosen one.
+// painting), then pick one of 2 or 4 paintings, then the 3D stage MoGe builds from it. The
+// prompt is composed into a stage plate (features/set/prompt.ts); what will be sent is shown.
 export function SetStep(props: { projectId: string; set: SetData | null; style: string; job?: Job }) {
   const s = props.set;
   const [prompt, setPrompt] = useState(s?.prompt ?? "");
   const [style, setStyle] = useState(s?.style || props.style);
+  const [count, setCount] = useState<2 | 4>(s?.count === 2 ? 2 : 4);
+  const [sameSeed, setSameSeed] = useState(false);
+  const composed = useMemo(() => composeSetPrompt(prompt, style), [prompt, style]);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [look, setLook] = useState<StageLook>("painting");
@@ -38,7 +48,9 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
   };
   const chip = (on: boolean) =>
     cn("rounded-full border px-2.5 py-0.5 text-xs transition-colors", on ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:border-ring/60 hover:text-foreground");
-  const painting = running && props.job?.detail === "Painting the set";
+  const painting = running && !!props.job?.detail?.startsWith("Painting");
+  const options = s?.options ?? [];
+  const earlier = (s?.paintings ?? []).filter((p) => !options.includes(p));
   const filling = running && !!props.job?.detail?.startsWith("Filling");
   const filled = fresh ? s!.stage!.fill : undefined;
   // Only a levelled stage (with a floor) takes the stand-in; older fills are shown as they were.
@@ -59,7 +71,7 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
             className="flex flex-col gap-3"
             onSubmit={(e) => {
               e.preventDefault();
-              if (prompt.trim().length >= 3) run(() => paintSet(props.projectId, prompt, style));
+              if (prompt.trim().length >= 3) run(() => paintSet(props.projectId, prompt, style, { count, sameSeed }));
             }}
           >
             <label htmlFor="set-prompt" className="sr-only">
@@ -69,8 +81,8 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
               id="set-prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              rows={2}
-              placeholder="Describe the place..."
+              rows={3}
+              placeholder="The place, near to far: what is on the ground in front, what stands along the sides, what fades away in the distance. Light and weather too."
               className="resize-none text-base"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) e.currentTarget.form?.requestSubmit();
@@ -79,8 +91,8 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
             {!prompt && (
               <div className="-mt-1 flex flex-wrap gap-1.5">
                 {EXAMPLES.map((x) => (
-                  <button key={x} type="button" className={chip(false)} onClick={() => setPrompt(x)}>
-                    {x.split(",")[0]}
+                  <button key={x.label} type="button" className={chip(false)} onClick={() => setPrompt(x.text)}>
+                    {x.label}
                   </button>
                 ))}
               </div>
@@ -118,10 +130,40 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
                   </button>
                 ))}
               </div>
+
+              <span className="text-xs text-muted-foreground">Options</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {([2, 4] as const).map((n) => (
+                  <button key={n} type="button" aria-pressed={count === n} className={chip(count === n)} onClick={() => setCount(n)}>
+                    {n}
+                  </button>
+                ))}
+                {s?.seed !== undefined && (
+                  <label className="ml-2 inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                    <input type="checkbox" checked={sameSeed} onChange={(e) => setSameSeed(e.target.checked)} className="accent-primary" />
+                    same seed (see what your words change)
+                  </label>
+                )}
+              </div>
             </div>
 
+            {prompt.trim().length >= 3 && (
+              <div className="flex flex-col gap-1.5">
+                {composed.warnings.map((w) => (
+                  <p key={w} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <TriangleAlert className="mt-px size-3.5 shrink-0 text-tone-yellow" />
+                    {w}
+                  </p>
+                ))}
+                <details className="group text-xs text-muted-foreground">
+                  <summary className="cursor-pointer select-none hover:text-foreground">What will be sent</summary>
+                  <p className="mt-1.5 rounded-md border bg-card/40 p-2 font-mono text-[11px] leading-relaxed">{composed.text}</p>
+                </details>
+              </div>
+            )}
+
             <div className="flex items-center gap-3 border-t pt-3">
-              <span className="font-mono text-[11px] text-muted-foreground">~30 s, then the stage builds · earlier paintings are kept</span>
+              <span className="font-mono text-[11px] text-muted-foreground">~{10 + count * 5} s for {count} options · pick one to build its stage · earlier paintings are kept</span>
               <Button type="submit" size="lg" className="ml-auto" disabled={busy || prompt.trim().length < 3}>
                 {pending && !running ? <LoadingDots /> : null}
                 Paint the set
@@ -130,21 +172,48 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
             {error && <p className="text-sm text-destructive">{error}</p>}
           </form>
 
-          {!!s?.paintings.length && (
+          {(!!options.length || painting) && (
             <div className="flex flex-col gap-3">
-              <SectionTitle n="" tone="bg-tone-yellow" title="Paintings" line="Pick one to build its stage." />
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {[...s.paintings].reverse().map((p) => (
+              <SectionTitle n="" tone="bg-tone-yellow" title="Pick one" line="Empty, a floor in front, near-middle-far depth: the one that reads most like a stage. Its 3D stage is built when you pick it." />
+              <div className={cn("grid gap-3", (painting ? count : options.length) === 2 ? "sm:grid-cols-2" : "grid-cols-2")}>
+                {(painting ? Array.from({ length: count }, () => "") : options).map((p, i) =>
+                  p ? (
+                    <button
+                      key={p}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => run(() => pickSet(props.projectId, p))}
+                      className={cn("group relative overflow-hidden rounded-lg border bg-card transition-colors hover:border-ring/60", s?.image === p && "border-primary")}
+                      aria-label={s?.image === p ? "Chosen painting" : `Use option ${i + 1}`}
+                    >
+                      <FadeImage src={file(p)} alt={`Set option ${i + 1}`} className="aspect-[7/4] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
+                      <span className="absolute inset-x-2 bottom-2 flex items-center justify-between">
+                        <span className="rounded border bg-background/80 px-1.5 font-mono text-[11px] text-muted-foreground backdrop-blur">{s?.image === p ? "chosen" : `0${i + 1}`}</span>
+                        <span className="rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Build this stage</span>
+                      </span>
+                    </button>
+                  ) : (
+                    <div key={i} className="aspect-[7/4] rounded-lg border border-primary/20 bg-card/30 motion-safe:animate-pulse" style={{ animationDelay: `${i * 120}ms` }} />
+                  ),
+                )}
+              </div>
+            </div>
+          )}
+
+          {!!earlier.length && (
+            <div className="flex flex-col gap-3">
+              <SectionTitle n="" tone="bg-tone-yellow" title="Earlier paintings" line="Pick one to build its stage instead." />
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                {[...earlier].reverse().map((p) => (
                   <button
                     key={p}
                     type="button"
                     disabled={busy}
                     onClick={() => run(() => pickSet(props.projectId, p))}
-                    className={cn("group relative overflow-hidden rounded-lg border bg-card transition-colors hover:border-ring/60", s.image === p && "border-primary")}
-                    aria-label={s.image === p ? "Chosen painting" : "Use this painting"}
+                    className={cn("group relative overflow-hidden rounded-md border bg-card transition-colors hover:border-ring/60", s?.image === p && "border-primary")}
+                    aria-label={s?.image === p ? "Chosen painting" : "Use this painting"}
                   >
-                    <FadeImage src={file(p)} alt="" className="aspect-[7/4] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
-                    {s.image === p && <span className="absolute bottom-2 left-2 rounded border bg-background/80 px-1.5 font-mono text-[11px] text-muted-foreground backdrop-blur">chosen</span>}
+                    <FadeImage src={file(p)} alt="" className="aspect-[7/4] w-full object-cover" />
                   </button>
                 ))}
               </div>

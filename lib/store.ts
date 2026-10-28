@@ -45,6 +45,9 @@ export type SetData = {
   prompt: string;
   style: string;
   paintings: string[]; // every painting made or uploaded, oldest first
+  options?: string[]; // the last Paint's paintings, to pick one from (also in paintings)
+  seed?: number; // the last Paint's seed; option i used seed + i
+  count?: number; // how many options one Paint makes (2 or 4)
   image?: string; // the chosen painting
   stage?: { image: string; mesh: string; depth: string; fill?: StageFill };
 };
