@@ -14,12 +14,13 @@ import { NextBar } from "@/features/wizard/components/next-bar";
 import type { Job, Keyframes, Shot } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { cancelShot, pickTake, renderTake } from "../actions/shot";
+import { ShotTabs, type ShotTab } from "./shot-tabs";
 
 const EXAMPLES = ["slowly turns to face the camera and raises the lantern", "looks around warily, then walks forward", "kneels, picks something up from the ground and studies it"];
 
 // Step 06: say what the character does; LTX-2.5 shoots the scene's camera move, guided by its
 // keyframes. Each take is kept; pick the one the sequence uses, or download it.
-export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job }) {
+export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; shots: ShotTab[] }) {
   const [action, setAction] = useState(props.shot?.action ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -38,6 +39,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           <span className="font-mono text-xs text-muted-foreground">06 · Shot</span>
           <h1 className="text-2xl font-semibold tracking-tight">Say what happens</h1>
         </div>
+        <ShotTabs projectId={props.projectId} shots={props.shots} locked={running} />
 
         <section className="nifl-enter flex flex-col gap-3" style={{ "--i": 1 } as React.CSSProperties}>
           <div className="flex flex-wrap items-start justify-between gap-3">
