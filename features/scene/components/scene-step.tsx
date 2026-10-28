@@ -37,6 +37,8 @@ export function SceneStep(props: {
   const cam = fresh ? props.set!.stage!.fill?.camera : undefined;
   const ready = !!cam?.floor && !!at;
   const [move, setMove] = useState<CameraMove>(props.camera ?? DEFAULT_MOVE);
+  // The shot can start once every key is painted from today's move, placement and stage.
+  const keysReady = ready && !!props.keyframes?.keys.every(Boolean) && props.keyframes.key === renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh);
   const [overview, setOverview] = useState(false);
   const [playing, setPlaying] = useState(false);
   const path = useMemo(() => {
@@ -107,7 +109,7 @@ export function SceneStep(props: {
       <NextBar
         back={{ href: `/p/${props.projectId}/turnaround`, label: "Turnaround" }}
         summary={building || cutting ? ((building ? props.setJob : props.stageJob)?.detail ?? "Working...") : at && !props.moved ? `Standing in the set, ${props.placement!.height.toFixed(2)} m tall.` : fresh ? "Stand the character on the stage to continue." : "Paint or upload a set to continue."}
-        next={{ label: "Shot", disabled: true, hint: at ? "The shot step comes next" : undefined }}
+        next={{ label: "Shot", href: `/p/${props.projectId}/shot`, disabled: !keysReady, hint: at && !keysReady ? "Make the keyframes first" : undefined }}
       />
     </>
   );
