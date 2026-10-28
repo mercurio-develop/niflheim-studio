@@ -79,6 +79,12 @@ export type Mesh = { glb: string; front: string; at: string; coloured?: string; 
 // to any of them shows it is out of date.
 export type CameraRender = { depth: string; preview: string; holes: number[]; key: string; at: string };
 
+// Keyframes for the shot: the stage viewer captured at frames 0, 32, 64... of the camera move with
+// the character card in (raw), each repainted by Qwen-Image-Edit into one finished frame (keys,
+// null until done). One prompt and seed for all, so they share a look; note: what the user asked
+// to see in the frame. key: the camera render key (lib/camera.ts renderKey) they were made from.
+export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)[]; prompt: string; note: string; seed: number; key: string; at: string };
+
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
 
@@ -109,6 +115,7 @@ export type Project = {
   stage?: StageData;
   camera?: CameraMove; // the scene's camera move (lib/camera.ts), aimed at the placed character
   cameraRender?: CameraRender; // the move rendered along its path, for the shot
+  keyframes?: Keyframes; // the shot's keyframes along the camera move
   jobs: Record<string, Job>;
 };
 

@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
-import { DEFAULT_MOVE, aim, inside, poses, renderKey, type CameraMove } from "@/lib/camera";
-import type { CameraRender, Job, SetData, StageData } from "@/lib/store";
+import { KeyframesPanel } from "@/features/shot/components/keyframes";
+import { DEFAULT_MOVE, aim, inside, keyFrames, poses, renderKey, type CameraMove } from "@/lib/camera";
+import type { CameraRender, Job, Keyframes, SetData, StageData } from "@/lib/store";
 import { CameraPath } from "./camera-path";
 import { CameraSection } from "./camera-section";
 import { DescribeSection } from "./describe-section";
@@ -23,6 +24,8 @@ export function SceneStep(props: {
   moved: boolean;
   camera: CameraMove | null; // the saved move
   cameraRender: CameraRender | null;
+  keyframes: Keyframes | null;
+  keyJob?: Job;
   setJob?: Job;
   stageJob?: Job;
 }) {
@@ -43,7 +46,7 @@ export function SceneStep(props: {
   }, [ready, cam, at, props.placement, move]);
   return (
     <>
-      <JobPoller running={building || stageBusy} />
+      <JobPoller running={building || stageBusy || props.keyJob?.status === "running"} />
       <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
           <span className="font-mono text-xs text-muted-foreground">03 · Scene</span>
@@ -81,6 +84,25 @@ export function SceneStep(props: {
           renderKey={ready ? renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh) : null}
           job={props.stageJob}
         />
+        {ready && path && (
+          <KeyframesPanel
+            projectId={props.projectId}
+            keyframes={props.keyframes}
+            current={!!props.keyframes && props.keyframes.key === renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh)}
+            frames={keyFrames(move)}
+            job={props.keyJob}
+            move={move}
+            capture={{
+              mesh: `/api/files/${props.projectId}/${props.set!.stage!.fill!.mesh}`,
+              camera: cam!,
+              cutouts: Object.fromEntries(Object.entries(props.placement!.cutouts).map(([v, f]) => [v, `/api/files/${props.projectId}/${f}`])),
+              at: at!,
+              height: props.placement!.height,
+              turn: props.placement!.turn,
+              poses: keyFrames(move).map((f) => path.poses[f]),
+            }}
+          />
+        )}
       </div>
       <NextBar
         back={{ href: `/p/${props.projectId}/turnaround`, label: "Turnaround" }}
