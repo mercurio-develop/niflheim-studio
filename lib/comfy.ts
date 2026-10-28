@@ -32,7 +32,9 @@ export async function runWorkflow(spec: RunSpec): Promise<string[]> {
   for (const [node, field, value] of spec.set ?? []) wf.setInput(node, field, value);
   for (const [node, file] of spec.images ?? []) wf.setInput(node, "image", c.assets.fromFile(file));
 
-  const job = await c.submit(wf);
+  const job = await c.submit(wf).catch((e: unknown) => {
+    throw unreachable(e) ?? e;
+  });
   await spec.onSubmit?.(job.id);
   await job.wait(spec.timeoutMs ?? 15 * 60_000);
   if (job.status !== "succeeded") throw new Error(job.status === "canceled" ? "cancelled" : `ComfyUI job ${job.status}`);
@@ -68,6 +70,14 @@ async function fromHistory(jobId: string, spec: RunSpec): Promise<string[]> {
 export async function cancelComfyJob(comfyJobId: string) {
   const job = await comfy().jobs.get(comfyJobId);
   await job.cancel();
+}
+
+// A refused or dropped connection says only "fetch failed": say what is down and how to start it.
+const OFFLINE = "Can't reach ComfyUI: start the Comfy proxy (mw serve start comfy-proxy) and ComfyUI, then try again.";
+function unreachable(e: unknown): Error | null {
+  const err = e as { message?: string; cause?: { code?: string } };
+  const down = err?.message === "fetch failed" || ["ECONNREFUSED", "ECONNRESET", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT"].includes(err?.cause?.code ?? "");
+  return down ? new Error(OFFLINE) : null;
 }
 
 // Is the Comfy API v2 surface answering? For the status badge; never throws.
