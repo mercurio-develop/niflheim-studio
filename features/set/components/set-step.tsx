@@ -302,7 +302,7 @@ export function SetStep(props: { projectId: string; set: SetData | null; style: 
       <NextBar
         back={{ href: `/p/${props.projectId}/turnaround`, label: "Turnaround" }}
         summary={fresh ? "A 3D stage from your painting." : running ? (props.job?.detail ?? "Working...") : "Paint or upload a set to continue."}
-        next={{ label: "Stage", onNext: () => finishSet(props.projectId), disabled: true, hint: fresh ? "Stage step comes next" : undefined }}
+        next={{ label: "Stage", onNext: () => finishSet(props.projectId), disabled: !floor, hint: fresh && !floor ? "Wait for the stage to be filled" : undefined }}
       />
     </>
   );

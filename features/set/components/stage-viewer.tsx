@@ -89,7 +89,8 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
   const polar = Math.acos(THREE.MathUtils.clamp(offset.y / offset.length(), -1, 1));
   const orbit = ORBIT[props.filled ? "filled" : "plain"];
   const click = (e: ThreeEvent<MouseEvent>) => {
-    if (!props.onFloor || !e.object.name.startsWith("floor")) return;
+    // A drag to orbit ends in a click too: only a press that barely moved places anything.
+    if (!props.onFloor || !e.object.name.startsWith("floor") || e.delta > 4) return;
     e.stopPropagation();
     props.onFloor([e.point.x, e.point.y, e.point.z]);
   };
