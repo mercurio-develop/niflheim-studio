@@ -1,0 +1,209 @@
+"use client";
+
+import { useEffect, useRef, useState, useTransition } from "react";
+import { Box, PaintBucket, PersonStanding, RefreshCw, Scissors } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { FadeImage } from "@/components/fade-image";
+import { SectionTitle } from "@/components/section-title";
+import { JobStatus } from "@/features/wizard/components/job-status";
+import type { Job, SetData, StageData } from "@/lib/store";
+import { cn } from "@/lib/utils";
+import { cancelSet, cancelStage, cutOutCharacter, placeCharacter, rebuildStage, refillStage } from "../actions/scene";
+import { CharacterCard } from "./character-card";
+import { chip } from "./chip";
+import { StageViewer, type StageLook, type StagePoint } from "./stage-viewer";
+
+// The 3D stage MoGe builds from the chosen painting, and the character standing in it: one
+// viewer. Once the stage is levelled (floor y = 0, metres), the character is cut out of the
+// turnaround by itself and stands where the floor is clicked, as a card that turns with the
+// camera; height and facing are saved a moment after the last change.
+export function StageSection(props: {
+  projectId: string;
+  set: SetData | null;
+  placement: StageData | null;
+  front: string | null; // the current turnaround front, to tell when the cutouts are old
+  moved: boolean; // the set was rebuilt or refilled since the character was placed
+  setJob?: Job;
+  stageJob?: Job;
+}) {
+  const s = props.set;
+  const file = (f: string) => `/api/files/${props.projectId}/${f}`;
+  const building = props.setJob?.status === "running";
+  const cutting = props.stageJob?.status === "running";
+  const fresh = !!s?.stage && s.stage.image === s.image;
+  const filled = fresh ? s!.stage!.fill : undefined;
+  const floor = !!filled?.camera?.floor; // only a levelled stage takes the character
+  const cut = !!props.placement && Object.keys(props.placement.cutouts).length > 0;
+  const oldCut = !!props.placement && !!props.front && props.placement.source !== props.front;
+  const ready = floor && cut;
+  const [at, setAt] = useState<StagePoint | null>(props.placement?.at ?? null);
+  const [height, setHeight] = useState(props.placement?.height ?? 1.7);
+  const [turn, setTurn] = useState(props.placement?.turn ?? 0);
+  const [look, setLook] = useState<StageLook>("painting");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const run = (fn: () => Promise<unknown>) => {
+    setError(null);
+    start(() => fn().then(() => {}, (e: Error) => setError(e.message)));
+  };
+  const filling = building && !!props.setJob?.detail?.startsWith("Filling");
+  const painting = building && !!props.setJob?.detail?.startsWith("Painting");
+
+  // A levelled stage with no cutouts yet: cut the character out by itself, once.
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current || !floor || !props.front || props.placement || building || cutting || props.stageJob?.status === "error") return;
+    asked.current = true;
+    run(() => cutOutCharacter(props.projectId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floor]);
+
+  // Saved a moment after the last change, so dragging a slider is one save.
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) return void (first.current = false);
+    if (!at || !ready) return;
+    const t = setTimeout(() => run(() => placeCharacter(props.projectId, { at, height, turn })), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at, height, turn]);
+
+  const cam = filled?.camera;
+  const distance = at && cam ? Math.hypot(at[0] - cam.c2w[0][3], at[2] - cam.c2w[2][3]) : null;
+  const line = ready
+    ? "Click the floor where they stand. Drag to look around: the card turns to you and shows the matching view of the turnaround."
+    : floor
+      ? "The stage is ready. The character is being cut out of the turnaround to stand in it."
+      : filled
+        ? "Drag to look around, scroll to move in. What the painting does not show was painted in from nearby cameras."
+        : fresh
+          ? "Drag to look around. The holes are being painted in from nearby cameras; then the character can stand in it."
+          : "Pick a painting: MoGe reads it as depth and builds a 3D stage you can stand the character in.";
+
+  return (
+    <section className="nifl-enter flex min-w-0 flex-col gap-3" style={{ "--i": 2 } as React.CSSProperties}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <SectionTitle n="2" tone="bg-tone-cyan" title="Stage" line={line} />
+        {s?.image && !building && !cutting && (
+          <div className="flex gap-1">
+            {(oldCut || props.stageJob?.status === "error") && floor && (
+              <Button variant="ghost" size="sm" onClick={() => run(() => cutOutCharacter(props.projectId))}>
+                <Scissors data-icon="inline-start" />
+                {oldCut ? "Cut out the new turnaround" : "Cut out again"}
+              </Button>
+            )}
+            {fresh && (
+              <Button variant="ghost" size="sm" onClick={() => run(() => refillStage(props.projectId))}>
+                <PaintBucket data-icon="inline-start" />
+                {filled ? "Fill again" : "Fill the holes"}
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => run(() => rebuildStage(props.projectId))}>
+              <RefreshCw data-icon="inline-start" />
+              Rebuild
+            </Button>
+          </div>
+        )}
+      </div>
+      {building && props.setJob && <JobStatus message={props.setJob.detail ?? "Working"} startedAt={props.setJob.startedAt} expected={painting ? 30 : filling ? 260 : 10} onCancel={() => cancelSet(props.projectId)} />}
+      {cutting && props.stageJob && <JobStatus message={props.stageJob.detail ?? "Cutting out the character"} startedAt={props.stageJob.startedAt} expected={10} onCancel={() => cancelStage(props.projectId)} />}
+
+      <div className="relative aspect-[7/4] overflow-hidden rounded-lg border">
+        {fresh ? (
+          <StageViewer
+            key={filled?.mesh ?? s!.stage!.mesh}
+            mesh={file(filled?.mesh ?? s!.stage!.mesh)}
+            camera={filled?.camera}
+            filled={!!filled}
+            look={look}
+            onFloor={ready ? setAt : undefined}
+            className="absolute inset-0"
+          >
+            {ready && at && <CharacterCard cutouts={Object.fromEntries(Object.entries(props.placement!.cutouts).map(([v, f]) => [v, file(f!)]))} at={at} height={height} turn={turn} />}
+          </StageViewer>
+        ) : s?.image ? (
+          <FadeImage src={file(s.image)} alt="The chosen painting" className={cn("absolute inset-0 size-full object-cover", building && "opacity-60")} />
+        ) : (
+          <div className={cn("absolute inset-0 flex flex-col items-center justify-center gap-2 bg-card/30 text-sm text-muted-foreground", painting && "nifl-loading")}>
+            {!painting && (
+              <>
+                <Box className="size-6" />
+                Your stage appears here.
+              </>
+            )}
+          </div>
+        )}
+        {building && s?.image && !fresh && <div aria-hidden className="nifl-loading pointer-events-none absolute inset-0 bg-transparent" />}
+        {ready && (!at || props.moved) && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-center text-sm backdrop-blur">
+              <PersonStanding className="size-4 shrink-0 text-primary" />
+              {at ? "The set changed since you placed them: click the floor to stand them again" : "Click the floor to stand them there"}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {fresh && (
+        <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 pt-1 sm:max-w-xl">
+          {filled && (
+            <>
+              <span className="text-xs text-muted-foreground">Show</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(["painting", "guide"] as const).map((x) => (
+                  <button key={x} type="button" aria-pressed={look === x} className={chip(look === x)} onClick={() => setLook(x)}>
+                    {x === "painting" ? "Painting" : "Guide"}
+                  </button>
+                ))}
+                {distance !== null && <span className="ml-2 font-mono text-[11px] text-muted-foreground">{distance.toFixed(1)} m from the camera</span>}
+              </div>
+            </>
+          )}
+          {ready && (
+            <>
+              <label htmlFor="scene-height" className="text-xs text-muted-foreground">
+                Height
+              </label>
+              <div className="flex items-center gap-3">
+                <input id="scene-height" type="range" min={0.5} max={3} step={0.05} value={height} onChange={(e) => setHeight(Number(e.target.value))} className="w-full accent-primary" />
+                <span className="w-14 text-right font-mono text-xs text-muted-foreground">{height.toFixed(2)} m</span>
+              </div>
+              <label htmlFor="scene-turn" className="text-xs text-muted-foreground">
+                Facing
+              </label>
+              <div className="flex items-center gap-3">
+                <input id="scene-turn" type="range" min={-180} max={180} step={5} value={turn} onChange={(e) => setTurn(Number(e.target.value))} className="w-full accent-primary" />
+                <span className="w-14 text-right font-mono text-xs text-muted-foreground">{turn === 0 ? "camera" : `${turn > 0 ? "→" : "←"} ${Math.abs(turn)}°`}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {fresh && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer select-none hover:text-foreground">How the stage was built</summary>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <span>Depth</span>
+            <FadeImage src={file(s!.stage!.depth)} alt="Depth map of the set" className="h-14 rounded border" />
+            {!!filled?.views.length && (
+              <>
+                <span className="ml-2">Painted views</span>
+                <div className="flex min-w-0 gap-1.5 overflow-x-auto">
+                  {filled.views.map((v) => (
+                    <FadeImage key={v} src={file(v)} alt="A view painted to fill the stage" className="h-14 shrink-0 rounded border" />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </details>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      {props.setJob?.status === "error" && <p className="text-sm text-destructive">The stage failed: {props.setJob.error}</p>}
+      {props.stageJob?.status === "error" && <p className="text-sm text-destructive">The cutout failed: {props.stageJob.error}</p>}
+      {pending && !building && !cutting && at && <p className="font-mono text-[11px] text-muted-foreground">Saving…</p>}
+    </section>
+  );
+}

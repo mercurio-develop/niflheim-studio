@@ -124,18 +124,6 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
   );
 }
 
-// A stand-in for the character until its 3D mesh is in: 1.7 m tall, standing on the floor.
-export function StandIn(props: { at: StagePoint; height?: number }) {
-  const h = props.height ?? 1.7;
-  const r = h * 0.14;
-  return (
-    <mesh position={[props.at[0], props.at[1] + h / 2, props.at[2]]}>
-      <capsuleGeometry args={[r, h - 2 * r, 6, 16]} />
-      <meshBasicMaterial color="#f0b429" transparent opacity={0.85} />
-    </mesh>
-  );
-}
-
 export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; onFloor?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
   return (
     <div className={props.className} style={{ background: FOG }}>

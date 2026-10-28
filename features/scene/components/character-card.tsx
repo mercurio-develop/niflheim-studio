@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import type { ViewId } from "@/lib/store";
-import type { StagePoint } from "@/features/set/components/stage-viewer";
+import type { StagePoint } from "./stage-viewer";
 
 // The character standing in the set until there is a 3D mesh of them: a card cut from the
 // turnaround that always turns to the camera, showing the view that matches the angle the camera

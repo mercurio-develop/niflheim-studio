@@ -1,9 +1,9 @@
 // Proof of the Set step's painting without the UI: three places, each painted with the old
-// one-line prompt and the composed stage prompt (features/set/prompt.ts), same seeds, then MoGe 2
+// one-line prompt and the composed stage prompt (features/scene/prompt.ts), same seeds, then MoGe 2
 // makes each stage mesh. Run: node --env-file=.env scripts/try-set.ts [seed]
 import { runWorkflow } from "../lib/comfy.ts";
 import { styleById } from "../lib/styles.ts";
-import { composeSetPrompt } from "../features/set/prompt.ts";
+import { composeSetPrompt } from "../features/scene/prompt.ts";
 
 const seed = Number(process.argv[2] ?? 7);
 const out = `${process.cwd()}/data/proof/set-prompt/${seed}`;
@@ -12,7 +12,7 @@ const PLACES: [string, string, "painterly" | "pixel"][] = [
   ["portland", "portland maine a port with boat around and a forest behind", "pixel"],
   ["forest", "a path in the dark forest with big pine trees", "painterly"],
 ];
-// The prompt before 2026-10-27 (features/set/actions/set.ts setPrompt).
+// The prompt before 2026-10-27 (features/scene/actions/scene.ts setPrompt).
 const before = (prompt: string, style: string) =>
   `Concept painting of ${prompt}. Wide establishing shot, eye-level camera, an open floor in the foreground, depth into the distance, no people, no characters. ${styleById(style).phrase}, cinematic light.`;
 
