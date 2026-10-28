@@ -15,12 +15,13 @@ import { NextBar } from "@/features/wizard/components/next-bar";
 import { Editor } from "@/features/character/components/editor";
 import { stackMoves } from "@/lib/history";
 import { VIEWS, viewsFor } from "@/lib/progress";
-import type { Asset, Job, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
+import type { Asset, Job, Mesh, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { cancelTurnaround, findMasks, generateTurnaround, generateView } from "../actions/turnaround";
 import { AssetsShelf } from "./assets-shelf";
 import { ASSETS } from "../flags";
 import { HiddenObjects } from "./hidden-objects";
+import { MeshSection } from "./mesh-section";
 import { ReplicateBar } from "./replicate-bar";
 
 // Things a character holds or carries come first among the parts you can hide.
@@ -38,6 +39,7 @@ export function TurnaroundStep(props: {
   views: Partial<Record<ViewId, ViewStack>>;
   fresh: boolean; // made from the current character
   assets: Asset[];
+  mesh: Mesh | null; // the character in 3D, from these views
   jobs: Record<string, Job>;
 }) {
   const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: "designed", hide: [], keep: [], extras: [] });
@@ -288,6 +290,15 @@ export function TurnaroundStep(props: {
             </div>
           );
         })()}
+
+        <MeshSection
+          projectId={props.projectId}
+          mesh={props.mesh}
+          front={image("front") ?? null}
+          ready={(["front", "side", "back"] as const).every((v) => image(v))}
+          locked={running || starting}
+          job={props.jobs.mesh}
+        />
 
         {ASSETS && <AssetsShelf projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={running} onView={(src, label) => setViewing({ src, label })} />}
       </div>
