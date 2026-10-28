@@ -457,7 +457,7 @@ export async function restyleCurrent(id: string, rawStyle: string) {
         onSubmit: ctx.track,
         workflow: "01_edit.api.json",
         set: [
-          ["17", "prompt", `Repaint this exact character as ${style.phrase}. Keep the same design, outfit, colours, proportions, pose and the plain background.`],
+          ["17", "prompt", `Repaint this exact character as ${style.phrase}. Keep the same design, outfit, proportions, pose and the plain background; colours and rendering follow the new style.`],
           ["22", "seed", newSeed()],
         ],
         images: [["1", abs(id, version.image)]],
@@ -468,6 +468,7 @@ export async function restyleCurrent(id: string, rawStyle: string) {
       await updateProject(id, (q) => {
         q.character.versions.push({ image: rel(id, [image])[0], label: `Style: ${style.label}`, parts: {}, tags: version.tags, parent: at });
         q.character.current = q.character.versions.length - 1;
+        q.character.style = style.id; // later edits and the style chips follow the new look
       });
     },
     `Repainting as ${style.label}`,

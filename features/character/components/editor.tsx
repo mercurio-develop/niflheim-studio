@@ -50,7 +50,7 @@ export function Editor(props: {
   const [paintMode, setPaintMode] = useState<"add" | "erase">("add");
   const [action, setAction] = useState<Action>("change");
   const [text, setText] = useState("");
-  const [style, setStyle] = useState(props.style);
+  const [style, setStyle] = useState<string | null>(null); // Restyle: a style other than the current one
   const [custom, setCustom] = useState("");
   const [partName, setPartName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -114,7 +114,9 @@ export function Editor(props: {
   // Why the Do button is off, said once; null = ready.
   const blocked =
     tool === "restyle"
-      ? null
+      ? !style
+        ? "Pick a style other than the current one"
+        : null
       : !box
         ? `Select something to ${current.verb.toLowerCase()}`
         : action !== "remove" && text.trim().length < 2
@@ -135,7 +137,7 @@ export function Editor(props: {
   const submit = () => {
     if (blocked) return;
     act(async () => {
-      if (tool === "restyle") return restyleCurrent(props.projectId, style);
+      if (tool === "restyle") return restyleCurrent(props.projectId, style!);
       const form = await selectionForm();
       if (action === "add") {
         form.set("thing", text);
@@ -322,13 +324,20 @@ export function Editor(props: {
                         type="button"
                         role="radio"
                         aria-checked={style === s.id}
+                        disabled={s.id === props.style}
+                        title={s.id === props.style ? "The character's style now" : undefined}
                         onClick={() => setStyle(s.id)}
                         className={cn(
-                          "rounded-full border px-2.5 py-0.5 text-sm transition-colors",
-                          style === s.id ? "border-tone-lilac bg-tone-lilac text-background" : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
+                          "rounded-full border px-2.5 py-0.5 text-sm transition-colors disabled:cursor-default",
+                          style === s.id
+                            ? "border-tone-lilac bg-tone-lilac text-background"
+                            : s.id === props.style
+                              ? "border-dashed text-foreground"
+                              : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
                         )}
                       >
                         {s.label}
+                        {s.id === props.style && <span className="ml-1 font-mono text-[10px] text-muted-foreground">now</span>}
                       </button>
                     ))}
                   </div>
@@ -466,12 +475,18 @@ export function Editor(props: {
                 <div>
                   <h3 className="text-sm font-semibold">Restyle</h3>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    Repaints the whole character as <span className="text-foreground">{styleById(style).label}</span>. Undo brings this version back.
+                    {style ? (
+                      <>
+                        Repaints the whole character as <span className="text-foreground">{styleById(style).label}</span>. Undo brings this version back.
+                      </>
+                    ) : (
+                      <>Now {styleById(props.style).label}. Pick another style above to repaint the whole character in it.</>
+                    )}
                   </p>
                 </div>
               </div>
-              <Button type="submit" size="lg" className="w-full" disabled={busy}>
-                {pending && !running ? <LoadingDots /> : <>Restyle as {styleById(style).label}<ArrowRight data-icon="inline-end" /></>}
+              <Button type="submit" size="lg" className="w-full" disabled={busy || !style}>
+                {pending && !running ? <LoadingDots /> : style ? <>Restyle as {styleById(style).label}<ArrowRight data-icon="inline-end" /></> : "Pick a style"}
               </Button>
             </form>
           ) : (
