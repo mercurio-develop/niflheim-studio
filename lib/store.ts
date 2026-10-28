@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import type { StageCamera } from "./stage-fill";
+import type { CameraMove } from "./camera";
 
 // Projects live on disk: data/projects/<id>/project.json, step results beside it.
 // Image paths in a project are relative to its folder and served by /api/files/<id>/<path>.
@@ -100,6 +101,7 @@ export type Project = {
   mesh?: Mesh; // the character in 3D, made from the turnaround views
   set?: SetData;
   stage?: StageData;
+  camera?: CameraMove; // the scene's camera move (lib/camera.ts), aimed at the placed character
   jobs: Record<string, Job>;
 };
 

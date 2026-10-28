@@ -1,14 +1,19 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
+import { DEFAULT_MOVE, aim, inside, poses, type CameraMove } from "@/lib/camera";
 import type { Job, SetData, StageData } from "@/lib/store";
+import { CameraPath } from "./camera-path";
+import { CameraSection } from "./camera-section";
 import { DescribeSection } from "./describe-section";
 import { StageSection } from "./stage-section";
 
 // Step 03: one painting becomes a 3D stage, and the character stands in it. Describe (or upload)
 // the place and pick a painting; its stage is built and filled; the character is cut out of the
-// turnaround and placed on the floor. The camera move comes next (scene-camera).
+// turnaround and placed on the floor; then a camera move aimed at them, shown and played in the
+// same viewer.
 export function SceneStep(props: {
   projectId: string;
   set: SetData | null;
@@ -16,6 +21,7 @@ export function SceneStep(props: {
   placement: StageData | null;
   front: string | null;
   moved: boolean;
+  camera: CameraMove | null; // the saved move
   setJob?: Job;
   stageJob?: Job;
 }) {
@@ -23,6 +29,16 @@ export function SceneStep(props: {
   const cutting = props.stageJob?.status === "running";
   const at = props.placement?.at;
   const fresh = !!props.set?.stage && props.set.stage.image === props.set.image;
+  const cam = fresh ? props.set!.stage!.fill?.camera : undefined;
+  const ready = !!cam?.floor && !!at;
+  const [move, setMove] = useState<CameraMove>(props.camera ?? DEFAULT_MOVE);
+  const [overview, setOverview] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const path = useMemo(() => {
+    if (!ready) return null;
+    const ps = poses(cam!, aim(cam!, at, props.placement!.height), move);
+    return { poses: ps, inside: ps.map((p) => inside(cam!, p.position)) };
+  }, [ready, cam, at, props.placement, move]);
   return (
     <>
       <JobPoller running={building || cutting} />
@@ -32,7 +48,34 @@ export function SceneStep(props: {
           <h1 className="text-2xl font-semibold tracking-tight">Build the place, stand them in it</h1>
         </div>
         <DescribeSection projectId={props.projectId} set={props.set} style={props.style} job={props.setJob} locked={cutting} />
-        <StageSection projectId={props.projectId} set={props.set} placement={props.placement} front={props.front} moved={props.moved} setJob={props.setJob} stageJob={props.stageJob} />
+        <StageSection
+          projectId={props.projectId}
+          set={props.set}
+          placement={props.placement}
+          front={props.front}
+          moved={props.moved}
+          setJob={props.setJob}
+          stageJob={props.stageJob}
+          overview={ready && overview}
+          layer={path && <CameraPath poses={path.poses} inside={path.inside} overview={overview} playing={playing} onDone={() => setPlaying(false)} />}
+        />
+        <CameraSection
+          projectId={props.projectId}
+          move={move}
+          onMove={(m) => {
+            setPlaying(false);
+            setMove(m);
+          }}
+          outside={path ? path.inside.filter((x) => !x).length : 0}
+          overview={overview}
+          onOverview={(on) => {
+            setPlaying(false);
+            setOverview(on);
+          }}
+          playing={playing}
+          onPlay={setPlaying}
+          ready={ready}
+        />
       </div>
       <NextBar
         back={{ href: `/p/${props.projectId}/turnaround`, label: "Turnaround" }}
