@@ -30,12 +30,15 @@ function shotPrompt(p: Project, action: string) {
   return `One continuous take with no cuts. ${MOVE_WORDS[p.camera?.move ?? "static"]} ${p.character.prompt}, who ${action}. ${p.set?.prompt ?? ""}. ${style}, consistent art style.`;
 }
 
-const Input = z.object({ action: z.string().trim().min(3, "Say what happens in a few words.").max(500), negative: z.string().trim().max(500) });
+// No negative from the user: the distilled graph runs at CFG 1, where a negative prompt has no
+// effect (04_shot ACCEPT proof 3: take D = take B frame for frame). The graph keeps a default.
+const Input = z.object({ action: z.string().trim().min(3, "Say what happens in a few words.").max(500) });
 
 // One take: LTX-2.5 distilled guided by every keyframe (ends 0.7, middle 0.5), with audio. About
 // 1.5 to 2 minutes on the 4080 for 97 to 121 frames.
 export async function renderTake(id: string, raw: unknown) {
-  const { action, negative } = Input.parse(raw);
+  const { action } = Input.parse(raw);
+  const negative = DEFAULT_NEGATIVE;
   const p = await getProject(id);
   if (!p) throw new Error("Project not found.");
   const k = p.keyframes;
@@ -50,7 +53,7 @@ export async function renderTake(id: string, raw: unknown) {
       workflow: "03_shot.api.json",
       onSubmit: ctx.track,
       edit: (g) => shapeShot(g, k.frames, length),
-      set: [["20", "text", shotPrompt(p, action)], ["21", "text", negative || DEFAULT_NEGATIVE], ["40", "noise_seed", seed]],
+      set: [["20", "text", shotPrompt(p, action)], ["21", "text", negative], ["40", "noise_seed", seed]],
       images: [["1", abs(id, keys[0])], ["2", abs(id, keys.at(-1)!)], ...keys.slice(1, -1).map((f, i) => [middleImageNode(i), abs(id, f)] as [string, string])],
       output: "55",
       ext: "mp4",
