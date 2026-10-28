@@ -6,7 +6,7 @@ export const STEPS = [
   { slug: "style", n: "04", title: "Style", line: "A style image or LoRA restyles it all.", art: "/steps/04-style.webp", body: "Add a style image or a LoRA and the whole world, character included, is repainted in that look.", ready: false },
   { slug: "vfx", n: "05", title: "VFX", line: "Fog, embers, rain, sparks, placed in 3D.", art: "/steps/06-vfx-previz.webp", body: "Place embers, rain, snow, sparks or magic in 3D. They move with the camera and take on the painting's look.", ready: false },
   { slug: "shot", n: "06", title: "Shot", line: "Say what happens. LTX-2.5 shoots it.", art: "/steps/07-shot.webp", body: "Say what the character does. LTX-2.5 shoots the move as video on your own GPU. Keep the best take, build a sequence.", ready: true },
-  { slug: "export", n: "07", title: "Export", line: "MP4, comp passes and a Gaussian splat.", art: "/steps/08-export.webp", body: "Take the MP4, the comp passes (depth, FX mask, camera) and a Gaussian splat of the shot you can fly through.", ready: false },
+  { slug: "export", n: "07", title: "Export", line: "MP4, comp passes and a Gaussian splat.", art: "/steps/08-export.webp", body: "Take the MP4, the comp passes (depth, FX mask, camera) and a Gaussian splat of the shot you can fly through.", ready: true },
 ] as const;
 
 export type StepSlug = (typeof STEPS)[number]["slug"];

@@ -129,7 +129,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
       <NextBar
         back={{ href: `/p/${props.projectId}/scene`, label: "Scene" }}
         summary={props.shot?.picked !== undefined ? `Take ${props.shot.picked + 1} picked.` : takes.length ? `${takes.length} take${takes.length > 1 ? "s" : ""}: pick one.` : "Shoot a take to continue."}
-        next={{ label: "Export", disabled: true, hint: "The export step comes next" }}
+        next={{ label: "Reel", href: `/p/${props.projectId}/export`, disabled: props.shot?.picked === undefined, hint: props.shot?.picked === undefined ? "Pick a take first" : undefined }}
       />
     </>
   );

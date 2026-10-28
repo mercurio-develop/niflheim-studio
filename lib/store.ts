@@ -104,6 +104,11 @@ export function allShots(p: Project): (ShotRef & ShotData & { active: boolean })
   });
 }
 
+// The reel: which shots, in what order, and how each joins the next (cut, a 0.5 s crossfade, or a
+// dip through black); export: the last MP4 made (scripts/reel.py) and what it was made from (key).
+export type Join = "cut" | "fade" | "dip";
+export type Reel = { order: string[]; joins: Join[]; export?: { video: string; seconds: number; key: string; at: string } };
+
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
 
@@ -141,6 +146,7 @@ export type Project = {
   shots?: ShotRef[];
   activeShot?: string;
   stash?: Record<string, ShotData>;
+  reel?: Reel; // the picked takes put together
   jobs: Record<string, Job>;
 };
 
