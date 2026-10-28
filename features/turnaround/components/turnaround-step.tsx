@@ -294,7 +294,7 @@ export function TurnaroundStep(props: {
         <MeshSection
           projectId={props.projectId}
           mesh={props.mesh}
-          front={image("front") ?? null}
+          views={Object.fromEntries((["front", "side", "back", "threequarter"] as const).flatMap((v) => (image(v) ? [[v, image(v)!]] : [])))}
           ready={(["front", "side", "back"] as const).every((v) => image(v))}
           locked={running || starting}
           job={props.jobs.mesh}
