@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Maximize2, Minimize2, X } from "lucide-react";
+import { FadeImage } from "@/components/fade-image";
 import { cn } from "@/lib/utils";
 
 type Side = { src: string; label: string; dot: string };
@@ -58,10 +59,8 @@ export function CompareView(props: { a: Side; b: Side; onClose: () => void }) {
       <div className="relative flex max-h-full max-w-full flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         {mode === "swipe" ? (
           <div className={cn("relative aspect-[7/9] max-w-full select-none overflow-hidden rounded-xl border bg-card", frame)}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={props.b.src} alt={props.b.label} className="absolute inset-0 h-full w-full object-cover" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={props.a.src} alt={props.a.label} className="absolute inset-0 h-full w-full object-cover" style={{ clipPath: `inset(0 ${100 - at}% 0 0)` }} />
+            <FadeImage src={props.b.src} alt={props.b.label} className="absolute inset-0 h-full w-full object-cover" />
+            <FadeImage src={props.a.src} alt={props.a.label} className="absolute inset-0 h-full w-full object-cover" style={{ clipPath: `inset(0 ${100 - at}% 0 0)` }} />
             <div aria-hidden className="pointer-events-none absolute inset-y-0 w-0.5 bg-primary shadow-[0_0_12px_var(--primary)]" style={{ left: `${at}%` }} />
             {tag(props.a, "left-3")}
             {tag(props.b, "right-3")}
@@ -79,8 +78,7 @@ export function CompareView(props: { a: Side; b: Side; onClose: () => void }) {
           <div className="flex max-w-full gap-3">
             {[props.a, props.b].map((v) => (
               <div key={v.src} className={cn("relative aspect-[7/9] max-w-[calc(50vw-1.5rem)] overflow-hidden rounded-xl border bg-card", frame)}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={v.src} alt={v.label} className="absolute inset-0 h-full w-full object-cover" />
+                <FadeImage src={v.src} alt={v.label} className="absolute inset-0 h-full w-full object-cover" />
                 {tag(v, "left-3")}
               </div>
             ))}

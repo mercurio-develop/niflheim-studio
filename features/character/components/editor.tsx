@@ -278,10 +278,7 @@ export function Editor(props: {
                 <Maximize2 className="size-4" />
               </button>
             )}
-            {comparing && props.parentImage && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={file(props.parentImage)} alt="The version before" className="absolute inset-0 h-full w-full object-cover" />
-            )}
+            {comparing && props.parentImage && <FadeImage src={file(props.parentImage)} alt="The version before" className="absolute inset-0 h-full w-full object-cover" />}
             {loader && (
               <FogLoader
                 className="absolute inset-0"
