@@ -14,7 +14,6 @@ import { NextBar } from "@/features/wizard/components/next-bar";
 import type { Job, Keyframes, Shot } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { cancelShot, pickTake, renderTake } from "../actions/shot";
-import { DEFAULT_NEGATIVE } from "../graph";
 
 const EXAMPLES = ["slowly turns to face the camera and raises the lantern", "looks around warily, then walks forward", "kneels, picks something up from the ground and studies it"];
 
@@ -22,7 +21,6 @@ const EXAMPLES = ["slowly turns to face the camera and raises the lantern", "loo
 // keyframes. Each take is kept; pick the one the sequence uses, or download it.
 export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job }) {
   const [action, setAction] = useState(props.shot?.action ?? "");
-  const [negative, setNegative] = useState(props.shot?.negative || DEFAULT_NEGATIVE);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const running = props.job?.status === "running";
@@ -68,7 +66,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
             className="flex flex-col gap-3"
             onSubmit={(e) => {
               e.preventDefault();
-              run(() => renderTake(props.projectId, { action, negative }));
+              run(() => renderTake(props.projectId, { action }));
             }}
           >
             <Textarea value={action} onChange={(e) => setAction(e.target.value)} rows={2} placeholder="slowly turns to face the camera and raises the lantern" className="resize-none text-base" aria-label="What happens" />
@@ -81,10 +79,6 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                 ))}
               </div>
             )}
-            <details className="text-xs text-muted-foreground">
-              <summary className="cursor-pointer select-none hover:text-foreground">What to avoid</summary>
-              <Textarea value={negative} onChange={(e) => setNegative(e.target.value)} rows={2} className="mt-1.5 resize-none font-mono text-[11px]" aria-label="What to avoid" />
-            </details>
             <div className="flex items-center gap-3 border-t pt-3">
               <span className="font-mono text-[11px] text-muted-foreground">
                 ~{Math.round(expected / 10) * 10} s · {props.seconds} s of video with sound · every take is kept

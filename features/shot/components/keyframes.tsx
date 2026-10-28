@@ -17,8 +17,8 @@ import type { CameraMove } from "@/lib/camera";
 import { rerollKey, saveKeys } from "../actions/keyframes";
 
 // The shot's keyframes: the stage at frames 0, 32, 64... of the camera move, each repainted into a
-// finished frame. Make keyframes captures them in the browser and sends them to be painted; any
-// one can be painted again. The note says what should be in the frame (a held prop, an action).
+// finished frame, all in the look of the first one. Make keyframes captures them in the browser
+// and sends them to be painted; any one can be painted again (the first one repaints them all). The note says what should be in the frame (a held prop, an action).
 export function KeyframesPanel(props: {
   projectId: string;
   keyframes: Keyframes | null;
@@ -50,7 +50,7 @@ export function KeyframesPanel(props: {
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-medium">Keyframes</span>
         <span className="font-mono text-[11px] text-muted-foreground">
-          frames {props.frames.join(", ")} · the shot follows them · ~{props.frames.length * 15} s
+          frames {props.frames.join(", ")} · the shot follows them · ~{props.frames.length * 35} s
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -63,7 +63,7 @@ export function KeyframesPanel(props: {
           {k ? "Make keyframes again" : "Make keyframes"}
         </Button>
       </div>
-      {running && props.job && <JobStatus message={props.job.detail ?? "Painting the keyframes"} startedAt={props.job.startedAt} expected={props.frames.length * 15} />}
+      {running && props.job && <JobStatus message={props.job.detail ?? "Painting the keyframes"} startedAt={props.job.startedAt} expected={props.frames.length * 35} />}
       {k && (
         <ol className={cn("grid grid-cols-2 gap-2 sm:grid-cols-4", !props.current && "opacity-50")}>
           {k.raw.map((raw, i) => (
@@ -84,7 +84,7 @@ export function KeyframesPanel(props: {
                   className="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-md border bg-background/80 px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100"
                 >
                   <Dices className="size-3" />
-                  Paint again
+                  {i === 0 ? "Paint all again" : "Paint again"}
                 </button>
               )}
             </li>

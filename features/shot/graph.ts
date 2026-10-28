@@ -4,7 +4,8 @@
 
 type Graph = Record<string, { class_type: string; inputs: Record<string, unknown>; _meta?: { title: string } }>;
 
-// What LTX is asked to avoid unless the user says otherwise; the cut words keep the move one take.
+// The graph's negative prompt. At CFG 1 (the distilled model) it changes nothing (04_shot ACCEPT
+// proof 3); it is kept so a later non-distilled graph has one.
 export const DEFAULT_NEGATIVE = "Jitter, warping face, morphing limbs, flickering textures, blurry, changing art style, extra limbs. Cut, scene change, jump cut, static camera.";
 
 export const END_STRENGTH = 0.7;
