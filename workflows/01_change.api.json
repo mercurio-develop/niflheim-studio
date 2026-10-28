@@ -22,7 +22,7 @@
   "class_type": "ImageScaleToTotalPixels",
   "inputs": {
    "image": [
-    "4",
+    "31",
     0
    ],
    "upscale_method": "lanczos",
@@ -235,11 +235,11 @@
     "5",
     0
    ],
-   "expand": 40,
+   "expand": 64,
    "incremental_expandrate": 0.0,
    "tapered_corners": true,
    "flip_input": false,
-   "blur_radius": 16.0,
+   "blur_radius": 6.0,
    "lerp_alpha": 1.0,
    "decay_factor": 1.0
   }
@@ -301,6 +301,52 @@
    "y": 0,
    "width": 512,
    "height": 512
+  }
+ },
+ "7": {
+  "class_type": "GrowMask",
+  "inputs": {
+   "mask": [
+    "5",
+    0
+   ],
+   "expand": 16,
+   "tapered_corners": true
+  }
+ },
+ "30": {
+  "class_type": "EmptyImage",
+  "inputs": {
+   "width": [
+    "24",
+    0
+   ],
+   "height": [
+    "24",
+    1
+   ],
+   "batch_size": 1,
+   "color": 8421504
+  }
+ },
+ "31": {
+  "class_type": "ImageCompositeMasked",
+  "inputs": {
+   "destination": [
+    "4",
+    0
+   ],
+   "source": [
+    "30",
+    0
+   ],
+   "x": 0,
+   "y": 0,
+   "resize_source": false,
+   "mask": [
+    "7",
+    0
+   ]
   }
  }
 }

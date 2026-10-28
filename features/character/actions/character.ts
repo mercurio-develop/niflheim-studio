@@ -313,14 +313,12 @@ async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
 }
 
 // Change in a close-up (01_change): a crop around the selection is edited at full size, so small
-// parts (hands, a buckle) really change, and the selection plus a soft 40 px margin is pasted back,
-// so the new part is not cut flat at the selection's edge (2026-10-27, hands on a front view).
+// parts (hands, a buckle) really change. The old part is greyed out first, as Add does: shown the
+// old part, Qwen painted the new one over a faint copy of it (2026-10-28, a club came out ghosted).
+// The selection plus 64 px with a 6 px edge is pasted back, so a bigger new part is not faded out.
 async function runChange(r: Run, what: string, change: string, mask: string) {
-  const ask =
-    what === "selection"
-      ? `Change the highlighted area into ${change}, drawn whole and attached naturally, in the same art style.`
-      : `Change only the ${what} into ${change}, drawn whole, in the same art style.`;
-  const prompt = `${await about(r.id)} ${ask} The pose stays; ${keepFace(what, change)}${what === "selection" ? "everything else" : "every other part"} and the background stay exactly the same.`;
+  const old = what === "selection" ? "what was there" : `the ${what}`;
+  const prompt = `${await about(r.id)} The flat grey shape is where ${old} was: replace all of it. Paint ${change} there, whole, solid and attached naturally, filling the shape; the rest of the grey becomes what is around it. No grey left. The pose stays; ${keepFace(what, change)}${what === "selection" ? "everything else" : "every other part"} and the background stay exactly the same.`;
   const source = abs(r.id, r.version.image);
   const strokes = await maskBox(abs(r.id, mask));
   if (!strokes) throw new Error("The selection is empty; paint or pick a part first.");
