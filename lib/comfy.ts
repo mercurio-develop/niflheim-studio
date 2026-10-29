@@ -100,7 +100,9 @@ function unreachable(e: unknown): Error | null {
 // Is the Comfy API v2 surface answering (and taking our key)? For the status badge; never throws.
 export async function comfyHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${comfyBase()}/api/v2/health`, { headers: auth(), signal: AbortSignal.timeout(onCloud() ? 4000 : 1500), cache: "no-store" });
+    // Cloud has no /api/v2/health; /api/user answers 200 only for a good key.
+    const url = onCloud() ? `${CLOUD}/api/user` : `${comfyBase()}/api/v2/health`;
+    const res = await fetch(url, { headers: auth(), signal: AbortSignal.timeout(onCloud() ? 4000 : 1500), cache: "no-store" });
     return res.ok;
   } catch {
     return false;
