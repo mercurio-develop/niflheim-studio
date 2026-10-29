@@ -290,7 +290,7 @@ export function TurnaroundSections(props: {
             </div>
           );
         })()}
-        {image("front") && props.fresh && (
+        {image("front") && (
           <More
             label="Poses"
             summary={props.poses.length ? props.poses.map((p) => p.label).join(", ") : "running, angry, happy: the character in other poses for shots"}
