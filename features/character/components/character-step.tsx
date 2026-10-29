@@ -77,7 +77,7 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
 
   return (
     <>
-      <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
         <JobPoller running={polling} />
         <SectionNav
           items={[

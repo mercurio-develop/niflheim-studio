@@ -7,7 +7,7 @@ import { STEPS } from "@/lib/steps";
 // focus widens and comes up in colour with its one-line pitch. Phones: stacked bars, colour, text shown.
 export function Pipeline() {
   return (
-    <ol className="flex flex-col gap-2 sm:h-[30rem] sm:-skew-x-[7deg] sm:flex-row sm:gap-2 sm:px-8 lg:-mx-12">
+    <ol className="flex flex-col gap-2 sm:h-[30rem] sm:-skew-x-[7deg] sm:flex-row sm:gap-2 sm:px-8 lg:-mx-6">
       {STEPS.map((s) => (
         <li
           key={s.slug}
