@@ -9,7 +9,7 @@ import { LoadingDots } from "@/components/loading-dots";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import { KeyCapture } from "@/features/scene/components/key-capture";
 import type { StagePose } from "@/features/scene/components/stage-viewer";
-import type { Job, Keyframes, ViewId } from "@/lib/store";
+import type { Block, Job, Keyframes, ViewId } from "@/lib/store";
 import type { StageCamera } from "@/lib/stage-fill";
 import { cn } from "@/lib/utils";
 import { saveCamera } from "@/features/scene/actions/camera";
@@ -26,7 +26,7 @@ export function KeyframesPanel(props: {
   frames: number[];
   job?: Job;
   move: CameraMove; // saved before capturing, so the server keys the same frames
-  capture: { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; poses: StagePose[] };
+  capture: { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; blocks: Block[]; poses: StagePose[] };
 }) {
   const k = props.keyframes;
   const [note, setNote] = useState(k?.note ?? "");

@@ -3,7 +3,7 @@
 import { SectionNav } from "@/components/section-nav";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
-import type { Job, SetData, StageData } from "@/lib/store";
+import type { Block, Job, SetData, StageData } from "@/lib/store";
 import { DescribeSection } from "./describe-section";
 import { StageSection } from "./stage-section";
 
@@ -15,6 +15,7 @@ export function SceneStep(props: {
   set: SetData | null;
   style: string; // the character's style, the set's default
   placement: StageData | null;
+  blocks: Block[];
   front: string | null;
   moved: boolean;
   setJob?: Job;
@@ -42,6 +43,7 @@ export function SceneStep(props: {
           projectId={props.projectId}
           set={props.set}
           placement={props.placement}
+          blocks={props.blocks}
           front={props.front}
           moved={props.moved}
           setJob={props.setJob}

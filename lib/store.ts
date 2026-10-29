@@ -63,6 +63,9 @@ export type StageFill = { mesh: string; cameras: string; views: string[]; holes:
 // in metres, turn: which way they face in degrees (0 = towards the painting's camera, positive
 // towards screen right). fill: the filled stage mesh `at` was placed on; a rebuilt or refilled set
 // moves the floor, so a different current fill makes the placement out of date.
+// A greybox shape standing on the stage (metres, floor y = 0): at is the middle of its base, size
+// width, height, depth, turn degrees about y. The keyframes paint it as its label ("a wooden cart").
+export type Block = { id: string; kind: "box" | "cylinder" | "ramp"; at: [number, number, number]; size: [number, number, number]; turn: number; label: string };
 export type StageData = { source: string; cutouts: Partial<Record<ViewId, string>>; at?: [number, number, number]; height: number; turn: number; fill?: string };
 
 // The character as a 3D model (Hunyuan3D-2 MV from the front, side and back views). front: the
@@ -145,6 +148,7 @@ export type Project = {
   mesh?: Mesh; // the character in 3D, made from the turnaround views
   set?: SetData;
   stage?: StageData;
+  blocks?: Block[]; // greybox shapes on the stage, painted into what their label says
   camera?: CameraMove; // the scene's camera move (lib/camera.ts), aimed at the placed character
   cameraRender?: CameraRender; // the move rendered along its path, for the shot
   keyframes?: Keyframes; // the shot's keyframes along the camera move

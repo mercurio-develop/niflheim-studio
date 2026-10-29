@@ -196,6 +196,27 @@ export async function placeCharacter(id: string, raw: unknown) {
   done(id);
 }
 
+const Blocks = z
+  .array(
+    z.object({
+      id: z.string().regex(/^[a-z0-9]{1,16}$/),
+      kind: z.enum(["box", "cylinder", "ramp"]),
+      at: z.tuple([z.number(), z.number(), z.number()]).refine((a) => a.every((x) => Number.isFinite(x) && Math.abs(x) < 500), "A block is off the stage."),
+      size: z.tuple([z.number(), z.number(), z.number()]).refine((a) => a.every((x) => x >= 0.1 && x <= 20), "A block's size is out of range."),
+      turn: z.number().min(-180).max(180),
+      label: z.string().trim().max(80),
+    }),
+  )
+  .max(12);
+
+// The greybox blocks on the stage, saved as they are placed and sized. Every shot sees them.
+export async function saveBlocks(id: string, raw: unknown) {
+  const blocks = Blocks.parse(raw);
+  await updateProject(id, (q) => void (q.blocks = blocks));
+  done(id);
+  revalidatePath(`/p/${id}/shot`);
+}
+
 export async function cancelStage(id: string) {
   await cancelJob(id, "stage");
   done(id);

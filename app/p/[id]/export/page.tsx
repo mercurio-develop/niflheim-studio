@@ -34,6 +34,7 @@ async function Export({ params }: { params: Promise<{ id: string }> }) {
           at: st.at,
           height: st.height,
           turn: st.turn,
+          blocks: project.blocks ?? [],
         }
       : null;
   return (

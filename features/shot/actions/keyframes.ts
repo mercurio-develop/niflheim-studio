@@ -4,7 +4,7 @@ import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { focusPhrase, keyFrames, renderKey } from "@/lib/camera";
+import { blocksKey, focusPhrase, keyFrames, renderKey } from "@/lib/camera";
 import { runWorkflow } from "@/lib/comfy";
 import { startJob } from "@/lib/jobs";
 import { currentFill } from "@/lib/progress";
@@ -26,7 +26,8 @@ async function load(id: string): Promise<Project> {
 function sceneKey(p: Project) {
   const fill = currentFill(p);
   if (!fill?.camera?.floor || !p.stage?.at || !p.camera) return null;
-  return renderKey(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn);
+  const bk = blocksKey(p.blocks);
+  return renderKey(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn) + (bk ? `|blocks:${bk}` : "");
 }
 
 // Every key is the capture repainted on its own with one strict prompt and one seed: keep
@@ -34,11 +35,21 @@ function sceneKey(p: Project) {
 // lantern keeper" made Qwen add a lantern, and a key that invents things makes the take invent
 // them. Matching keys to key 0 collapsed the camera move (04_shot ACCEPT proof 5: method M, camera
 // travel 10 px, worst pop-in 5.8, no frame over the line). The note is the one thing that may be added.
+// The greybox blocks become what their labels say; an unlabelled one is left to fit the scene.
+function blocksPhrase(p: Project) {
+  const named = (p.blocks ?? []).map((b) => b.label.trim()).filter(Boolean);
+  if (!p.blocks?.length) return "";
+  return named.length
+    ? `The plain grey shapes are stand-ins: paint each as what it is (${named.join("; ")}), the same size and place, solid, in the scene's style.`
+    : "The plain grey shapes are stand-ins: paint each as a fitting object of the same size and place, in the scene's style.";
+}
+
 function keyPrompt(p: Project, note: string) {
   const style = styleById(p.set?.style || p.character.style).phrase;
   return [
     "Keep everything in this picture exactly where it is and add nothing new: no new objects, nothing in the hands that is not already there.",
     `Make it one finished frame, ${style}: light the character so they belong in the scene with a soft shadow on the ground, repaint smeared, jagged or broken patches cleanly, and fill any black holes at the edges with the scene around them. Same camera framing.`,
+    blocksPhrase(p),
     focusPhrase(p.camera),
     note,
   ]
