@@ -109,7 +109,7 @@ const withFirst = (g: Record<string, { class_type: string; inputs: Record<string
 
 // Repaint the given keys with 01_edit (Qwen-Image-Edit 2511 + Lightning, about 30 s each) as one
 // job; every key uses the saved prompt and seed, a re-rolled one a new seed. Key 1 goes first and
-// is the reference for the rest.
+// is the reference for the rest (in a continued shot, key 1 is the previous take's last frame).
 async function refine(id: string, which: number[], reroll = false) {
   const p = await load(id);
   const k = p.keyframes;
@@ -120,7 +120,9 @@ async function refine(id: string, which: number[], reroll = false) {
       await ctx.progress(`Painting key ${n + 1} of ${which.length}`);
       const outDir = path.join(path.dirname(abs(id, k.raw[i])), `key-${String(k.frames[i]).padStart(3, "0")}-${Date.now().toString(36)}`);
       const ref = i > 0 ? first : null;
-      let [image] = await runWorkflow({
+      // A shot that continues another starts on that take's last frame, as it is.
+      const seeded = i === 0 && p.seededFrom ? abs(id, p.seededFrom.frame) : null;
+      let [image] = seeded ? [seeded] : await runWorkflow({
         workflow: "01_edit.api.json",
         onSubmit: ctx.track,
         edit: ref ? withFirst : undefined,
@@ -130,7 +132,7 @@ async function refine(id: string, which: number[], reroll = false) {
         outDir,
       });
       if (!(await ctx.alive())) return;
-      if (k.detail) {
+      if (k.detail && !seeded) {
         // Faces and hands: SAM3 finds them by name, Z-Image repaints each crop lightly (faces 0.22,
         // which keeps the expression and the person; hands 0.35, which fixes fingers).
         await ctx.progress(`Fixing faces and hands in key ${n + 1} of ${which.length}`);
