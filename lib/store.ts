@@ -108,7 +108,7 @@ export type CameraRender = { depth: string; preview: string; holes: number[]; ke
 // null until done). One prompt and seed for all, so they share a look; note: what the user asked
 // to see in the frame. key: the camera render key (lib/camera.ts renderKey) they were made from.
 // detail: each painted key also gets the face and hand pass (03_key_detail).
-export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)[]; prompt: string; note: string; seed: number; key: string; at: string; detail?: boolean };
+export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)[]; prompt: string; note: string; seed: number; key: string; at: string; detail?: boolean; captions?: (string | null)[] };
 
 // The shot: what happens, and the LTX-2.5 takes of it (MP4 with audio, 768x448, the camera move's
 // 8n+1 frames at 24 fps), each guided by the keyframes it was made from (keys: Keyframes.at).

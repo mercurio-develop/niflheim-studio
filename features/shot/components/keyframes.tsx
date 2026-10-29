@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Dices, Images } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
 import { JobStatus } from "@/features/wizard/components/job-status";
@@ -14,11 +15,12 @@ import type { StageCamera } from "@/lib/stage-fill";
 import { cn } from "@/lib/utils";
 import { saveCamera } from "@/features/scene/actions/camera";
 import type { CameraMove } from "@/lib/camera";
-import { rerollKey, saveKeys } from "../actions/keyframes";
+import { rerollKey, saveCaption, saveKeys } from "../actions/keyframes";
 
 // The shot's keyframes: the stage at frames 0, 32, 64... of the camera move, each repainted into a
 // finished frame with one strict prompt and seed. Make keyframes captures them in the browser and
 // sends them to be painted; any one can be painted again. The note says what should be in the frame (a held prop, an action).
+// Under each key, Florence-2's caption of it: editable, and merged into the take prompt in order.
 export function KeyframesPanel(props: {
   projectId: string;
   keyframes: Keyframes | null;
@@ -51,7 +53,7 @@ export function KeyframesPanel(props: {
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-medium">Keyframes</span>
         <span className="font-mono text-[11px] text-muted-foreground">
-          frames {props.frames.join(", ")} · the shot follows them · ~{props.frames.length * 30} s
+          frames {props.frames.join(", ")} · the shot follows them · ~{props.frames.length * 42} s
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -69,7 +71,7 @@ export function KeyframesPanel(props: {
         </label>
         <p className="w-full text-xs text-muted-foreground">Only what they hold or wear. Someone else, or an object in the place, goes on the stage as a Scene asset or block: each key is painted on its own, so a note like &ldquo;a human&rdquo; paints a different one in every key.</p>
       </div>
-      {running && props.job && <JobStatus message={props.job.detail ?? "Painting the keyframes"} startedAt={props.job.startedAt} expected={props.frames.length * 30} />}
+      {running && props.job && <JobStatus message={props.job.detail ?? "Painting the keyframes"} startedAt={props.job.startedAt} expected={props.frames.length * 42} />}
       {k && (
         <ol className={cn("grid grid-cols-2 gap-2 sm:grid-cols-4", !props.current && "opacity-50")}>
           {k.raw.map((raw, i) => (
@@ -82,7 +84,7 @@ export function KeyframesPanel(props: {
                   {running && <div className="nifl-loading absolute inset-0 bg-transparent" />}
                 </div>
               )}
-              <span className="absolute bottom-1.5 left-1.5 rounded border bg-background/80 px-1 font-mono text-[10px] text-muted-foreground backdrop-blur">{k.frames[i]}</span>
+              <span className="absolute top-1.5 left-1.5 rounded border bg-background/80 px-1 font-mono text-[10px] text-muted-foreground backdrop-blur">{k.frames[i]}</span>
               {k.keys[i] && !busy && (
                 <button
                   type="button"
@@ -93,6 +95,7 @@ export function KeyframesPanel(props: {
                   Paint again
                 </button>
               )}
+              {k.keys[i] && <KeyCaption key={`${raw}-${k.captions?.[i] ?? ""}`} text={k.captions?.[i] ?? ""} frame={k.frames[i]} disabled={busy} onSave={(t) => act(() => saveCaption(props.projectId, i, t))} />}
             </li>
           ))}
         </ol>
@@ -102,5 +105,22 @@ export function KeyframesPanel(props: {
       {error && <p className="text-sm text-destructive">{error}</p>}
       {capturing && <KeyCapture {...props.capture} projectId={props.projectId} onDone={captured} onError={(m) => (setCapturing(false), setError(m))} />}
     </div>
+  );
+}
+
+// Saved when the field loses focus, only if it changed; empty means the take prompt skips this key.
+function KeyCaption(props: { text: string; frame: number; disabled: boolean; onSave: (text: string) => void }) {
+  const [text, setText] = useState(props.text);
+  return (
+    <Textarea
+      aria-label={`What key ${props.frame} shows`}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => text.trim() !== props.text.trim() && props.onSave(text)}
+      placeholder="What this key shows (described after painting)"
+      disabled={props.disabled}
+      rows={3}
+      className="min-h-0 resize-none rounded-none border-0 border-t text-xs"
+    />
   );
 }

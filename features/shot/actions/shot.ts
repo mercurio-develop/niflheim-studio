@@ -67,6 +67,7 @@ function shotPrompt(p: Project, b: Beats) {
     clean(b.then) ? `As the camera ${cam.move}, the character ${clean(b.then)}.` : `The camera ${cam.move}.`,
     clean(b.end) ? `A moment later, the character ${clean(b.end)}.` : "",
     pov ? "" : `The shot ends ${cam.ends}.`,
+    keysPhrase(p),
     `One continuous take with no cuts, ${style}, consistent art style.`,
     focusPhrase(m),
   ];
@@ -85,6 +86,16 @@ const cast = (p: Project) => {
     .map((a) => (a.prompt ? `${a.name}, ${a.prompt}` : a.name))
     .join("; ");
 };
+// What the keys show, in order (Florence-2 captions, or the user's edits of them): the frame the take
+// starts on, passes through and ends on. Keys without a caption are skipped.
+function keysPhrase(p: Project) {
+  const c = (p.keyframes?.captions ?? []).map((x) => x?.trim().replace(/[.\s]+$/, "")).filter(Boolean) as string[];
+  if (!c.length) return "";
+  const lower = (x: string) => x.charAt(0).toLowerCase() + x.slice(1);
+  if (c.length === 1) return `At the start, ${lower(c[0])}.`;
+  const middle = c.slice(1, -1).map((x) => ` Then, ${lower(x)}.`).join("");
+  return `At the start, ${lower(c[0])}.${middle} By the end, ${lower(c.at(-1)!)}.`;
+}
 const poseOf = (p: Project, id?: string) => p.poses?.find((x) => x.id === id)?.prompt;
 const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 
