@@ -88,10 +88,11 @@ async function draw(id: string, cid: string) {
     views: ["front", "threequarter", "side", "back"].map((v) => pic(view(v)) ?? null),
     set: p.set?.image ? abs(id, p.set.image) : null,
   };
-  await run(PYTHON, ["-I", DRAW, JSON.stringify(spec)], { maxBuffer: 1 << 20 });
+  const { stdout } = await run(PYTHON, ["-I", DRAW, JSON.stringify(spec)], { maxBuffer: 1 << 20 });
+  const rows = JSON.parse(stdout);
   await updateProject(id, (q) => {
     const s = charOf(q, cid).sheet;
-    if (s) Object.assign(s, { drawn: rel(id, spec.out), at: new Date().toISOString() });
+    if (s) Object.assign(s, { drawn: rel(id, spec.out), rows, at: new Date().toISOString() });
   });
 }
 

@@ -69,10 +69,20 @@ export function sheetPrompt(rows: SheetRows, who: SheetElement, props: SheetElem
   return lines.join("\n");
 }
 
+// A character take: only the first key guides it (frame 0, LTX-2.5's own image guide); the last key
+// and any middle ones come out, and the sheet carries who they are for the rest (05_submit proof v3:
+// the sheet alone kept the right character with no pop-ins).
+export function firstKeyOnly(g: Graph) {
+  for (const n of Object.keys(g)) if (["2", "4", "6", "32"].includes(n) || Number(n) >= 200 && Number(n) < 300) delete g[n];
+  g["34"].inputs.video_latent = ["31", 2];
+  for (const n of ["41", "51"]) g[n].inputs = { ...g[n].inputs, positive: ["31", 0], negative: ["31", 1] };
+}
+
 // The sheet alone, without keyframes (Lightricks' own Ingredients graph): the keyframe guides come
 // out and the sampler, the audio-video latent and the crop read the sheet's guide directly.
 export function sheetOnly(g: Graph) {
   for (const n of ["1", "2", "3", "4", "5", "6", "31", "32"]) delete g[n];
+  for (const n of Object.keys(g)) if (Number(n) >= 200 && Number(n) < 300) delete g[n];
   g["34"].inputs.video_latent = ["305", 2];
   for (const n of ["41", "51"]) g[n].inputs = { ...g[n].inputs, positive: ["305", 0], negative: ["305", 1] };
 }

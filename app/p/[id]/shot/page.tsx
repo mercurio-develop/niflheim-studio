@@ -28,6 +28,8 @@ async function Shot({ params }: { params: Promise<{ id: string }> }) {
         key={project.activeShot}
         shots={allShots(project).map((s) => ({ id: s.id, name: s.name, active: s.active, picked: s.shot?.picked !== undefined }))}
         projectId={id} keyframes={k ?? null} ready={ready} seconds={seconds} shot={project.shot ?? null} job={project.jobs.shot}
+        suggested={["static"].includes(project.camera?.move ?? "static") || ["close", "pov"].includes(project.camera?.framing ?? "") ? "character" : "camera"}
+        sheet={project.sheet?.drawn ?? null}
         keysRunning={project.jobs.keyframes?.status === "running" || project.jobs.stage?.status === "running"}
         cameraPanel={<ShotCamera projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} cameraRender={project.cameraRender ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} stageJob={project.jobs.stage} />}
         keyPanel={<ShotKeyframes projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} keyframes={k ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} job={project.jobs.keyframes} continuity={continuity} />}

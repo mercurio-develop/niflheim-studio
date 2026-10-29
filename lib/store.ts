@@ -75,7 +75,8 @@ export type Block = { id: string; kind: "box" | "cylinder" | "ramp"; at: [number
 // close-up or a thing they wear or carry on its own. Each has its own prompt, so it can be re-rolled
 // alone or with the prompt edited; image is the painted picture, cutout the body or item cut out.
 export type SheetCell = { id: string; kind: "view" | "face" | "item"; label: string; prompt: string; image?: string; cutout?: string };
-export type CharacterSheet = { cells: SheetCell[]; drawn?: string; at?: string };
+// rows: what scripts/make_sheet.py drew, top to bottom, so a take's prompt can say each cell by its place.
+export type CharacterSheet = { cells: SheetCell[]; drawn?: string; rows?: { kind: "faces+items" | "bodies" | "set"; cells: string[] }[]; at?: string };
 export type CharacterPose = { id: string; label: string; prompt: string; views: Partial<Record<AssetView, string>>; cutouts: Partial<Record<AssetView, string>> };
 
 // An object made for the scene, from a prompt (its concept painted first), an uploaded picture or
@@ -123,9 +124,14 @@ export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)
 // 8n+1 frames at 24 fps), each guided by the keyframes it was made from (keys: Keyframes.at).
 // score: scripts/score_take.py on arrival: camera travel (px of flow), pop-in frames and worst spike.
 export type TakeScore = { travel: number; popins: number; worst: number };
-export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore; prompt?: string };
+export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore; prompt?: string; kind?: ShotKind };
 // beats: what happens first, then, and by the end (action joins them, for older readers).
-export type Shot = { action: string; beats?: { start: string; then?: string; end?: string }; negative: string; takes: Take[]; picked?: number };
+// kind: what guides its takes (decision 0014): "camera", the keyframes along the move (and later the
+// stage's clay clip, Layout-to-Render); "character", the character's sheet (Ingredients IC-LoRA), from
+// the first key, 5 s. One or the other: Lightricks advises against mixing IC-LoRA guides.
+// expression: said in the take's prompt; a sheet holds the face so firmly it goes stiff otherwise.
+export type ShotKind = "camera" | "character";
+export type Shot = { action: string; beats?: { start: string; then?: string; end?: string }; negative: string; takes: Take[]; picked?: number; kind?: ShotKind; expression?: string };
 
 // One shot of the scene: its name, and (while not active) its move, render, keyframes and takes.
 export type ShotRef = { id: string; name: string };
