@@ -50,18 +50,42 @@ function Model(props: { url: string; asset: SceneAsset; picked: boolean; onPick?
   );
 }
 
-function Card(props: { projectId: string; asset: SceneAsset }) {
+function Card(props: { projectId: string; asset: SceneAsset; picked?: boolean; onPick?: () => void }) {
   const a = props.asset;
-  return <CharacterCard cutouts={Object.fromEntries(Object.entries(a.cutouts!).map(([v, f]) => [v, `/api/files/${props.projectId}/${f}`]))} at={a.at!} height={a.height} turn={a.turn} />;
+  return <CharacterCard cutouts={Object.fromEntries(Object.entries(a.cutouts!).map(([v, f]) => [v, `/api/files/${props.projectId}/${f}`]))} at={a.at!} height={a.height} turn={a.turn} picked={props.picked} onPick={props.onPick} />;
+}
+
+// The gizmo on whatever is picked on the stage: arrows move it along the floor (its height stays),
+// the ring turns it about y. turn in degrees, as SceneAsset and Placement keep it.
+export function FloorGizmo(props: { at: [number, number, number]; turn: number; onMove: (at: [number, number, number], turn: number) => void }) {
+  const matrix = new THREE.Matrix4().compose(new THREE.Vector3(...props.at), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (props.turn * Math.PI) / 180), new THREE.Vector3(1, 1, 1));
+  return (
+    <PivotControls
+      matrix={matrix}
+      autoTransform={false}
+      disableScaling
+      disableSliders
+      activeAxes={[true, false, true]}
+      depthTest={false}
+      fixed
+      scale={80}
+      lineWidth={3}
+      onDrag={(_l, _dl, w) => {
+        const p = new THREE.Vector3().setFromMatrixPosition(w);
+        const y = new THREE.Euler().setFromRotationMatrix(w, "YXZ").y;
+        props.onMove([p.x, props.at[1], p.z], Math.round((y * 180) / Math.PI));
+      }}
+    />
+  );
 }
 
 // A cast member (a character asset) is a card, like the main character; an object, its model.
 export const assetReady = (a: SceneAsset) => (a.kind === "character" ? ["front", "threequarter", "side", "back"].every((v) => a.cutouts?.[v as "front"]) : !!a.glb);
 
-// The scene's assets that are made and have a spot. With onPick a click selects one; the selected
-// one carries a move gizmo along the floor (onMove gives its new base point).
+// The scene's assets that are made and have a spot. With onPick a click selects one (a model or a
+// character card); the selected one carries the floor gizmo (onMove gives its new base point and turn).
 // wait: no Suspense of its own, so the viewer waits for the models before it draws (keyframes).
-export function SceneAssets(props: { projectId: string; assets: SceneAsset[]; wait?: boolean; picked?: string | null; onPick?: (id: string) => void; onMove?: (id: string, at: [number, number, number]) => void }) {
+export function SceneAssets(props: { projectId: string; assets: SceneAsset[]; wait?: boolean; picked?: string | null; onPick?: (id: string) => void; onMove?: (id: string, at: [number, number, number], turn: number) => void }) {
   return (
     <>
       {props.assets.map((a) =>
@@ -72,7 +96,7 @@ export function SceneAssets(props: { projectId: string; assets: SceneAsset[]; wa
                 <Card projectId={props.projectId} asset={a} />
               ) : (
                 <Suspense fallback={null}>
-                  <Card projectId={props.projectId} asset={a} />
+                  <Card projectId={props.projectId} asset={a} picked={a.id === props.picked} onPick={props.onPick && (() => props.onPick!(a.id))} />
                 </Suspense>
               )
             ) : props.wait ? (
@@ -82,23 +106,7 @@ export function SceneAssets(props: { projectId: string; assets: SceneAsset[]; wa
                 <Model url={`/api/files/${props.projectId}/${a.glb}`} asset={a} picked={a.id === props.picked} onPick={props.onPick && (() => props.onPick!(a.id))} />
               </Suspense>
             )}
-            {a.id === props.picked && props.onMove && (
-              <PivotControls
-                matrix={new THREE.Matrix4().makeTranslation(new THREE.Vector3(...a.at))}
-                autoTransform={false}
-                disableRotations
-                disableScaling
-                activeAxes={[true, false, true]}
-                depthTest={false}
-                fixed
-                scale={80}
-                lineWidth={3}
-                onDrag={(_l, _dl, w) => {
-                  const p = new THREE.Vector3().setFromMatrixPosition(w);
-                  props.onMove!(a.id, [p.x, a.at![1], p.z]);
-                }}
-              />
-            )}
+            {a.id === props.picked && props.onMove && <FloorGizmo at={a.at} turn={a.turn} onMove={(at, turn) => props.onMove!(a.id, at, turn)} />}
           </group>
         ) : null,
       )}

@@ -45,7 +45,8 @@ function cropOf(img: HTMLImageElement): Crop {
 }
 
 // live: where they stand this frame, when they walk (CameraPath writes it); `at` otherwise.
-export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>; at: StagePoint; height: number; turn: number; live?: React.RefObject<StagePoint | null> }) {
+// With onPick a click selects them; picked rings their feet (the stage puts the gizmo on).
+export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>; at: StagePoint; height: number; turn: number; live?: React.RefObject<StagePoint | null>; picked?: boolean; onPick?: () => void }) {
   const views = PICK.filter((p) => props.cutouts[p.view]);
   const textures = useTexture(views.map((p) => props.cutouts[p.view]!));
   const [crops, setCrops] = useState<Crop[] | null>(null);
@@ -98,8 +99,28 @@ export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>;
 
   if (!views.length) return null;
   return (
-    <mesh ref={mesh} position={[props.at[0], props.at[1] + props.height / 2, props.at[2]]} material={material}>
-      <planeGeometry args={[1, 1]} />
-    </mesh>
+    <>
+      <mesh
+        ref={mesh}
+        position={[props.at[0], props.at[1] + props.height / 2, props.at[2]]}
+        material={material}
+        onClick={
+          props.onPick &&
+          ((e) => {
+            if (e.delta > 4) return;
+            e.stopPropagation();
+            props.onPick!();
+          })
+        }
+      >
+        <planeGeometry args={[1, 1]} />
+      </mesh>
+      {props.picked && (
+        <mesh position={[props.at[0], props.at[1] + 0.005, props.at[2]]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[props.height * 0.3, props.height * 0.34, 32]} />
+          <meshBasicMaterial color="#fbbf24" side={THREE.DoubleSide} />
+        </mesh>
+      )}
+    </>
   );
 }
