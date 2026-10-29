@@ -39,6 +39,8 @@ export function KeyCapture(props: {
   poses: (StagePose & { turn?: number; assets?: SceneAsset[] })[]; // a key moment's turn and object spots, when it has them
   onDone: (pngs: Blob[]) => void;
   onError: (message: string) => void;
+  clay?: boolean; // the Layout-to-Render clay clip: grey guide look, no grid, a grey card, every frame
+  onFrame?: (n: number) => void;
 }) {
   const [i, setI] = useState(0);
   const shots = useRef<Blob[]>([]);
@@ -48,7 +50,7 @@ export function KeyCapture(props: {
     busy.current = true;
     // A key that sees mostly outside the stage (the viewer's empty background) gives Qwen nothing
     // to keep: it invents a new place for every key and the take jumps between them. Stop there.
-    const empty = emptyShare(canvas);
+    const empty = props.clay ? 0 : emptyShare(canvas);
     if (empty > 0.4) {
       busy.current = false;
       return props.onError(`Key ${i + 1} sees mostly outside the stage (${Math.round(empty * 100)}% empty). Bring the camera nearer the painting's view, or shorten the move.`);
@@ -57,18 +59,20 @@ export function KeyCapture(props: {
       busy.current = false;
       if (!b) return props.onError("The browser could not capture the stage.");
       shots.current[i] = b;
+      props.onFrame?.(i + 1);
       if (i + 1 < props.poses.length) setI(i + 1);
       else props.onDone(shots.current);
-    }, "image/jpeg", 0.92);
+    }, "image/jpeg", props.clay ? 0.8 : 0.92);
   };
   return (
     <div aria-hidden className="pointer-events-none fixed top-0 -left-[9999px]" style={{ width: 768, height: 448 }}>
-      <StageViewer mesh={props.mesh} camera={props.camera} filled pose={{ ...props.poses[i], n: i }} onDrawn={drawn} className="size-full">
+      <StageViewer mesh={props.mesh} camera={props.camera} filled look={props.clay ? "guide" : "painting"} grid={!props.clay} pose={{ ...props.poses[i], n: i }} onDrawn={drawn} className="size-full">
         <StageScene
           projectId={props.projectId}
           blocks={props.blocks}
           assets={props.poses[i].assets ?? props.assets}
           wait
+          clay={props.clay}
           main={{ cutouts: (props.poses[i].card as typeof props.cutouts | undefined) ?? props.cutouts, at: props.poses[i].at ?? props.at, height: props.height, turn: props.poses[i].turn ?? props.turn }}
         />
       </StageViewer>

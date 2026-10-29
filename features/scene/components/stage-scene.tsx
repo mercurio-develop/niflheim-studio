@@ -29,6 +29,7 @@ export function StageScene(props: {
   onMoveAsset?: (id: string, at: StagePoint, turn: number) => void;
   onMoveBlock?: (id: string, at: StagePoint) => void;
   wait?: boolean; // captures: no Suspense of their own, so the viewer waits for every model
+  clay?: boolean; // the Layout-to-Render clay clip: the character as a flat grey shape
 }) {
   const p = props.picked;
   const pick = props.onPick;
@@ -46,6 +47,7 @@ export function StageScene(props: {
       />
       {props.main && (
         <CharacterCard
+          clay={props.clay}
           cutouts={props.main.cutouts}
           at={props.main.at}
           height={props.main.height}
