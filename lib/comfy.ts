@@ -28,6 +28,7 @@ export type RunSpec = {
   workflow: string; // file name in workflows/, e.g. "01_concept.api.json"
   set?: [node: string, field: string, value: unknown][];
   images?: [node: string, filePath: string][]; // LoadImage nodes
+  videos?: [node: string, filePath: string][]; // LoadVideo nodes (input "file")
   output: string; // node id whose outputs we keep
   outDir: string; // absolute folder for downloaded files
   ext?: string; // file extension for outputs (default png)
@@ -43,6 +44,7 @@ export async function runWorkflow(spec: RunSpec): Promise<string[]> {
   const wf = c.workflows.fromJson(graph);
   for (const [node, field, value] of spec.set ?? []) wf.setInput(node, field, value);
   for (const [node, file] of spec.images ?? []) wf.setInput(node, "image", c.assets.fromFile(file));
+  for (const [node, file] of spec.videos ?? []) wf.setInput(node, "file", c.assets.fromFile(file));
 
   const job = await c.submit(wf).catch((e: unknown) => {
     throw unreachable(e) ?? e;
