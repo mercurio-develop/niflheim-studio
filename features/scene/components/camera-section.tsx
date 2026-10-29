@@ -21,6 +21,7 @@ export function CameraSection(props: {
   onMove: (m: CameraMove) => void;
   start: Vec | null; // where the move starts today, which the Height slider raises or lowers
   subject: { at: Vec; turn: number } | null; // where the character stands and faces, to start a walk
+  subjects?: { id: string; label: string }[]; // what the camera can work around: main, placed assets, none
   poses?: { id: string; label: string }[]; // the character's finished poses (Character → Turnaround)
   outside: number; // frames outside the stage's space
   close?: number; // the first frame the camera is too close to the character, or -1
@@ -51,7 +52,7 @@ export function CameraSection(props: {
     const t = setTimeout(() => start(() => saveCamera(props.projectId, m).then(() => setError(null), (e: Error) => setError(e.message))), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m.move, m.amount, m.seconds, m.ease, m.framing, m.from?.join(), m.to?.join(), m.walk?.to.join(), m.walk?.from.join(), m.focus, m.pose, m.poseThen]);
+  }, [m.move, m.amount, m.seconds, m.ease, m.framing, m.from?.join(), m.to?.join(), m.walk?.to.join(), m.walk?.from.join(), m.focus, m.pose, m.poseThen, m.subject]);
 
   return (
     <Section
@@ -78,6 +79,18 @@ export function CameraSection(props: {
       {props.top}
       {props.ready && (
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:max-w-xl">
+          {!!props.subjects && props.subjects.length > 2 && (
+            <>
+              <span className="text-xs text-muted-foreground">Around</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {props.subjects.map((x) => (
+                  <button key={x.id} type="button" aria-pressed={(m.subject ?? "main") === x.id} className={chip((m.subject ?? "main") === x.id)} onClick={() => set({ subject: x.id === "main" ? undefined : x.id })}>
+                    {x.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           <span className="text-xs text-muted-foreground">Framing</span>
           <div className="flex flex-wrap items-center gap-1.5">
             {FRAMINGS.map((x) => (

@@ -66,7 +66,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
   const captureKeys = (move: CameraMove) =>
     new Promise<Blob[]>((resolve, reject) => {
       const s = props.scene!;
-      const ps = poses(s.camera, s, move);
+      const ps = poses(s.camera, s, move, s.assets);
       setCapture({ poses: keyFrames(move).map((f) => ({ ...ps[f], card: cardAt(move, f, s.cutouts, s.poses) })), done: (b) => (setCapture(null), resolve(b)), fail: (m) => (setCapture(null), reject(new Error(m))) });
     });
 

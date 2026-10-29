@@ -14,8 +14,8 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
   const at = props.placement?.at;
   const move = props.camera ?? DEFAULT_MOVE;
   const path = useMemo(
-    () => (cam?.floor && at && props.placement ? poses(cam, { at, height: props.placement.height, turn: props.placement.turn }, move) : null),
-    [cam, at, props.placement, move],
+    () => (cam?.floor && at && props.placement ? poses(cam, { at, height: props.placement.height, turn: props.placement.turn }, move, props.assets) : null),
+    [cam, at, props.placement, move, props.assets],
   );
   if (!fill || !cam || !at || !path || !props.placement) {
     return <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">Build the scene first: a stage, the character standing in it and a camera move.</p>;

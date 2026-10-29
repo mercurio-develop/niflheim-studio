@@ -13,11 +13,17 @@ export type FocusId = "deep" | "soft" | "strong";
 // to: where the camera ends, when moved off the preset's end. walk: the character crosses the stage
 // from one spot to another over the shot (none: they stand at the placement). pose: one of the
 // character's poses (none: as designed); poseThen: the pose the second half of the keys show.
-export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec }; focus?: FocusId; pose?: string; poseThen?: string };
+// subject: what the camera works around: "main" (the default, the step-1 character), an asset id
+// (a cast member or an object on the stage) or "none" (the painting's look point, a free camera).
+export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec }; focus?: FocusId; pose?: string; poseThen?: string; subject?: string };
 // at: where the character stands at that frame.
 export type Pose = { position: Vec; target: Vec; at?: Vec };
 // Who the camera is about: where they stand, how tall, which way they face (degrees, CharacterCard's).
-export type Subject = { at: Vec; height: number; turn: number };
+// frame: the size Long, Mid and Close frame them at (default their height); an object is framed at
+// least as a person would be, since a low wide thing is not shorter in the frame.
+export type Subject = { at: Vec; height: number; turn: number; frame?: number };
+// What else stands on the stage and can be a subject (SceneAsset's spot).
+export type Others = { id: string; kind?: string; at?: Vec; height: number; turn: number }[];
 
 export const FPS = 24;
 
@@ -82,6 +88,18 @@ export function aim(cam: StageCamera, at?: Vec | null, height = 1.7): Vec {
   return at ? [at[0], at[1] + height * 0.6, at[2]] : home(cam).look;
 }
 
+// The subject a move works around: the main character, an asset with a spot, or the painting's
+// look point (on the floor, at a person's height) for "none". An asset that is gone falls back to main.
+export function subjectOf(cam: StageCamera, main: Subject, m: CameraMove, others: Others = []): Subject {
+  if (!m.subject || m.subject === "main") return main;
+  if (m.subject === "none") {
+    const l = home(cam).look;
+    return { at: [l[0], 0, l[2]], height: 1.7, turn: 0 };
+  }
+  const a = others.find((o) => o.id === m.subject && o.at);
+  return a ? { at: a.at!, height: a.height, turn: a.turn, ...(a.kind === "character" ? {} : { frame: Math.max(1.7, a.height) }) } : main;
+}
+
 // Where a move starts and what it looks at, for the move's framing.
 export function start(cam: StageCamera, who: Subject, m: CameraMove): Pose {
   const chest = aim(cam, who.at, who.height);
@@ -95,7 +113,7 @@ export function start(cam: StageCamera, who: Subject, m: CameraMove): Pose {
   }
   if (f === "long" || f === "mid" || f === "close") {
     const s = SHOT[f];
-    const k = who.height / 1.7;
+    const k = (who.frame ?? who.height) / 1.7;
     const back = sub(home(cam).position, who.at);
     const flat: Vec = [back[0], 0, back[2]];
     const dir = scale(flat, 1 / (len(flat) || 1));
@@ -127,17 +145,19 @@ function ends(p0: Vec, aimAt: Vec, m: CameraMove): { from: Vec; to: Vec; arc?: {
   }
 }
 
-// Every frame's pose, from the framing's start, eased in and out when asked. A walking character
-// carries the aim (and a following or first-person camera) along with them; a camera end moved off
-// the preset's goes straight there.
-export function poses(cam: StageCamera, who: Subject, m: CameraMove): Pose[] {
+// Every frame's pose, from the framing's start, eased in and out when asked. who is the main
+// character (pose.at is where they stand, walking or not); the move is framed on the subject
+// (subjectOf). A walking main subject carries the aim (and a following or first-person camera)
+// along with them; a camera end moved off the preset's goes straight there.
+export function poses(cam: StageCamera, who: Subject, m: CameraMove, others: Others = []): Pose[] {
   const n = frameCount(m.seconds);
   const a0 = m.walk?.from ?? who.at;
   const a1 = m.walk?.to ?? a0;
-  const { position: p0, target: aimAt } = start(cam, { ...who, at: a0 }, m);
+  const main = !m.subject || m.subject === "main" || subjectOf(cam, who, m, others) === who;
+  const { position: p0, target: aimAt } = start(cam, main ? { ...who, at: a0 } : subjectOf(cam, who, m, others), m);
   const preset = ends(p0, aimAt, m);
   const e = m.to ? { from: preset.from, to: m.to } : preset;
-  const carry = m.move === "follow" || m.framing === "pov";
+  const carry = main && (m.move === "follow" || m.framing === "pov");
   const out: Pose[] = [];
   for (let i = 0; i < n; i++) {
     const t0 = n === 1 ? 0 : i / (n - 1);
@@ -150,7 +170,7 @@ export function poses(cam: StageCamera, who: Subject, m: CameraMove): Pose[] {
       position = add(e.arc.centre, [off[0] * Math.cos(a) - off[2] * Math.sin(a), off[1], off[0] * Math.sin(a) + off[2] * Math.cos(a)]);
     }
     const at = lerp(a0, a1, t);
-    const moved = sub(at, a0);
+    const moved = main ? sub(at, a0) : ([0, 0, 0] as Vec);
     out.push({ position: carry ? add(position, moved) : position, target: add(aimAt, moved), at });
   }
   return out;
@@ -223,7 +243,7 @@ export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string, 
   const f = m.framing ?? "painting";
   const v = (p?: Vec) => (p ?? []).map((x) => x.toFixed(2));
   const framing = f === "painting" ? [] : f === "free" ? [f, ...v(m.from)] : f === "pov" ? [f, turn] : [f];
-  const more = [...(m.to ? ["to", ...v(m.to)] : []), ...(m.walk ? ["walk", ...v(m.walk.from), ...v(m.walk.to)] : []), ...(m.focus && m.focus !== "deep" ? [m.focus] : []), ...(m.pose ? ["pose", m.pose] : []), ...(m.poseThen ? ["then", m.poseThen] : [])];
+  const more = [...(m.to ? ["to", ...v(m.to)] : []), ...(m.walk ? ["walk", ...v(m.walk.from), ...v(m.walk.to)] : []), ...(m.focus && m.focus !== "deep" ? [m.focus] : []), ...(m.pose ? ["pose", m.pose] : []), ...(m.poseThen ? ["then", m.poseThen] : []), ...(m.subject && m.subject !== "main" ? ["subject", m.subject] : [])];
   return [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh, ...framing, ...more].join("|");
 };
 

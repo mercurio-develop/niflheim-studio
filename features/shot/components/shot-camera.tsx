@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Blocks } from "@/features/scene/components/blocks";
 import { CameraPath } from "@/features/scene/components/camera-path";
-import { SceneAssets } from "@/features/scene/components/scene-assets";
+import { SceneAssets, assetReady } from "@/features/scene/components/scene-assets";
 import { CameraSection } from "@/features/scene/components/camera-section";
 import { CharacterCard } from "@/features/scene/components/character-card";
 import { StageViewer } from "@/features/scene/components/stage-viewer";
@@ -27,10 +27,10 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   const setLive = useCallback((at: Vec | null) => void (live.current = at), []);
   const path = useMemo(() => {
     if (!ready) return null;
-    const ps = poses(cam!, { at: pl!.at!, height: pl!.height, turn: pl!.turn }, move);
+    const ps = poses(cam!, { at: pl!.at!, height: pl!.height, turn: pl!.turn }, move, props.assets);
     const who = { at: pl!.at!, height: pl!.height, turn: pl!.turn };
     return { poses: ps, inside: ps.map((p) => inside(cam!, p.position)), close: tooClose(ps, who, move) };
-  }, [ready, cam, pl, move]);
+  }, [ready, cam, pl, move, props.assets]);
   const pick = (m: CameraMove) => {
     setPlaying(false);
     setMove(m);
@@ -74,6 +74,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
       onMove={pick}
       start={path?.poses[0].position ?? null}
       subject={ready ? { at: pl!.at!, turn: pl!.turn } : null}
+      subjects={[{ id: "main", label: "The character" }, ...props.assets.filter((a) => a.at && assetReady(a)).map((a) => ({ id: a.id, label: a.name })), { id: "none", label: "Nothing (free)" }]}
       poses={ready4.map((p) => ({ id: p.id, label: p.label }))}
       outside={path ? path.inside.filter((x) => !x).length : 0}
       close={path?.close ?? -1}

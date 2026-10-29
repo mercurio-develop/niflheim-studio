@@ -78,7 +78,7 @@ const cast = (p: Project) => {
   const cam = currentFill(p)?.camera;
   const m = p.camera;
   const st = p.stage;
-  const path = cam && m && st?.at ? poses(cam, { at: st.at, height: st.height, turn: st.turn }, m) : null;
+  const path = cam && m && st?.at ? poses(cam, { at: st.at, height: st.height, turn: st.turn }, m, p.sceneAssets ?? []) : null;
   const keys = path && m ? keyFrames(m).map((f) => path[f]) : [];
   return (p.sceneAssets ?? [])
     .filter((a) => a.kind === "character" && a.at && keys.some((k) => sees(k, [a.at![0], a.at![1] + a.height * 0.6, a.at![2]], cam!.fov, 768 / 448)))

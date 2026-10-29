@@ -34,6 +34,7 @@ const Move = z
     focus: z.enum(FOCUS.map((f) => f.id) as [string, ...string[]]).optional(),
     pose: z.string().regex(/^[a-z0-9]{1,16}$/).optional(),
     poseThen: z.string().regex(/^[a-z0-9]{1,16}$/).optional(),
+    subject: z.string().regex(/^(main|none|[a-z0-9]{1,24})$/).optional(),
   })
   .refine((m) => {
     const spec = MOVES.find((x) => x.id === m.move)!;
@@ -64,7 +65,7 @@ export async function renderCamera(id: string) {
   await startJob(id, "stage", async (ctx) => {
     const out = path.join(projectDir(id), "scene", "camera", Date.now().toString(36));
     await mkdir(out, { recursive: true });
-    await writeFile(path.join(out, "poses.json"), JSON.stringify(poses(cam, { at, height, turn }, move).map(c2w)));
+    await writeFile(path.join(out, "poses.json"), JSON.stringify(poses(cam, { at, height, turn }, move, p.sceneAssets ?? []).map(c2w)));
     const dir = path.join(projectDir(id), path.dirname(fill!.mesh));
     await run(PYTHON, ["-I", SCRIPT, "--dir", dir, "--poses", path.join(out, "poses.json"), "--fov", String(cam.fov), "--out", out], { maxBuffer: 1 << 20 });
     if (!(await ctx.alive())) return;
