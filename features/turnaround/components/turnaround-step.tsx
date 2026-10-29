@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Maximize2, Pencil, RefreshCw, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2, Pencil, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
 import { ImageViewer } from "@/components/image-viewer";
@@ -45,6 +45,7 @@ export function TurnaroundSections(props: {
   const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: "designed", hide: [], keep: [], extras: [] });
   const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);
   const [editing, setEditing] = useState<ViewId | null>(null);
+  const [seeing, setSeeing] = useState<ViewId | null>(null); // the view shown full screen
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [starting, startGenerate] = useTransition(); // Generate pressed, the job not on the page yet
@@ -62,6 +63,9 @@ export function TurnaroundSections(props: {
     const s = props.views[v];
     return s ? s.versions[s.current]?.image : undefined;
   };
+  // The painted views in turnaround order; the arrows step round them (past the back is the front).
+  const painted = shown.filter((v) => image(v.id)).map((v) => v.id);
+  const step = (from: ViewId, by: number) => painted[(painted.indexOf(from) + by + painted.length) % painted.length];
   // A Generate paints the views in order and says which one it is on ("Making the side view (3/6)");
   // that view and every one after it still shows its old picture (or nothing) until it lands.
   const painting = running ? Number(job?.detail?.match(/\((\d+)\/\d+\)/)?.[1] ?? 1) - 1 : -1;
@@ -202,7 +206,7 @@ export function TurnaroundSections(props: {
                     {img && !busy && (
                       <button
                         type="button"
-                        onClick={() => setViewing({ src: file(img), label: `${v.label} · ${stack?.versions[stack.current]?.label ?? ""}` })}
+                        onClick={() => setSeeing(v.id)}
                         aria-label={`See the ${v.label.toLowerCase()} view full screen`}
                         className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-md border bg-background/75 text-muted-foreground backdrop-blur transition-colors hover:text-foreground"
                       >
@@ -244,10 +248,22 @@ export function TurnaroundSections(props: {
           const label = VIEWS.find((v) => v.id === editing)!.label;
           return (
             <div key={editing} className="nifl-enter relative flex flex-col gap-3 rounded-xl border bg-card/30 p-4">
-              <Button variant="ghost" size="sm" className="absolute top-3 right-3 z-10" onClick={() => setEditing(null)} aria-label="Close the editor">
-                <X data-icon="inline-start" />
-                Close
-              </Button>
+              <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
+                {painted.length > 1 && (
+                  <>
+                    <Button variant="ghost" size="icon" onClick={() => setEditing(step(editing, -1))} aria-label="Fix the previous view">
+                      <ChevronLeft />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => setEditing(step(editing, 1))} aria-label="Fix the next view">
+                      <ChevronRight />
+                    </Button>
+                  </>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setEditing(null)} aria-label="Close the editor">
+                  <X data-icon="inline-start" />
+                  Close
+                </Button>
+              </div>
               <Editor
                 projectId={props.projectId}
                 target={`view:${editing}`}
@@ -285,6 +301,20 @@ export function TurnaroundSections(props: {
 
         {ASSETS && <AssetsShelf projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={running} onView={(src, label) => setViewing({ src, label })} />}
       {viewing && <ImageViewer src={viewing.src} label={viewing.label} onClose={() => setViewing(null)} />}
+      {seeing && image(seeing) && (() => {
+        const stack = props.views[seeing]!;
+        const label = VIEWS.find((v) => v.id === seeing)!.label;
+        const more = painted.length > 1;
+        return (
+          <ImageViewer
+            src={file(image(seeing)!)}
+            label={`${label} · ${stack.versions[stack.current]?.label ?? ""}`}
+            onClose={() => setSeeing(null)}
+            onPrev={more ? () => setSeeing(step(seeing, -1)) : undefined}
+            onNext={more ? () => setSeeing(step(seeing, 1)) : undefined}
+          />
+        );
+      })()}
     </>
   );
 }

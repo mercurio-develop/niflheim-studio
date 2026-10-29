@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Maximize2, Minimize2, Minus, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Minus, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MIN = 1;
@@ -10,9 +10,17 @@ const MAX = 6;
 
 // See the details: the image as big as the screen allows. Wheel zooms around the pointer,
 // drag pans, double-click toggles fit / 2x. Full screen uses the browser's own (F); Esc closes.
-export function ImageViewer(props: { src: string; label: string; dot?: string; onClose: () => void }) {
+// onPrev / onNext: a set of images (the turnaround's views) stepped through with the side arrows or
+// the arrow keys; each new image opens fitted.
+export function ImageViewer(props: { src: string; label: string; dot?: string; onClose: () => void; onPrev?: () => void; onNext?: () => void }) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [shown, setShown] = useState(props.src);
+  if (shown !== props.src) {
+    setShown(props.src);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }
   const [full, setFull] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -45,6 +53,8 @@ export function ImageViewer(props: { src: string; label: string; dot?: string; o
       if (e.key === "-") setZoom((z) => Math.max(MIN, z / 1.25));
       if (e.key === "0") { setZoom(1); setPan({ x: 0, y: 0 }); }
       if (e.key.toLowerCase() === "f") void toggleFull();
+      if (e.key === "ArrowLeft") props.onPrev?.();
+      if (e.key === "ArrowRight") props.onNext?.();
     };
     const fs = () => setFull(!!document.fullscreenElement);
     window.addEventListener("keydown", key);
@@ -110,8 +120,18 @@ export function ImageViewer(props: { src: string; label: string; dot?: string; o
           className="absolute inset-0 m-auto max-h-full max-w-full select-none object-contain transition-transform duration-150 ease-out"
           style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
         />
+        {props.onPrev && (
+          <button type="button" onClick={props.onPrev} onPointerDown={(e) => e.stopPropagation()} aria-label="Previous" className="absolute top-1/2 left-4 flex size-11 -translate-y-1/2 items-center justify-center rounded-full border bg-background/80 text-muted-foreground backdrop-blur transition-colors hover:text-foreground">
+            <ChevronLeft className="size-5" />
+          </button>
+        )}
+        {props.onNext && (
+          <button type="button" onClick={props.onNext} onPointerDown={(e) => e.stopPropagation()} aria-label="Next" className="absolute top-1/2 right-4 flex size-11 -translate-y-1/2 items-center justify-center rounded-full border bg-background/80 text-muted-foreground backdrop-blur transition-colors hover:text-foreground">
+            <ChevronRight className="size-5" />
+          </button>
+        )}
       </div>
-      <p className="px-4 py-2 text-center text-[11px] text-muted-foreground">Scroll to zoom · drag to move · double-click for 2× · F full screen · Esc close</p>
+      <p className="px-4 py-2 text-center text-[11px] text-muted-foreground">Scroll to zoom · drag to move · double-click for 2× · {props.onPrev || props.onNext ? "← → step · " : ""}F full screen · Esc close</p>
     </div>,
     document.body,
   );
