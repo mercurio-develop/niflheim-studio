@@ -22,6 +22,7 @@ export function HiddenObjects(props: {
   disabled: boolean;
   onKeep: (name: string, on: boolean) => void;
   onUnhide: (name: string) => void;
+  cid?: string;
 }) {
   const [refining, setRefining] = useState<string | null>(null);
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
@@ -56,7 +57,7 @@ export function HiddenObjects(props: {
       </ul>
       <span className="text-[11px] text-muted-foreground">Pink is what gets painted out. Too much or too little? Refine it; nothing pink means it was not found.</span>
       {refining && (
-        <Refine key={refining} projectId={props.projectId} name={refining} src={file(props.character)} mask={props.parts[refining] ? file(props.parts[refining]) : undefined} onDone={() => setRefining(null)} />
+        <Refine key={refining} cid={props.cid} projectId={props.projectId} name={refining} src={file(props.character)} mask={props.parts[refining] ? file(props.parts[refining]) : undefined} onDone={() => setRefining(null)} />
       )}
     </div>
   );
@@ -115,7 +116,7 @@ function Zoomed(props: { character: string; mask: string | null; finding: boolea
   );
 }
 
-function Refine(props: { projectId: string; name: string; src: string; mask?: string; onDone: () => void }) {
+function Refine(props: { projectId: string; name: string; src: string; mask?: string; onDone: () => void; cid?: string }) {
   const canvas = useRef<SelectionHandle>(null);
   const [tool, setTool] = useState<"add" | "erase">("add");
   const [size, setSize] = useState(32);
@@ -129,7 +130,7 @@ function Refine(props: { projectId: string; name: string; src: string; mask?: st
         const form = new FormData();
         form.set("name", props.name);
         form.set("mask", new File([blob], "mask.png", { type: "image/png" }));
-        await savePart(props.projectId, form, "character");
+        await savePart(props.projectId, form, "character", props.cid);
         props.onDone();
       } catch (e) {
         setError((e as Error).message);

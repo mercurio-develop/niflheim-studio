@@ -28,6 +28,7 @@ export function ConceptSection(props: {
   pickedImage: string | null;
   hasVersion: boolean;
   job?: Job;
+  cid?: string; // which character (default c1)
 }) {
   const perImage = props.reference ? 22 : 12; // seconds: a sketch is one Qwen edit per concept
   const [viewing, setViewing] = useState<number | null>(null); // index into sets; null = the current set
@@ -48,7 +49,7 @@ export function ConceptSection(props: {
     setError(null);
     start(async () => {
       try {
-        await generateConcepts(props.projectId, { ...v, reseed: true });
+        await generateConcepts(props.projectId, { ...v, reseed: true }, props.cid);
         setViewing(null);
       } catch (e) {
         setError((e as Error).message);
@@ -81,9 +82,9 @@ export function ConceptSection(props: {
         onReference={(image) => {
           const form = new FormData();
           form.set("image", image);
-          start(() => setReference(props.projectId, form).catch((err: Error) => setError(err.message)));
+          start(() => setReference(props.projectId, form, props.cid).catch((err: Error) => setError(err.message)));
         }}
-        onClearReference={() => start(() => clearReference(props.projectId).catch((err: Error) => setError(err.message)))}
+        onClearReference={() => start(() => clearReference(props.projectId, props.cid).catch((err: Error) => setError(err.message)))}
         onGenerate={generate}
         busy={busy}
         pending={pending && !running}
@@ -115,7 +116,7 @@ export function ConceptSection(props: {
           message={`Painting ${props.count === 1 ? "one" : props.count} ${props.job.detail && props.job.detail !== props.style ? `${label(props.job.detail).toLowerCase()} ` : "new "}concept${props.count === 1 ? "" : "s"}${props.reference ? " from your sketch" : ""}`}
           startedAt={props.job.startedAt}
           expected={10 + props.count * perImage}
-          onCancel={() => cancel(props.projectId, "concepts")}
+          onCancel={() => cancel(props.projectId, "concepts", "character", props.cid)}
         />
       )}
       <div className="relative grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -129,7 +130,7 @@ export function ConceptSection(props: {
               onClick={() =>
                 start(async () => {
                   try {
-                    await pickConcept(props.projectId, i, shown.at ?? undefined);
+                    await pickConcept(props.projectId, i, shown.at ?? undefined, props.cid);
                   } catch (err) {
                     setError((err as Error).message);
                   }

@@ -11,7 +11,7 @@ import { selectVersion } from "../actions/character";
 
 // Every pick and edit, newest first, coloured by what made it. Click one to carry on from it,
 // or turn on Compare and pick two to swipe between them. Collapses to a thin rail.
-export function VersionsSidebar(props: { projectId: string; versions: Version[]; current: number | null; busy: boolean }) {
+export function VersionsSidebar(props: { projectId: string; versions: Version[]; current: number | null; busy: boolean; cid?: string }) {
   const [open, setOpen] = useState(true);
   const [comparing, setComparing] = useState(false);
   const [picked, setPicked] = useState<number[]>([]);
@@ -25,7 +25,7 @@ export function VersionsSidebar(props: { projectId: string; versions: Version[];
   };
 
   const click = (i: number) => {
-    if (!comparing) return start(() => selectVersion(props.projectId, i).catch((e: Error) => setError(e.message)));
+    if (!comparing) return start(() => selectVersion(props.projectId, i, "character", props.cid).catch((e: Error) => setError(e.message)));
     setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i].slice(-2)));
   };
 
