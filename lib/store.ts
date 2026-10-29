@@ -71,6 +71,11 @@ export type StageFill = { mesh: string; cameras: string; views: string[]; holes:
 export type Block = { id: string; kind: "box" | "cylinder" | "ramp"; at: [number, number, number]; size: [number, number, number]; turn: number; label: string };
 // The character in another pose: its front painted from the turnaround's front, the other three
 // views from that, and each cut out for the stage card. A shot picks a pose (and one to switch to).
+// One picture of the character's Ingredients reference sheet: a body view in a relaxed pose, a face
+// close-up or a thing they wear or carry on its own. Each has its own prompt, so it can be re-rolled
+// alone or with the prompt edited; image is the painted picture, cutout the body or item cut out.
+export type SheetCell = { id: string; kind: "view" | "face" | "item"; label: string; prompt: string; image?: string; cutout?: string };
+export type CharacterSheet = { cells: SheetCell[]; drawn?: string; at?: string };
 export type CharacterPose = { id: string; label: string; prompt: string; views: Partial<Record<AssetView, string>>; cutouts: Partial<Record<AssetView, string>> };
 
 // An object made for the scene, from a prompt (its concept painted first), an uploaded picture or
@@ -153,7 +158,7 @@ export type Autopilot = { plan: AutopilotShot[]; join: Join; steps: AutopilotSte
 // A project holds several characters. The first ("c1") is the top-level character, turnaround,
 // assets, poses and mesh, as projects always had; the others ("c2", "c3", ...) are cast members
 // with the same fields, so old projects load unchanged.
-export type CharacterData = Pick<Project, "character" | "turnaround" | "assets" | "poses" | "mesh">;
+export type CharacterData = Pick<Project, "character" | "turnaround" | "assets" | "poses" | "mesh" | "sheet">;
 export type CastMember = { id: string; name: string } & CharacterData;
 export const CID = /^c[0-9]{1,3}$/;
 
@@ -205,6 +210,7 @@ export type Project = {
   assets?: Asset[]; // objects hidden from the turnaround, kept to be made on their own later
   poses?: CharacterPose[]; // the character in other poses (running, angry), for shots to swap in
   mesh?: Mesh; // the character in 3D, made from the turnaround views
+  sheet?: CharacterSheet; // the pictures of the Ingredients reference sheet (features/turnaround/actions/sheet.ts)
   // character .. mesh above are the first character ("c1"); every other one lives in cast.
   characterName?: string; // c1's own name once renamed; otherwise read from its prompt
   cast?: CastMember[];
