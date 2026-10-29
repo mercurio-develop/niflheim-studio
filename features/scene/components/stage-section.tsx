@@ -11,9 +11,9 @@ import { cn } from "@/lib/utils";
 import { cancelSet, cancelStage, cutOutCharacter, placeCharacter, rebuildStage, refillStage, saveBlocks } from "../actions/scene";
 import { placeAsset } from "../actions/assets";
 import { AssetsPanel } from "./assets-panel";
-import { Blocks } from "./blocks";
-import { FloorGizmo, SceneAssets, assetReady } from "./scene-assets";
-import { CharacterCard } from "./character-card";
+import { assetReady } from "./scene-assets";
+import { StageScene } from "./stage-scene";
+import { urlsOf } from "@/lib/stage-context";
 import { chip } from "./chip";
 import { StageViewer, type StageLook, type StagePoint } from "./stage-viewer";
 
@@ -74,7 +74,7 @@ export function StageSection(props: {
   const assetsBusy = Object.entries(props.assetJobs).some(([k, j]) => k.startsWith("scene-asset:") && j.status === "running");
   // One thing is picked at a time (the character, an asset or a block); it carries the gizmo.
   const [pickedCharacter, setPickedCharacter] = useState(false);
-  const pickCharacter = () => (setPickedCharacter(!pickedCharacter), setPickedAsset(null), setPicked(null));
+  const pickCharacter = () => (setPickedCharacter(true), setPickedAsset(null), setPicked(null));
   const pickAsset = (id: string | null) => (setPickedAsset(id), setPickedCharacter(false), setPicked(null));
   const pickBlock = (id: string | null) => (setPicked(id), setPickedCharacter(false), setPickedAsset(null));
 
@@ -193,10 +193,19 @@ export function StageSection(props: {
             onFloor={placing && floor ? put : placingAsset && floor ? putAsset : ready ? setAt : undefined}
             className="absolute inset-0"
           >
-            {floor && <Blocks blocks={blocks} picked={picked} onPick={pickBlock} onMove={(id, p) => change(id, { at: p })} />}
-            {floor && <SceneAssets projectId={props.projectId} assets={assets} picked={pickedAsset} onPick={pickAsset} onMove={(id, p, t) => spot(id, { at: p, turn: t })} />}
-            {ready && at && <CharacterCard cutouts={Object.fromEntries(Object.entries(props.placement!.cutouts).map(([v, f]) => [v, file(f!)]))} at={at} height={height} turn={turn} picked={pickedCharacter} onPick={pickCharacter} />}
-            {ready && at && pickedCharacter && <FloorGizmo at={at} turn={turn} onMove={(p, t) => (setAt(p), setTurn(t))} />}
+            {floor && (
+              <StageScene
+                projectId={props.projectId}
+                blocks={blocks}
+                assets={assets}
+                main={ready && at ? { cutouts: urlsOf(props.projectId, props.placement!.cutouts), at, height, turn } : null}
+                picked={pickedCharacter ? { kind: "main", id: "main" } : pickedAsset ? { kind: "asset", id: pickedAsset } : picked ? { kind: "block", id: picked } : null}
+                onPick={(x) => (x?.kind === "main" ? pickCharacter() : x?.kind === "asset" ? pickAsset(x.id) : pickBlock(x?.kind === "block" ? x.id : null))}
+                onMoveMain={(p, t) => (setAt(p), setTurn(t))}
+                onMoveAsset={(id, p, t) => spot(id, { at: p, turn: t })}
+                onMoveBlock={(id, p) => change(id, { at: p })}
+              />
+            )}
           </StageViewer>
         ) : s?.image ? (
           <FadeImage src={file(s.image)} alt="The chosen painting" className={cn("absolute inset-0 size-full object-cover", building && "opacity-60")} />
