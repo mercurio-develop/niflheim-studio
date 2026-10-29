@@ -22,14 +22,33 @@ export const VIEWS: { id: ViewId; label: string; optional?: boolean; prompt: str
 // "Model sheet" in a view prompt made Qwen draw callout lines and labels, so it is said here never to.
 const KEEP = "Same character, same face, same outfit, same colours, same proportions, same plain light grey background. No text, labels, arrows or lines.";
 
+// Four legs: an animal is painted standing on all four, its body level, never upright on two legs
+// and never in a T-pose; every view says so, or Qwen stands it up like a person.
+export const fourLegs = (o?: Pick<TurnaroundOptions, "body">) => o?.body === "animal";
+// The view a turnaround paints first, from the character; every other view is turned from it. An
+// animal starts from the side: asked head-on, Qwen kept a cat upright or sat it down, while a side
+// profile on four legs came out right the first time (2026-10-29, data/proof/four-legs).
+export const firstView = (o?: Pick<TurnaroundOptions, "body">): ViewId => (fourLegs(o) ? "side" : "front");
+const FOUR_LEGS = "This is an animal that walks on four legs: it stands on all four legs with all four paws on the ground, the body level, never upright on two legs and never in a T-pose.";
+const FOUR_VIEWS: Partial<Record<ViewId, string>> = {
+  front: "Show it head on: its face and chest point directly at the viewer, the two front legs side by side, the whole animal in frame, the camera at its chest height.",
+  threequarter: "Turn the animal 45 degrees for a full-body three-quarter view: we see its front and one side at an angle, all four legs on the ground.",
+  side: "Show the animal from the side: a full-body left side profile with all four legs and the tail.",
+  back: "Turn the animal around: a full-body back view from behind, with its hind legs and tail.",
+};
+const viewWords = (id: ViewId, o?: Pick<TurnaroundOptions, "body">) => (fourLegs(o) && FOUR_VIEWS[id]) || VIEWS.find((x) => x.id === id)!.prompt;
+
 const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
 // The front's prompt. A pose change has to lead the prompt or Qwen keeps the original pose;
 // "for a 3D model sheet" gave the straightest T in tests (2026-10-27). "Keep the character's own
 // pose" kept the concept's slight turn too, so the front came out a copy of the concept; asking
 // for face, chest, hips and feet square to the camera makes a real front (2026-10-27).
+// For an animal it paints the side instead (firstView), on all four legs.
 export function frontPrompt(o: TurnaroundOptions): string {
-  const hide = o.hide.length ? `Remove ${list(o.hide.map((h) => `the ${h}`))} completely; the hands are empty and nothing is held or carried.` : "";
+  const legs = fourLegs(o);
+  const hide = o.hide.length ? `Remove ${list(o.hide.map((h) => `the ${h}`))} completely; ${legs ? "nothing is worn or carried" : "the hands are empty and nothing is held or carried"}.` : "";
+  if (legs) return ["Change the pose: redraw this animal as a real animal standing on all four legs, body horizontal, all four paws on the ground, seen from the side in a full left profile, head and tail in frame, never upright on its hind legs.", hide, "Add nothing that is not in this picture.", KEEP].filter(Boolean).join(" ");
   const pose =
     o.pose === "tpose"
       ? "Make this character do a T-pose for a 3D model sheet: arms fully extended sideways in a straight horizontal line, forming a T shape with the body, legs together and straight."
@@ -41,6 +60,7 @@ export function frontPrompt(o: TurnaroundOptions): string {
 // Every other view: made from the front, so it inherits the pose and the missing objects.
 // From the side a T-pose's arms point at the camera, and Qwen drops them unless told not to.
 export function viewPrompt(id: ViewId, o?: TurnaroundOptions): string {
+  if (fourLegs(o)) return `${viewWords(id, o)} ${FOUR_LEGS} Keep the same standing stance and markings; only the angle changes, it does not sit. ${KEEP}`;
   const v = VIEWS.find((x) => x.id === id)!;
   const tpose =
     o?.pose === "tpose"
@@ -49,6 +69,20 @@ export function viewPrompt(id: ViewId, o?: TurnaroundOptions): string {
         : "Keep the T-pose: both arms stay stretched straight out sideways at shoulder height."
       : "Keep the same stance and arm positions; only the angle changes.";
   return `${v.prompt} ${tpose} Keep the same items as in this image. ${KEEP}`;
+}
+
+// The sheet's pictures (the Ingredients reference sheet, features/turnaround/actions/sheet.ts): a
+// relaxed pose, never the T-pose, then the same pose from every side; an animal stays on all four.
+const SHEET_KEEP = "Same character: the same face, body, clothes, colours and art style. Plain light grey background, nothing else in the image, no text.";
+export function relaxedPrompt(o?: Pick<TurnaroundOptions, "body">): string {
+  const pose = fourLegs(o)
+    ? `${FOUR_LEGS} Make it stand relaxed and natural, its weight even on all four paws, head up.`
+    : "Make this character stand in a relaxed, natural pose: arms down at their sides, hands relaxed, weight on one leg, not a T-pose.";
+  return `${pose} Front view, full body, facing the viewer, the whole figure in frame. ${SHEET_KEEP}`;
+}
+export function turnPrompt(from: string, o?: Pick<TurnaroundOptions, "body">): string {
+  const keep = fourLegs(o) ? `${FOUR_LEGS} Keep its legs as they are` : "Keep the arms and legs as they are";
+  return `Show this same character in exactly the same relaxed pose ${from}. ${keep}; only the angle changes. Full body in frame. ${SHEET_KEEP}`;
 }
 
 // The views a Generate makes: the four main ones plus the chosen extras.

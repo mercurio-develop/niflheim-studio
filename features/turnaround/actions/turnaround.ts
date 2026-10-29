@@ -8,7 +8,7 @@ import { ASSETS } from "../flags";
 import { paintViews } from "@/lib/asset-3d";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
-import { characterImage, frontPrompt, viewImage, viewPrompt, VIEWS, viewsFor } from "@/lib/progress";
+import { characterImage, firstView, frontPrompt, viewImage, viewPrompt, VIEWS, viewsFor } from "@/lib/progress";
 import { CID, charDir, charKey, charOf, getProject, projectDir, updateProject, type Edit, type TurnaroundOptions, type ViewId } from "@/lib/store";
 
 // Which character: c1 (the top-level fields) unless another is named.
@@ -20,6 +20,7 @@ const Options = z.object({
   hide: z.array(Name).max(12),
   keep: z.array(Name).max(12).default([]),
   extras: z.array(z.enum(["top", "bottom"])).max(2),
+  body: z.enum(["person", "animal", "creature"]).default("person"),
 });
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const rel = (id: string, f: string) => path.relative(projectDir(id), f);
@@ -160,12 +161,13 @@ async function removeObject(id: string, from: string, mask: string, strokes: Box
   return rel(id, image);
 }
 
-const describe = (o: TurnaroundOptions) => [o.pose === "tpose" ? "T-pose" : "as designed", ...o.hide.map((h) => `no ${h}`)].join(", ");
+const describe = (o: TurnaroundOptions) => [o.body === "animal" ? "on four legs" : o.pose === "tpose" ? "T-pose" : "as designed", ...o.hide.map((h) => `no ${h}`)].join(", ");
 
 // Generate: each hidden object is found, kept (if asked) and painted out of the character with its
 // mask; then the front from that clean character (pose, prompt), then every view from that front.
 export async function generateTurnaround(id: string, rawOptions: z.input<typeof Options>, rawCid?: unknown) {
   const options = Options.parse(rawOptions);
+  if (options.body === "animal") options.pose = "designed"; // on four legs: never a T-pose
   const cid = Cid.parse(rawCid) ?? "c1";
   options.keep = ASSETS ? options.keep.filter((k) => options.hide.includes(k)) : [];
   const p = await getProject(id);
@@ -199,12 +201,14 @@ export async function generateTurnaround(id: string, rawOptions: z.input<typeof 
         const t = charOf(q, cid).turnaround;
         if (t) t.clean = clean;
       });
-      await ctx.progress(`Making the front view (1/${views.length})`);
-      const front = await makeView(id, "front", clean, frontPrompt(options), ctx, `Front · ${describe(options)}`, cid);
-      if (!front) return;
-      for (const [i, v] of views.slice(1).entries()) {
+      // The first view comes from the character (the front; an animal's side), the rest from it.
+      const first = firstView(options);
+      await ctx.progress(`Making the ${label(first).toLowerCase()} view (1/${views.length})`);
+      const anchor = await makeView(id, first, clean, frontPrompt(options), ctx, `${label(first)} · ${describe(options)}`, cid);
+      if (!anchor) return;
+      for (const [i, v] of views.filter((x) => x.id !== first).entries()) {
         await ctx.progress(`Making the ${label(v.id).toLowerCase()} view (${i + 2}/${views.length})`);
-        if (!(await makeView(id, v.id, front, viewPrompt(v.id, options), ctx, `${label(v.id)} · from the front`, cid))) return;
+        if (!(await makeView(id, v.id, anchor, viewPrompt(v.id, options), ctx, `${label(v.id)} · from the ${label(first).toLowerCase()}`, cid))) return;
       }
     },
     `Making the front view (1/${views.length})`,
@@ -212,7 +216,8 @@ export async function generateTurnaround(id: string, rawOptions: z.input<typeof 
   done(id);
 }
 
-// Again for one view: the front again from the character, any other view from the current front.
+// Again for one view: the first view (the front; an animal's side) again from the character, any
+// other view from the current first view.
 export async function generateView(id: string, rawView: string, rawCid?: unknown) {
   const view = View.parse(rawView);
   const cid = Cid.parse(rawCid) ?? "c1";
@@ -221,13 +226,14 @@ export async function generateView(id: string, rawView: string, rawCid?: unknown
   if (!p || !source) throw new Error("Finish the character first.");
   const t = charOf(p, cid).turnaround;
   if (!t) throw new Error("Generate the turnaround first.");
-  const front = viewImage(p, "front", cid);
-  if (view !== "front" && !front) throw new Error("Make the front view first.");
+  const first = firstView(t.options);
+  const anchor = viewImage(p, first, cid);
+  if (view !== first && !anchor) throw new Error(`Make the ${label(first).toLowerCase()} view first.`);
   await startJob(
     id,
     charKey(cid, `view:${view}`),
     (ctx) =>
-      makeView(id, view, view === "front" ? (t.clean ?? source) : front!, view === "front" ? frontPrompt(t.options) : viewPrompt(view, t.options), ctx, `${label(view)} · again`, cid).then(() => {}),
+      makeView(id, view, view === first ? (t.clean ?? source) : anchor!, view === first ? frontPrompt(t.options) : viewPrompt(view, t.options), ctx, `${label(view)} · again`, cid).then(() => {}),
     `Making the ${label(view).toLowerCase()} view again`,
   );
   done(id);

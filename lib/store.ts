@@ -24,7 +24,10 @@ export type Version = {
 export type Edit = { kind: "change" | "add" | "remove"; what: string; change?: string; mask?: string; box?: { x: number; y: number; width: number; height: number } };
 
 // hide: left out of every view; keep: the hidden ones also kept as assets.
-export type TurnaroundOptions = { pose: "designed" | "tpose"; hide: string[]; keep: string[]; extras: ("top" | "bottom")[] };
+// body: person (two legs), animal (four legs: never upright, never a T-pose) or creature; projects
+// from before have none and are read as a person.
+export type Body = "person" | "animal" | "creature";
+export type TurnaroundOptions = { pose: "designed" | "tpose"; hide: string[]; keep: string[]; extras: ("top" | "bottom")[]; body?: Body };
 export type AssetView = "front" | "threequarter" | "side" | "back";
 export type ViewStack = { versions: Version[]; current: number };
 // A hidden object: its cutout and mask from the character it came off, and its own views once made.
@@ -280,6 +283,8 @@ function normalizeChar(d: CharacterData) {
   if (t) {
     t.options ??= { pose: "designed", hide: [], keep: [], extras: [] };
     t.options.keep ??= [...t.options.hide];
+    t.options.body ??= "person";
+    if (t.options.body === "animal") t.options.pose = "designed"; // no T-pose on four legs
     // Turnarounds made before views had versions stored one image per view.
     for (const [k, v] of Object.entries(t.views)) {
       if (typeof v === "string") t.views[k] = { versions: [{ image: v, label: k, parts: {} }], current: 0 };

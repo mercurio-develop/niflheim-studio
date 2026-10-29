@@ -26,6 +26,7 @@ import { ReplicateBar } from "./replicate-bar";
 // Things a character holds or carries come first among the parts you can hide.
 const HELD = /(sword|dagger|axe|spear|staff|wand|bow|shield|gun|lantern|book|umbrella|bag|satchel|backpack|pouch|cape|cloak|helmet|hat|hood|banner|flag)$/;
 const PER_VIEW = 25; // seconds for one Qwen edit, warm
+const BODIES = [["person", "Person · two legs"], ["animal", "Animal · four legs"], ["creature", "Creature"]] as const;
 const EDIT_JOBS = ["mask", "swap", "tags", "brush"] as const; // the editor's jobs, per view: "view:side:brush"
 
 // Sections 3-5 of the Character step: the turnaround (set up, views, fixing a view), the 3D model and
@@ -106,16 +107,25 @@ export function TurnaroundSections(props: {
         tone="bg-tone-lilac"
         title="Turnaround"
         line={`Every side of ${props.characterLabel}, painted fresh from it, so later shots and the 3D model see one character.`}
-        summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted${props.options ? ` · ${props.options.pose === "tpose" ? "T-pose" : "as designed"}` : ""}${props.options?.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}`}
+        summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted${props.options ? ` · ${props.options.body === "animal" ? "on four legs" : props.options.pose === "tpose" ? "T-pose" : "as designed"}` : ""}${props.options?.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}`}
         open={none || running || !props.fresh}
         className="nifl-enter"
         style={{ "--i": 3 } as React.CSSProperties}
       >
-        <More label="Set up" summary={`${options.pose === "tpose" ? "T-pose" : "As designed"}${options.hide.length ? ` · without ${options.hide.join(", ")}` : ""}${options.extras.length ? ` · + ${options.extras.join(", ")}` : ""}`} open={none}>
+        <More label="Set up" summary={`${options.body === "animal" ? "Animal · four legs" : options.body === "creature" ? "Creature" : "Person"} · ${options.pose === "tpose" ? "T-pose" : "as designed"}${options.hide.length ? ` · without ${options.hide.join(", ")}` : ""}${options.extras.length ? ` · + ${options.extras.join(", ")}` : ""}`} open={none}>
           <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
+            <span className="text-xs text-muted-foreground">Body</span>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Body">
+              {BODIES.map(([b, text]) => (
+                <button key={b} type="button" role="radio" aria-checked={(options.body ?? "person") === b} onClick={() => setOptions((o) => ({ ...o, body: b, pose: b === "animal" ? "designed" : o.pose }))} className={chip((options.body ?? "person") === b)}>
+                  {text}
+                </button>
+              ))}
+            </div>
+
             <span className="text-xs text-muted-foreground">Pose</span>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Pose">
-              {(["designed", "tpose"] as const).map((p) => (
+              {(options.body === "animal" ? (["designed"] as const) : (["designed", "tpose"] as const)).map((p) => (
                 <button key={p} type="button" role="radio" aria-checked={options.pose === p} onClick={() => setOptions((o) => ({ ...o, pose: p }))} className={chip(options.pose === p)}>
                   {p === "designed" ? "As designed" : "T-pose"}
                 </button>
