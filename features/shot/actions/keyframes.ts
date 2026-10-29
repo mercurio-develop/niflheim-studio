@@ -82,17 +82,38 @@ export async function saveKeys(id: string, form: FormData, rawNote: unknown, raw
   done(id);
 }
 
+// Later keys see the painted first key as Qwen's picture 2, so every key keeps the same person,
+// clothes and light (without it each key invented its own character and the take swapped people).
+const SAME_AS_FIRST = "Picture 2 is the first frame of this same shot: the character must be the same person as in picture 2 (face, hair, clothes, build and colours) under the same light. Keep the layout of picture 1.";
+const withFirst = (g: Record<string, { class_type: string; inputs: Record<string, unknown> }>) => {
+  g["30"] = { class_type: "LoadImage", inputs: { image: "" } };
+  g["31"] = { class_type: "FluxKontextImageScale", inputs: { image: ["30", 0] } };
+  g["17"].inputs.image2 = ["31", 0];
+  g["18"].inputs.image2 = ["31", 0];
+};
+
 // Repaint the given keys with 01_edit (Qwen-Image-Edit 2511 + Lightning, about 30 s each) as one
-// job; every key uses the saved prompt and seed, a re-rolled one a new seed.
+// job; every key uses the saved prompt and seed, a re-rolled one a new seed. Key 1 goes first and
+// is the reference for the rest.
 async function refine(id: string, which: number[], reroll = false) {
   const p = await load(id);
   const k = p.keyframes;
   if (!k) throw new Error("Make the keyframes first.");
   await startJob(id, "keyframes", async (ctx) => {
+    let first = !which.includes(0) && k.keys[0] ? abs(id, k.keys[0]) : null;
     for (const [n, i] of which.entries()) {
       await ctx.progress(`Painting key ${n + 1} of ${which.length}`);
       const outDir = path.join(path.dirname(abs(id, k.raw[i])), `key-${String(k.frames[i]).padStart(3, "0")}-${Date.now().toString(36)}`);
-      let [image] = await runWorkflow({ workflow: "01_edit.api.json", onSubmit: ctx.track, set: [["17", "prompt", k.prompt], ["22", "seed", reroll ? seed() : k.seed]], images: [["1", abs(id, k.raw[i])]], output: "28", outDir });
+      const ref = i > 0 ? first : null;
+      let [image] = await runWorkflow({
+        workflow: "01_edit.api.json",
+        onSubmit: ctx.track,
+        edit: ref ? withFirst : undefined,
+        set: [["17", "prompt", ref ? `${k.prompt} ${SAME_AS_FIRST}` : k.prompt], ["22", "seed", reroll ? seed() : k.seed]],
+        images: [["1", abs(id, k.raw[i])], ...(ref ? [["30", ref] as [string, string]] : [])],
+        output: "28",
+        outDir,
+      });
       if (!(await ctx.alive())) return;
       if (k.detail) {
         // Faces and hands: SAM3 finds them by name, Z-Image repaints each crop lightly (faces 0.22,
@@ -112,6 +133,7 @@ async function refine(id: string, which: number[], reroll = false) {
       await updateProject(id, (q) => {
         if (q.keyframes?.raw[i] === k.raw[i]) q.keyframes.keys[i] = rel(id, image);
       });
+      if (i === 0) first = image;
     }
   }, "Painting the keyframes");
 }

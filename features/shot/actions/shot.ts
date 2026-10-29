@@ -6,13 +6,13 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { focusPhrase, frameCount, keyFrames, poses, sees } from "@/lib/camera";
+import { focusPhrase, frameCount, keyFrames, momentsOf, poses, sees } from "@/lib/camera";
 import { currentFill } from "@/lib/progress";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob } from "@/lib/jobs";
 import { getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
 import { styleById } from "@/lib/styles";
-import { DEFAULT_NEGATIVE, middleImageNode, shapeShot } from "../graph";
+import { DEFAULT_NEGATIVE, END_NEW_POSE_STRENGTH, END_STRENGTH, middleImageNode, shapeShot } from "../graph";
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const run = promisify(execFile);
@@ -118,6 +118,8 @@ export async function renderTake(id: string, raw: unknown) {
   if (k.frames.at(-1) !== length - 1) throw new Error("The camera move changed since the keyframes were made: make them again.");
   const keys = k.keys as string[];
   const prompt = shotPrompt(p, beats);
+  const ms = momentsOf(p.camera);
+  const endStrength = ms.length > 1 && (ms[0].marks.main?.pose ?? "") !== (ms.at(-1)!.marks.main?.pose ?? "") ? END_NEW_POSE_STRENGTH : END_STRENGTH;
   await updateProject(id, (q) => void (q.shot = { takes: [], ...q.shot, action, beats, negative }));
   await startJob(id, "shot", async (ctx) => {
     const made: { index: number; score?: TakeScore }[] = [];
@@ -127,7 +129,7 @@ export async function renderTake(id: string, raw: unknown) {
       const [video] = await runWorkflow({
         workflow: "03_shot.api.json",
         onSubmit: ctx.track,
-        edit: (g) => shapeShot(g, k.frames, length),
+        edit: (g) => shapeShot(g, k.frames, length, endStrength),
         set: [["20", "text", prompt], ["21", "text", negative], ["40", "noise_seed", seed]],
         images: [["1", abs(id, keys[0])], ["2", abs(id, keys.at(-1)!)], ...keys.slice(1, -1).map((f, i) => [middleImageNode(i), abs(id, f)] as [string, string])],
         output: "55",
