@@ -25,8 +25,13 @@ export const ASSET_VIEWS: { id: AssetView; from: string }[] = [
 ];
 
 // The prompt for one view: the first is the object alone from its picture (whole: complete it,
-// including what the picture hides), the others turn that front.
-export function assetViewPrompt(name: string, v: (typeof ASSET_VIEWS)[number], first: boolean, whole: boolean) {
+// including what the picture hides), the others turn that front. A character (a cast member) is
+// shown whole, standing, like the main character's turnaround.
+export function assetViewPrompt(name: string, v: (typeof ASSET_VIEWS)[number], first: boolean, whole: boolean, character = false) {
+  if (character)
+    return first
+      ? `Show only this character, ${name}, on their own: full body from head to feet, standing in a relaxed natural pose, front view, facing the viewer, centred, plain light grey background, nothing else in the image. Keep the face, body, clothes, colours and art style.`
+      : `Show this same character ${v.from}, full body from head to feet, in the same pose, centred, plain light grey background, nothing else in the image. Keep the face, body, clothes, colours and art style.`;
   return first
     ? `Show only the ${name}${whole ? ", complete and whole, including the parts hidden in this picture," : " from this picture"} on its own, as a clean product view from the front, centred, nothing else in the image, plain light grey background.`
     : `Show this same ${name} ${v.from}, as a clean product view, centred, nothing else in the image, plain light grey background.`;
@@ -34,14 +39,14 @@ export function assetViewPrompt(name: string, v: (typeof ASSET_VIEWS)[number], f
 
 // Paint the four views from `image` (project-relative); `onView` gets each as it lands. false when
 // cancelled.
-export async function paintViews(id: string, name: string, image: string, whole: boolean, dir: string, ctx: JobCtx, onView: (v: AssetView, file: string) => Promise<unknown>) {
+export async function paintViews(id: string, name: string, image: string, whole: boolean, dir: string, ctx: JobCtx, onView: (v: AssetView, file: string) => Promise<unknown>, character = false) {
   let front: string | null = null;
   for (const v of ASSET_VIEWS) {
     await ctx.progress(`Painting the ${name} ${v.from}`);
     const [out] = await runWorkflow({
       workflow: "01_edit.api.json",
       onSubmit: ctx.track,
-      set: [["17", "prompt", assetViewPrompt(name, v, !front, whole)], ["22", "seed", seed()]],
+      set: [["17", "prompt", assetViewPrompt(name, v, !front, whole, character)], ["22", "seed", seed()]],
       images: [["1", front ?? abs(id, image)]],
       output: "28",
       outDir: abs(id, `${dir}/${v.id}-${Date.now().toString(36)}`),

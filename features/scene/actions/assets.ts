@@ -24,11 +24,16 @@ const jobKey = (aid: string) => `scene-asset:${aid}`;
 
 const Name = z.string().trim().min(2).max(40);
 const Aid = z.string().regex(/^[a-z0-9]{1,16}$/);
+const Kind = z.enum(["object", "character"]).default("object");
 const Source = z.discriminatedUnion("from", [
-  z.object({ from: z.literal("prompt"), name: Name, prompt: z.string().trim().min(3).max(300) }),
-  z.object({ from: z.literal("upload"), name: Name }),
-  z.object({ from: z.literal("character"), name: Name }),
+  z.object({ from: z.literal("prompt"), name: Name, prompt: z.string().trim().min(3).max(300), kind: Kind }),
+  z.object({ from: z.literal("upload"), name: Name, kind: Kind }),
+  z.object({ from: z.literal("character"), name: Name, kind: Kind }),
 ]);
+
+// A cast member, painted like the main character's concepts: whole figure, front view, on grey.
+const castPrompt = (prompt: string, style: string) =>
+  `Full-body character ${mediumOf(style)} of ${prompt}. Standing, natural relaxed pose, front view, whole figure in frame, a face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
 
 // A single object, whole and centred on grey, the way the views and the 3D model want it.
 const conceptPrompt = (prompt: string, style: string) =>
@@ -36,6 +41,8 @@ const conceptPrompt = (prompt: string, style: string) =>
 
 // The object from its picture to a coloured 3D model: a concept first when it was described, its
 // four views (kept from the character's asset when it has them), then the model. About 3 min.
+// A character (a cast member) is painted like the main one and its views cut out instead, about
+// 2.5 min: a card on the stage that turns with the camera.
 async function build(id: string, aid: string, ctx: JobCtx) {
   const p = await getProject(id);
   const a = p?.sceneAssets?.find((x) => x.id === aid);
@@ -52,7 +59,7 @@ async function build(id: string, aid: string, ctx: JobCtx) {
     const [file] = await runWorkflow({
       workflow: "01_concept.api.json",
       onSubmit: ctx.track,
-      set: [["5", "text", conceptPrompt(a.prompt, p.set?.style || p.character.style)], ["8", "seed", Math.floor(Math.random() * 2 ** 31)], ["7", "batch_size", 1]],
+      set: [["5", "text", (a.kind === "character" ? castPrompt : conceptPrompt)(a.prompt, p.set?.style || p.character.style)], ["8", "seed", Math.floor(Math.random() * 2 ** 31)], ["7", "batch_size", 1]],
       output: "10",
       outDir: abs(id, `${dir}/concept`),
     });
@@ -62,10 +69,22 @@ async function build(id: string, aid: string, ctx: JobCtx) {
   }
   if (!image) throw new Error("The asset has no picture to work from.");
   const views = { ...a.views };
+  const cast = a.kind === "character";
   if (!views.front || !views.side || !views.back) {
     const whole = a.from === "character";
-    const ok = await paintViews(id, a.name, image, whole, `${dir}/views`, ctx, (v, f) => ((views[v] = f), set({ views: { ...views } })));
+    const ok = await paintViews(id, a.name, image, whole, `${dir}/views`, ctx, (v, f) => ((views[v] = f), set({ views: { ...views } })), cast);
     if (!ok) return;
+  }
+  if (cast) {
+    const cutouts: SceneAsset["cutouts"] = {};
+    for (const [v, f] of Object.entries(views) as [keyof typeof views, string][]) {
+      await ctx.progress(`Cutting out the ${a.name} (${v === "threequarter" ? "three-quarter" : v})`);
+      const [file] = await runWorkflow({ onSubmit: ctx.track, workflow: "02_cutout.api.json", images: [["1", abs(id, f)]], output: "6", outDir: abs(id, `${dir}/cutouts/${v}`) });
+      if (!(await ctx.alive())) return;
+      cutouts[v] = rel(id, file);
+      await set({ cutouts: { ...cutouts } });
+    }
+    return;
   }
   await ctx.progress(`Building the ${a.name} in 3D`);
   const made = await meshFromViews(id, { ...views, front: views.front!, side: views.side!, back: views.back! }, `${dir}/mesh`, ctx);
@@ -76,12 +95,12 @@ async function build(id: string, aid: string, ctx: JobCtx) {
 // A new asset for the scene: described, uploaded, or one of the character's assets (by name). Its
 // model is made right away; it stands on the stage once placed.
 export async function makeAsset(id: string, form: FormData) {
-  const src = Source.parse({ from: form.get("from"), name: form.get("name"), prompt: form.get("prompt") ?? undefined });
+  const src = Source.parse({ from: form.get("from"), name: form.get("name"), prompt: form.get("prompt") ?? undefined, kind: form.get("kind") ?? undefined });
   const p = await getProject(id);
   if (!p) throw new Error("Project not found.");
   if ((p.sceneAssets?.length ?? 0) >= 12) throw new Error("A scene holds up to 12 assets.");
   const aid = stamp();
-  const asset: SceneAsset = { id: aid, name: src.name, from: src.from, height: 1, turn: 0 };
+  const asset: SceneAsset = { id: aid, name: src.name, kind: src.kind, from: src.from, height: src.kind === "character" ? 1.7 : 1, turn: 0 };
   if (src.from === "prompt") asset.prompt = src.prompt;
   if (src.from === "upload") {
     const file = form.get("image");

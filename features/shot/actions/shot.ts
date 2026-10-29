@@ -59,6 +59,7 @@ function shotPrompt(p: Project, b: Beats) {
   const lines = [
     `${FRAMING_WORDS[m?.framing ?? "painting"]}${p.set?.prompt ? ` of ${clean(p.set.prompt)}` : ""}.`,
     pov ? `Seen through the eyes of ${clean(p.character.prompt)}, who ${clean(b.start)}.` : `${capital(clean(p.character.prompt)!)} ${clean(b.start)}.`,
+    cast(p) ? `Also in the scene: ${cast(p)}.` : "",
     m?.walk ? "They walk steadily across the ground." : "",
     poseOf(p, m?.pose) ? `They ${poseOf(p, m?.pose)}.` : "",
     m?.poseThen ? `Halfway through, they ${poseOf(p, m.poseThen) ?? "return to how they stood at first"}.` : "",
@@ -70,6 +71,12 @@ function shotPrompt(p: Project, b: Beats) {
   ];
   return lines.filter(Boolean).join(" ");
 }
+// The cast members standing on the stage, by name and description.
+const cast = (p: Project) =>
+  (p.sceneAssets ?? [])
+    .filter((a) => a.kind === "character" && a.at)
+    .map((a) => (a.prompt ? `${a.name}, ${a.prompt}` : a.name))
+    .join("; ");
 const poseOf = (p: Project, id?: string) => p.poses?.find((x) => x.id === id)?.prompt;
 const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 

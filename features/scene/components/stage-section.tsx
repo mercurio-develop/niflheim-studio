@@ -12,7 +12,7 @@ import { cancelSet, cancelStage, cutOutCharacter, placeCharacter, rebuildStage, 
 import { placeAsset } from "../actions/assets";
 import { AssetsPanel } from "./assets-panel";
 import { Blocks } from "./blocks";
-import { SceneAssets } from "./scene-assets";
+import { SceneAssets, assetReady } from "./scene-assets";
 import { CharacterCard } from "./character-card";
 import { chip } from "./chip";
 import { StageViewer, type StageLook, type StagePoint } from "./stage-viewer";
@@ -271,7 +271,7 @@ export function StageSection(props: {
         <More
           label="Assets"
           summary={assets.length ? `${assets.length}: ${assets.map((a) => a.name).join(", ")}` : "objects made in 3D from a description, a picture or the character's assets"}
-          open={!!placingAsset || !!pickedAsset || assetsBusy || assets.some((x) => x.glb && !x.at)}
+          open={!!placingAsset || !!pickedAsset || assetsBusy || assets.some((x) => assetReady(x) && !x.at)}
         >
           <AssetsPanel
             projectId={props.projectId}

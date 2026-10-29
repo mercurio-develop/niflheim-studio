@@ -4,6 +4,7 @@ import { Suspense, useMemo } from "react";
 import { PivotControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import type { SceneAsset } from "@/lib/store";
+import { CharacterCard } from "./character-card";
 
 // One asset's model standing on the stage: scaled to its height, its base on the floor at `at`,
 // turned about y (the model faces +z as Hunyuan3D makes it).
@@ -49,16 +50,32 @@ function Model(props: { url: string; asset: SceneAsset; picked: boolean; onPick?
   );
 }
 
-// The scene's assets that have a model and a spot. With onPick a click selects one; the selected
+function Card(props: { projectId: string; asset: SceneAsset }) {
+  const a = props.asset;
+  return <CharacterCard cutouts={Object.fromEntries(Object.entries(a.cutouts!).map(([v, f]) => [v, `/api/files/${props.projectId}/${f}`]))} at={a.at!} height={a.height} turn={a.turn} />;
+}
+
+// A cast member (a character asset) is a card, like the main character; an object, its model.
+export const assetReady = (a: SceneAsset) => (a.kind === "character" ? ["front", "threequarter", "side", "back"].every((v) => a.cutouts?.[v as "front"]) : !!a.glb);
+
+// The scene's assets that are made and have a spot. With onPick a click selects one; the selected
 // one carries a move gizmo along the floor (onMove gives its new base point).
 // wait: no Suspense of its own, so the viewer waits for the models before it draws (keyframes).
 export function SceneAssets(props: { projectId: string; assets: SceneAsset[]; wait?: boolean; picked?: string | null; onPick?: (id: string) => void; onMove?: (id: string, at: [number, number, number]) => void }) {
   return (
     <>
       {props.assets.map((a) =>
-        a.glb && a.at ? (
+        assetReady(a) && a.at ? (
           <group key={a.id}>
-            {props.wait ? (
+            {a.kind === "character" ? (
+              props.wait ? (
+                <Card projectId={props.projectId} asset={a} />
+              ) : (
+                <Suspense fallback={null}>
+                  <Card projectId={props.projectId} asset={a} />
+                </Suspense>
+              )
+            ) : props.wait ? (
               <Model url={`/api/files/${props.projectId}/${a.glb}`} asset={a} picked={false} />
             ) : (
               <Suspense fallback={null}>

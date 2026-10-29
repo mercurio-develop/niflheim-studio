@@ -210,10 +210,10 @@ export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string, 
 
 // What stood on the stage when a set of keyframes was painted (greybox blocks, placed assets), as
 // a suffix to the render key: keys made before a block or an asset moved are old. Empty with none.
-export function propsKey(blocks: { kind: string; at: Vec; size: Vec; turn: number; label: string }[] = [], assets: { id: string; glb?: string; at?: Vec; height: number; turn: number }[] = []) {
+export function propsKey(blocks: { kind: string; at: Vec; size: Vec; turn: number; label: string }[] = [], assets: { id: string; glb?: string; cutouts?: { front?: string }; at?: Vec; height: number; turn: number }[] = []) {
   const v = (p: Vec) => p.map((x) => x.toFixed(2));
   const b = blocks.map((x) => [x.kind, ...v(x.at), ...v(x.size), x.turn, x.label].join(",")).join(";");
-  const a = assets.filter((x) => x.glb && x.at).map((x) => [x.id, x.glb, ...v(x.at!), x.height.toFixed(2), x.turn].join(",")).join(";");
+  const a = assets.filter((x) => (x.glb || x.cutouts?.front) && x.at).map((x) => [x.id, x.glb ?? x.cutouts!.front, ...v(x.at!), x.height.toFixed(2), x.turn].join(",")).join(";");
   return (b ? `|blocks:${b}` : "") + (a ? `|assets:${a}` : "");
 }
 
