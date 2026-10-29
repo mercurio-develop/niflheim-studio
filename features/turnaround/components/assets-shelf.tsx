@@ -20,7 +20,7 @@ const key = (name: string) => `asset:${name.replace(/ /g, "-")}`;
 
 // Hidden objects kept as their own parts: the object as found, then its four views, made on demand
 // one asset at a time or all together. Delete takes it off the list (it stays hidden in the views).
-export function AssetsShelf(props: { projectId: string; assets: Asset[]; jobs: Record<string, Job>; locked: boolean; onView: (src: string, label: string) => void }) {
+export function AssetsShelf(props: { projectId: string; assets: Asset[]; jobs: Record<string, Job>; locked: boolean; onView: (src: string, label: string) => void; cid?: string }) {
   const [confirm, setConfirm] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -42,13 +42,13 @@ export function AssetsShelf(props: { projectId: string; assets: Asset[]; jobs: R
       summary={`${props.assets.length} hidden object${props.assets.length === 1 ? "" : "s"}: ${props.assets.map((a) => a.name).join(", ")}`}
       open={!!all || props.assets.some((a) => busy(a.name))}
       actions={
-        <Button variant="outline" size="sm" disabled={props.locked || pending || !!all || props.assets.some((a) => busy(a.name))} onClick={() => act(() => makeAllAssetViews(props.projectId))}>
+        <Button variant="outline" size="sm" disabled={props.locked || pending || !!all || props.assets.some((a) => busy(a.name))} onClick={() => act(() => makeAllAssetViews(props.projectId, props.cid))}>
           <RefreshCw data-icon="inline-start" />
           Make all views
         </Button>
       }
     >
-      {all && <p className="text-xs text-muted-foreground">{all.detail} · <button type="button" className="underline" onClick={() => cancelTurnaround(props.projectId, "assets")}>Cancel</button></p>}
+      {all && <p className="text-xs text-muted-foreground">{all.detail} · <button type="button" className="underline" onClick={() => cancelTurnaround(props.projectId, "assets", props.cid)}>Cancel</button></p>}
       <ul className="flex flex-col gap-3">
         {props.assets.map((a) => {
           const j = props.jobs[key(a.name)];
@@ -83,12 +83,12 @@ export function AssetsShelf(props: { projectId: string; assets: Asset[]; jobs: R
                   );
                 })}
                 {running && j && (
-                  <FogLoader className="absolute inset-0 rounded-md" compact message={j.detail ?? `Painting the ${a.name}`} startedAt={j.startedAt} expected={VIEWS.length * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, key(a.name))} />
+                  <FogLoader className="absolute inset-0 rounded-md" compact message={j.detail ?? `Painting the ${a.name}`} startedAt={j.startedAt} expected={VIEWS.length * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, key(a.name), props.cid)} />
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm">{a.name}</span>
-                <Button variant="ghost" size="sm" className="ml-auto" disabled={running || !!all || props.locked || pending} onClick={() => act(() => makeAssetViews(props.projectId, a.name))}>
+                <Button variant="ghost" size="sm" className="ml-auto" disabled={running || !!all || props.locked || pending} onClick={() => act(() => makeAssetViews(props.projectId, a.name, props.cid))}>
                   <RefreshCw data-icon="inline-start" />
                   {a.views ? "Again" : "Make views"}
                 </Button>
@@ -97,7 +97,7 @@ export function AssetsShelf(props: { projectId: string; assets: Asset[]; jobs: R
                   size="sm"
                   className={confirm === a.name ? "text-destructive" : "text-muted-foreground"}
                   disabled={running || !!all || pending}
-                  onClick={() => (confirm === a.name ? act(() => deleteAsset(props.projectId, a.name)) : setConfirm(a.name))}
+                  onClick={() => (confirm === a.name ? act(() => deleteAsset(props.projectId, a.name, props.cid)) : setConfirm(a.name))}
                   onBlur={() => setConfirm(null)}
                 >
                   <Trash2 data-icon="inline-start" />

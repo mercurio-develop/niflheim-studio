@@ -25,7 +25,7 @@ const ORDER = ["front", "threequarter", "side", "back"] as const;
 
 // The character in other poses, made from the turnaround: four views each, cut out for the stage.
 // In Shots, a shot picks one (and one to switch to halfway).
-export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; jobs: Record<string, Job>; locked: boolean }) {
+export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; jobs: Record<string, Job>; locked: boolean; cid?: string }) {
   const [label, setLabel] = useState("");
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; j
             key={x.label}
             type="button"
             disabled={pending || props.locked}
-            onClick={() => run(() => makePose(props.projectId, x))}
+            onClick={() => run(() => makePose(props.projectId, x, props.cid))}
             className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-ring/60 hover:text-foreground disabled:opacity-50"
           >
             <Plus className="size-3" />
@@ -59,7 +59,7 @@ export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; j
           disabled={pending || props.locked || label.trim().length < 2 || prompt.trim().length < 3}
           onClick={() =>
             run(async () => {
-              await makePose(props.projectId, { label, prompt });
+              await makePose(props.projectId, { label, prompt }, props.cid);
               setLabel("");
               setPrompt("");
             })
@@ -96,15 +96,15 @@ export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; j
                   )}
                 </span>
                 {running ? (
-                  <Button variant="ghost" size="icon" aria-label={`Stop painting ${p.label}`} onClick={() => run(() => cancelPose(props.projectId, p.id))}>
+                  <Button variant="ghost" size="icon" aria-label={`Stop painting ${p.label}`} onClick={() => run(() => cancelPose(props.projectId, p.id, props.cid))}>
                     <Square />
                   </Button>
                 ) : (
-                  <Button variant="ghost" size="icon" aria-label={`Paint ${p.label} again`} disabled={props.locked} onClick={() => run(() => remakePose(props.projectId, p.id))}>
+                  <Button variant="ghost" size="icon" aria-label={`Paint ${p.label} again`} disabled={props.locked} onClick={() => run(() => remakePose(props.projectId, p.id, props.cid))}>
                     <RefreshCw />
                   </Button>
                 )}
-                <Button variant="ghost" size="icon" aria-label={`Remove ${p.label}`} disabled={running} onClick={() => run(() => deletePose(props.projectId, p.id))}>
+                <Button variant="ghost" size="icon" aria-label={`Remove ${p.label}`} disabled={running} onClick={() => run(() => deletePose(props.projectId, p.id, props.cid))}>
                   <Trash2 />
                 </Button>
               </li>

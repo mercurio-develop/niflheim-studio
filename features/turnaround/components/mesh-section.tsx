@@ -15,16 +15,16 @@ const EXPECTED = 50; // seconds, Hunyuan3D-2 MV turbo on the 4080
 
 // The character in 3D, made from the front, side and back views and coloured from them.
 // views: the current image of each view, to tell when the colour is older than a fixed view.
-export function MeshSection(props: { projectId: string; mesh: Mesh | null; views: Partial<Record<MeshColourView, string>>; ready: boolean; locked: boolean; job?: Job }) {
+export function MeshSection(props: { projectId: string; mesh: Mesh | null; views: Partial<Record<MeshColourView, string>>; ready: boolean; locked: boolean; job?: Job; cid?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [starting, start] = useTransition();
   const running = props.job?.status === "running";
   const stale = !!props.mesh && props.mesh.front !== props.views.front;
   const colours = props.mesh?.colours;
   const recolour = !!props.mesh && !stale && (!props.mesh.coloured || (Object.keys(props.views) as MeshColourView[]).some((v) => colours?.[v] !== props.views[v]));
-  const act = (fn: (id: string) => Promise<void>) => {
+  const act = (fn: (id: string, cid?: unknown) => Promise<void>) => {
     setError(null);
-    start(() => fn(props.projectId).catch((e: Error) => setError(e.message)));
+    start(() => fn(props.projectId, props.cid).catch((e: Error) => setError(e.message)));
   };
   const make = () => act(generateMesh);
 
@@ -70,7 +70,7 @@ export function MeshSection(props: { projectId: string; mesh: Mesh | null; views
           </div>
         )}
         {running && props.job && (
-          <FogLoader className="absolute inset-0" message={props.job.detail ?? "Building the 3D model"} startedAt={props.job.startedAt} expected={EXPECTED} onCancel={() => cancelMesh(props.projectId)} />
+          <FogLoader className="absolute inset-0" message={props.job.detail ?? "Building the 3D model"} startedAt={props.job.startedAt} expected={EXPECTED} onCancel={() => cancelMesh(props.projectId, props.cid)} />
         )}
         {recolour && !running && (
           <span className="absolute inset-x-3 top-3 rounded-md border bg-background/80 px-2.5 py-1 text-center text-xs text-muted-foreground backdrop-blur">

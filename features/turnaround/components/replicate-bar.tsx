@@ -11,7 +11,7 @@ import { cancelTurnaround, replicateEdit } from "../actions/turnaround";
 const say = (e: Edit) => (e.kind === "add" ? `+ ${e.change}` : e.kind === "remove" ? `− ${e.what || "selection"}` : `${e.what || "selection"} → ${e.change}`);
 
 // After a fix on one view: repeat the same change on the other views you tick (all by default).
-export function ReplicateBar(props: { projectId: string; from: ViewId; edit: Edit; others: { id: ViewId; label: string }[]; job?: Job; locked: boolean }) {
+export function ReplicateBar(props: { projectId: string; from: ViewId; edit: Edit; others: { id: ViewId; label: string }[]; job?: Job; locked: boolean; cid?: string }) {
   const [on, setOn] = useState<ViewId[]>(props.others.map((v) => v.id));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -35,13 +35,13 @@ export function ReplicateBar(props: { projectId: string; from: ViewId; edit: Edi
           disabled={!on.length || running || pending || props.locked}
           onClick={() => {
             setError(null);
-            start(() => replicateEdit(props.projectId, props.from, on).catch((e: Error) => setError(e.message)));
+            start(() => replicateEdit(props.projectId, props.from, on, props.cid).catch((e: Error) => setError(e.message)));
           }}
         >
           {pending && !running ? <LoadingDots /> : `Apply to ${on.length} view${on.length === 1 ? "" : "s"}`}
         </Button>
       </div>
-      {running && props.job && <JobStatus message={props.job.detail ?? "Repeating the change"} startedAt={props.job.startedAt} expected={on.length * 35} onCancel={() => cancelTurnaround(props.projectId, "replicate")} />}
+      {running && props.job && <JobStatus message={props.job.detail ?? "Repeating the change"} startedAt={props.job.startedAt} expected={on.length * 35} onCancel={() => cancelTurnaround(props.projectId, "replicate", props.cid)} />}
       {props.job?.status === "error" && <p className="text-xs text-destructive">{props.job.error}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

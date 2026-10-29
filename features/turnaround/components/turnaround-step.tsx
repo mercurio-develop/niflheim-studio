@@ -43,6 +43,7 @@ export function TurnaroundSections(props: {
   poses: CharacterPose[]; // the character in other poses, for shots
   mesh: Mesh | null; // the character in 3D, from these views
   jobs: Record<string, Job>;
+  cid?: string; // which character (default c1)
 }) {
   const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: "designed", hide: [], keep: [], extras: [] });
   const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);
@@ -84,8 +85,8 @@ export function TurnaroundSections(props: {
     const missing = options.hide.filter((n) => !Object.hasOwn(props.parts, n) && !asked.current.has(n));
     if (!missing.length) return;
     missing.forEach((n) => asked.current.add(n));
-    findMasks(props.projectId, missing).catch((e: Error) => setError(e.message));
-  }, [finding, options.hide, props.parts, props.projectId]);
+    findMasks(props.projectId, missing, props.cid).catch((e: Error) => setError(e.message));
+  }, [finding, options.hide, props.parts, props.projectId, props.cid]);
   const findingName = finding ? (props.jobs["hide-masks"]?.detail?.replace(/^Finding the /, "") ?? null) : null;
   const setHidden = (name: string, on: boolean) =>
     setOptions((o) => ({ ...o, hide: on ? [...o.hide, name] : o.hide.filter((x) => x !== name), keep: on && ASSETS ? [...o.keep, name] : o.keep.filter((x) => x !== name) }));
@@ -136,6 +137,7 @@ export function TurnaroundSections(props: {
               </div>
               {ASSETS && (
                 <HiddenObjects
+                  cid={props.cid}
                   projectId={props.projectId}
                   character={props.character}
                   hide={options.hide}
@@ -170,7 +172,7 @@ export function TurnaroundSections(props: {
               disabled={anyRunning || pending || starting}
               onClick={() => {
                 setError(null);
-                startGenerate(() => generateTurnaround(props.projectId, options).catch(fail));
+                startGenerate(() => generateTurnaround(props.projectId, options, props.cid).catch(fail));
               }}
             >
               {starting && !running ? <LoadingDots /> : null}
@@ -178,7 +180,7 @@ export function TurnaroundSections(props: {
             </Button>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          {running && job && <JobStatus message={job.detail ?? "Painting the views"} startedAt={job.startedAt} expected={shown.length * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, "turnaround")} />}
+          {running && job && <JobStatus message={job.detail ?? "Painting the views"} startedAt={job.startedAt} expected={shown.length * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, "turnaround", props.cid)} />}
           {/* Turnarounds from before views were painted fresh have no options and no front. */}
           {Object.keys(props.views).length > 0 && (!props.options || !image("front")) ? (
             <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made with an older version. Generate again to paint every view fresh, the front included.</p>
@@ -216,7 +218,7 @@ export function TurnaroundSections(props: {
                       </button>
                     )}
                     {busy && j && (
-                      <FogLoader className="absolute inset-0" compact message={`Painting the ${v.label.toLowerCase()}`} startedAt={j.startedAt} expected={PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, `view:${v.id}`)} />
+                      <FogLoader className="absolute inset-0" compact message={`Painting the ${v.label.toLowerCase()}`} startedAt={j.startedAt} expected={PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, `view:${v.id}`, props.cid)} />
                     )}
                   </div>
                   <div className="flex items-center justify-between gap-2">
@@ -225,7 +227,7 @@ export function TurnaroundSections(props: {
                       {stack && stack.versions.length > 1 && <span className="font-mono text-[11px] text-muted-foreground">v{stack.current + 1}/{stack.versions.length}</span>}
                     </span>
                     <span className="flex items-center">
-                      <Button variant="ghost" size="sm" disabled={busy || fixing || running || pending || starting || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id).catch(fail))}>
+                      <Button variant="ghost" size="sm" disabled={busy || fixing || running || pending || starting || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id, props.cid).catch(fail))}>
                         <RefreshCw data-icon="inline-start" />
                         Again
                       </Button>
@@ -267,6 +269,7 @@ export function TurnaroundSections(props: {
                 </Button>
               </div>
               <Editor
+                cid={props.cid}
                 projectId={props.projectId}
                 target={`view:${editing}`}
                 title={{ n: "", title: `Fix the ${label.toLowerCase()} view`, line: "Select what is wrong, then change it, add what is missing or remove it. Undo walks this view's history." }}
@@ -278,6 +281,7 @@ export function TurnaroundSections(props: {
               />
               {stack.versions[stack.current].edit && (
                 <ReplicateBar
+                  cid={props.cid}
                   key={stack.current}
                   projectId={props.projectId}
                   from={editing}
@@ -296,12 +300,13 @@ export function TurnaroundSections(props: {
             summary={props.poses.length ? props.poses.map((p) => p.label).join(", ") : "running, angry, happy: the character in other poses for shots"}
             open={props.poses.some((p) => props.jobs[`pose:${p.id}`]?.status === "running")}
           >
-            <PosesPanel projectId={props.projectId} poses={props.poses} jobs={props.jobs} locked={running} />
+            <PosesPanel cid={props.cid} projectId={props.projectId} poses={props.poses} jobs={props.jobs} locked={running} />
           </More>
         )}
       </Section>
 
         <MeshSection
+          cid={props.cid}
           projectId={props.projectId}
           mesh={props.mesh}
           views={Object.fromEntries((["front", "side", "back", "threequarter"] as const).flatMap((v) => (image(v) ? [[v, image(v)!]] : [])))}
@@ -310,7 +315,7 @@ export function TurnaroundSections(props: {
           job={props.jobs.mesh}
         />
 
-        {ASSETS && <AssetsShelf projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={running} onView={(src, label) => setViewing({ src, label })} />}
+        {ASSETS && <AssetsShelf cid={props.cid} projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={running} onView={(src, label) => setViewing({ src, label })} />}
       {viewing && <ImageViewer src={viewing.src} label={viewing.label} onClose={() => setViewing(null)} />}
       {seeing && image(seeing) && (() => {
         const stack = props.views[seeing]!;
