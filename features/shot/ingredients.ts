@@ -30,14 +30,35 @@ export function addIngredients(g: Graph, length: number) {
   g[FIRST_GUIDE].inputs = { ...g[FIRST_GUIDE].inputs, positive: ["305", 0], negative: ["305", 1], latent: ["305", 2] };
 }
 
-export type SheetPanels = { top: string[]; bottom: string[] };
+// The rows scripts/make_sheet.py drew, top to bottom.
+export type SheetRows = { kind: "character" | "set" | "props+set"; cells: string[] }[];
+export type SheetElement = { name: string; description?: string; kind?: "object" | "character" };
 
-// The sheet said by position (the Ingredients prompt format: "Reference sheet: ..." first, then
-// "Generated video: ..."), so the model knows which panel is which.
-export function sheetPrompt(panels: SheetPanels, who: string, props: string[], place?: string) {
-  const bottom = panels.bottom.map((b) => (b === "medium" ? `a close-up of ${who}` : b === "set" ? `the place${place ? `, ${place}` : ""}` : props.shift() ?? "an object"));
-  const top = panels.top.length ? `The top row shows ${who} from the front, three-quarter, side and back.` : "";
-  return `Reference sheet: ${top} The bottom row shows, from left to right, ${bottom.join("; ")}.`.replace(/\s+/g, " ");
+const sentence = (x: string) => x.trim().replace(/[.\s]+$/, "");
+
+// The sheet said cell by cell, in the form of Lightricks' Ingredients examples (a "Reference Sheet
+// Description" with a bold position and kind per cell, then the video), so the model knows which
+// cell is which and the video can refer to them.
+export function sheetPrompt(rows: SheetRows, who: SheetElement, props: SheetElement[], place?: string) {
+  const lines = ["### Reference Sheet Description"];
+  const desc = who.description ? `, ${sentence(who.description)}` : "";
+  for (const [r, row] of rows.entries()) {
+    const at = rows.length > 1 ? (r === 0 ? "Top Row" : "Bottom Row") : "Sheet";
+    if (row.kind === "character") {
+      lines.push(`**${at} Left (Character):** A close-up of the face of ${who.name}${desc}.`);
+      lines.push(`**${at} (Character Turnaround):** ${who.name}, full body, seen from the front, three-quarter, side and back, in the same clothes${desc}.`);
+      continue;
+    }
+    const shown = new Set(row.cells.filter((c) => c.startsWith("prop")).map((c) => Number(c.slice(4, c.indexOf(":"))) - 1));
+    [...shown].forEach((i, n) => {
+      const p = props[i];
+      if (!p) return;
+      const kind = p.kind === "character" ? "Character" : "Object";
+      lines.push(`**${at} ${n === 0 ? "Left" : "Middle"} (${kind}):** ${p.name}${p.description ? `, ${sentence(p.description)}` : ""}, seen from several angles.`);
+    });
+    if (row.cells.includes("place")) lines.push(`**${at} ${shown.size ? "Right" : ""} (Setting):** ${place ? sentence(place) : "the place"}.`.replace("  ", " "));
+  }
+  return lines.join("\n");
 }
 
-export const withSheet = (sheet: string, video: string) => `${sheet} Generated video: ${video}`;
+export const withSheet = (sheet: string, video: string) => `${sheet}\n\n### Generated Video\n${video}`;
