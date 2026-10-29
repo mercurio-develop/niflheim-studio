@@ -15,7 +15,10 @@ import { getProject, projectDir, updateProject } from "@/lib/store";
 const run = promisify(execFile);
 const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
 const SCRIPT = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "stage_path.py");
-const done = (id: string) => revalidatePath(`/p/${id}/scene`);
+const done = (id: string) => {
+  revalidatePath(`/p/${id}/scene`);
+  revalidatePath(`/p/${id}/shot`);
+};
 
 const Point = z.tuple([z.number(), z.number(), z.number()]).refine((v) => v.every((x) => Number.isFinite(x) && Math.abs(x) < 500));
 const Move = z
@@ -34,7 +37,7 @@ const Move = z
     return m.amount >= spec.min && m.amount <= spec.max;
   }, "That amount is out of range for this move.");
 
-// The scene's camera move, saved as it is tuned.
+// The active shot's camera move, saved as it is tuned.
 export async function saveCamera(id: string, raw: unknown) {
   const camera = Move.parse(raw) as CameraMove;
   await updateProject(id, (q) => void (q.camera = camera));

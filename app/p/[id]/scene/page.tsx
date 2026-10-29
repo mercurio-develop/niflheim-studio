@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { SceneStep } from "@/features/scene/components/scene-step";
 import { StepRail } from "@/features/wizard/components/step-rail";
 import { placementStale, stepStates, viewImage } from "@/lib/progress";
-import { allShots, getProject } from "@/lib/store";
+import { getProject } from "@/lib/store";
 
 async function Scene({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,18 +14,12 @@ async function Scene({ params }: { params: Promise<{ id: string }> }) {
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
       <StepRail projectId={id} active="scene" states={stepStates(project)} />
       <SceneStep
-        key={project.activeShot}
-        shots={allShots(project).map((s) => ({ id: s.id, name: s.name, active: s.active, picked: s.shot?.picked !== undefined }))}
         projectId={id}
         set={project.set ?? null}
         style={project.character.style}
         placement={project.stage ?? null}
         front={viewImage(project, "front")}
         moved={placementStale(project) === "set"}
-        camera={project.camera ?? null}
-        cameraRender={project.cameraRender ?? null}
-        keyframes={project.keyframes ?? null}
-        keyJob={project.jobs.keyframes}
         setJob={project.jobs.set}
         stageJob={project.jobs.stage}
       />

@@ -96,7 +96,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
       if (st.kind !== "export") await selectShot(id, st.shot);
       if (st.kind === "keys") {
         const move = props.shots.find((s) => s.id === st.shot)?.move;
-        if (!move) throw new Error(`${name(st.shot)} has no camera move: set one in Scene.`);
+        if (!move) throw new Error(`${name(st.shot)} has no camera move: set one in Shots.`);
         const pngs = await captureKeys(move);
         const form = new FormData();
         pngs.forEach((b, k) => form.set(`key${k}`, new File([b], `key${k}.jpg`, { type: "image/jpeg" })));
