@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { SceneStep } from "@/features/scene/components/scene-step";
 import { StepRail } from "@/features/wizard/components/step-rail";
-import { placementStale, stepStates, viewImage } from "@/lib/progress";
+import { characterImage, placementStale, stepStates, viewImage, viewsFor } from "@/lib/progress";
 import { getProject } from "@/lib/store";
 
 async function Scene({ params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +22,12 @@ async function Scene({ params }: { params: Promise<{ id: string }> }) {
         assets={project.sceneAssets ?? []}
         assetJobs={Object.fromEntries(Object.entries(project.jobs).filter(([k]) => k.startsWith("scene-asset:")))}
         characterAssets={(project.assets ?? []).map((a) => a.name)}
+        cast={(project.cast ?? []).map((m) => {
+          // Ready once every side of its turnaround is painted from the version in use.
+          const t = m.turnaround;
+          const ready = !!t && t.source === characterImage(project, m.id) && viewsFor(t.options).every((v) => t.views[v.id]?.versions.length);
+          return { cid: m.id, name: m.name, image: viewImage(project, "front", m.id), ready, onStage: project.sceneAssets?.find((a) => a.cid === m.id)?.id ?? null };
+        })}
         front={viewImage(project, "front")}
         moved={placementStale(project) === "set"}
         setJob={project.jobs.set}

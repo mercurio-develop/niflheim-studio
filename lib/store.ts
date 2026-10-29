@@ -78,7 +78,8 @@ export type SceneAsset = {
   name: string;
   kind?: "object" | "character"; // a character (a cast member) stands as a cut-out card, like the main one
   cutouts?: Partial<Record<AssetView, string>>; // a character's views, cut out
-  from: "prompt" | "upload" | "character";
+  from: "prompt" | "upload" | "character" | "cast";
+  cid?: string; // from "cast": a character made in the Character step (CastMember), standing here
   prompt?: string;
   image?: string; // the picture its views are made from
   views?: Partial<Record<AssetView, string>>;

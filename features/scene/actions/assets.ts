@@ -8,7 +8,8 @@ import { REFERENCE_TYPES, referenceError } from "@/features/character/schemas";
 import { meshFromViews, paintViews } from "@/lib/asset-3d";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
-import { getProject, projectDir, updateProject, type SceneAsset } from "@/lib/store";
+import { CID, getProject, projectDir, updateProject, type SceneAsset } from "@/lib/store";
+import { viewImage } from "@/lib/progress";
 import { mediumOf, styleById } from "@/lib/styles";
 
 const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
@@ -119,6 +120,29 @@ export async function makeAsset(id: string, form: FormData) {
   }
   await updateProject(id, (q) => void (q.sceneAssets = [...(q.sceneAssets ?? []), asset]));
   await startJob(id, jobKey(aid), (ctx) => build(id, aid, ctx), `Making the ${src.name}`);
+  done(id);
+}
+
+// A character made in the Character step, stood on the stage: its turnaround views (as they are
+// now) cut out into a card, like the main character's (about 10 s). Its prompt names it in shots.
+export async function addCastMember(id: string, rawCid: unknown) {
+  const cid = z.string().regex(CID).refine((x) => x !== "c1", "The first character is already on the stage.").parse(rawCid);
+  const p = await getProject(id);
+  if (!p) throw new Error("Project not found.");
+  const m = p.cast?.find((x) => x.id === cid);
+  if (!m) throw new Error("No such character.");
+  if (p.sceneAssets?.some((x) => x.cid === cid)) throw new Error(`${m.name} is already on the stage.`);
+  if ((p.sceneAssets?.length ?? 0) >= 12) throw new Error("A scene holds up to 12 assets.");
+  const views: SceneAsset["views"] = {};
+  for (const v of ["front", "threequarter", "side", "back"] as const) {
+    const f = viewImage(p, v, cid);
+    if (f) views[v] = f;
+  }
+  if (!views.front || !views.side || !views.back) throw new Error(`Paint ${m.name}'s turnaround first (front, side and back).`);
+  const aid = stamp();
+  const asset: SceneAsset = { id: aid, name: m.name, kind: "character", from: "cast", cid, prompt: m.character.prompt, image: views.front, views, height: 1.7, turn: 0 };
+  await updateProject(id, (q) => void (q.sceneAssets = [...(q.sceneAssets ?? []), asset]));
+  await startJob(id, jobKey(aid), (ctx) => build(id, aid, ctx), `Cutting out ${asset.name}`);
   done(id);
 }
 

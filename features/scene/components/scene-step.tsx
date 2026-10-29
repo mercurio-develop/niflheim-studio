@@ -7,6 +7,7 @@ import { NextBar } from "@/features/wizard/components/next-bar";
 import type { Block, Job, SceneAsset, SetData, StageData } from "@/lib/store";
 import { DescribeSection } from "./describe-section";
 import { StageSection } from "./stage-section";
+import type { CastOption } from "./cast-picker";
 
 // Step 02: one painting becomes a 3D stage, and the character stands in it. Describe (or upload)
 // the place and pick a painting; its stage is built and filled; the character is cut out of the
@@ -20,6 +21,7 @@ export function SceneStep(props: {
   assets: SceneAsset[];
   assetJobs: Record<string, Job>;
   characterAssets: string[];
+  cast: CastOption[];
   front: string | null;
   moved: boolean;
   setJob?: Job;
@@ -55,6 +57,7 @@ export function SceneStep(props: {
           assets={props.assets}
           assetJobs={props.assetJobs}
           characterAssets={props.characterAssets}
+          cast={props.cast}
           front={props.front}
           moved={props.moved}
           setJob={props.setJob}

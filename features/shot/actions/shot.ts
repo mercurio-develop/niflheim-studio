@@ -83,7 +83,7 @@ const cast = (p: Project) => {
   const keys = path && m ? keyFrames(m).map((f) => path[f]) : [];
   return (p.sceneAssets ?? [])
     .filter((a) => a.kind === "character" && a.at && keys.some((k) => sees(k, [a.at![0], a.at![1] + a.height * 0.6, a.at![2]], cam!.fov, 768 / 448)))
-    .map((a) => (a.prompt ? `${a.name}, ${a.prompt}` : a.name))
+    .map((a) => ((x) => (x ? `${a.name}, ${x}` : a.name))(p.cast?.find((m) => m.id === a.cid)?.character.prompt ?? a.prompt))
     .join("; ");
 };
 // What the keys show, in order (Florence-2 captions, or the user's edits of them): the frame the take

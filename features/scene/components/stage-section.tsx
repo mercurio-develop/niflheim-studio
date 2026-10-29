@@ -15,6 +15,7 @@ import { assetReady } from "./scene-assets";
 import { StageScene } from "./stage-scene";
 import { urlsOf } from "@/lib/stage-context";
 import { chip } from "./chip";
+import type { CastOption } from "./cast-picker";
 import { StageViewer, type StageLook, type StagePoint } from "./stage-viewer";
 
 const SIZES: Record<Block["kind"], Block["size"]> = { box: [1, 1, 1], cylinder: [0.6, 1.2, 0.6], ramp: [1.5, 0.6, 2] };
@@ -31,6 +32,7 @@ export function StageSection(props: {
   assets: SceneAsset[]; // objects made for the scene in 3D
   assetJobs: Record<string, Job>; // their jobs, by key
   characterAssets: string[]; // names of the assets taken off the character
+  cast: CastOption[]; // the other characters made in the Character step
   front: string | null; // the current turnaround front, to tell when the cutouts are old
   moved: boolean; // the set was rebuilt or refilled since the character was placed
   setJob?: Job;
@@ -293,6 +295,7 @@ export function StageSection(props: {
             assets={assets}
             jobs={props.assetJobs}
             characterAssets={props.characterAssets}
+            cast={props.cast}
             picked={pickedAsset}
             onPick={pickAsset}
             placing={placingAsset}
