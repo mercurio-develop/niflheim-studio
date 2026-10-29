@@ -18,7 +18,9 @@ function emptyShare(canvas: HTMLCanvasElement) {
   g.drawImage(canvas, 0, 0, w, h);
   const px = g.getImageData(0, 0, w, h).data;
   let n = 0;
-  for (let i = 0; i < px.length; i += 4) if (px[i] < 22 && px[i + 1] < 21 && px[i + 2] < 20) n++;
+  // The background is drawn flat in exactly the fog colour (13, 12, 11); a dark painting (a night
+  // scene) has pixels near it too, but not that flat colour over a large share.
+  for (let i = 0; i < px.length; i += 4) if (Math.abs(px[i] - 13) <= 2 && Math.abs(px[i + 1] - 12) <= 2 && Math.abs(px[i + 2] - 11) <= 2) n++;
   return n / (w * h);
 }
 
@@ -34,7 +36,7 @@ export function KeyCapture(props: {
   blocks: Block[];
   assets: SceneAsset[];
   projectId: string;
-  poses: StagePose[];
+  poses: (StagePose & { turn?: number; assets?: SceneAsset[] })[]; // a key moment's turn and object spots, when it has them
   onDone: (pngs: Blob[]) => void;
   onError: (message: string) => void;
 }) {
@@ -65,9 +67,9 @@ export function KeyCapture(props: {
         <StageScene
           projectId={props.projectId}
           blocks={props.blocks}
-          assets={props.assets}
+          assets={props.poses[i].assets ?? props.assets}
           wait
-          main={{ cutouts: (props.poses[i].card as typeof props.cutouts | undefined) ?? props.cutouts, at: props.poses[i].at ?? props.at, height: props.height, turn: props.turn }}
+          main={{ cutouts: (props.poses[i].card as typeof props.cutouts | undefined) ?? props.cutouts, at: props.poses[i].at ?? props.at, height: props.height, turn: props.poses[i].turn ?? props.turn }}
         />
       </StageViewer>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { DEFAULT_MOVE, cardAt, keyFrames, propsKey, poses, renderKey, type CameraMove } from "@/lib/camera";
+import { DEFAULT_MOVE, cardAt, keyFrames, placeAt, propsKey, poses, renderKey, type CameraMove } from "@/lib/camera";
 import type { Block, CharacterPose, Job, Keyframes, SceneAsset, SetData, StageData } from "@/lib/store";
 import { KeyframesPanel } from "./keyframes";
 
@@ -40,8 +40,14 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
         turn: props.placement.turn,
         blocks: props.blocks,
         assets: props.assets,
-        // Each key wears the shot's pose for its half of the move.
-        poses: keyFrames(move).map((f) => ({ ...path[f], card: cardAt(move, f, urls(props.placement!.cutouts), cards) })),
+        // Each key wears the pose the move (or its moments) gives at its frame; with key moments,
+        // the main character's turn and every object's spot are the moment's too.
+        poses: keyFrames(move).map((f) => ({
+          ...path[f],
+          card: cardAt(move, f, urls(props.placement!.cutouts), cards),
+          turn: placeAt(move, "main", { at, turn: props.placement!.turn }, f).turn,
+          assets: props.assets.map((a) => (a.at ? { ...a, ...(({ at, turn }) => ({ at, turn }))(placeAt(move, a.id, { at: a.at, turn: a.turn }, f)) } : a)),
+        })),
       }}
     />
   );

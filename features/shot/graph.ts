@@ -10,17 +10,20 @@ export const DEFAULT_NEGATIVE = "Jitter, warping face, morphing limbs, flickerin
 
 export const END_STRENGTH = 0.7;
 export const MIDDLE_STRENGTH = 0.5;
+// The last key held more loosely when the character ends in another pose than they start in, so
+// LTX has room to move into it instead of snapping at the end (decision 0013).
+export const END_NEW_POSE_STRENGTH = 0.45;
 const GUIDE_FIRST = "31";
 const GUIDE_LAST = "32";
 
 // Nodes 200+ hold the middle keys: LoadImage, ImageScale, LTXVPreprocess and LTXVAddGuide each.
 export const middleImageNode = (i: number) => String(200 + i * 4);
 
-export function shapeShot(g: Graph, frames: number[], length: number) {
+export function shapeShot(g: Graph, frames: number[], length: number, endStrength = END_STRENGTH) {
   g["30"].inputs.length = length;
   g["33"].inputs.frames_number = length;
   g[GUIDE_FIRST].inputs.strength = END_STRENGTH;
-  g[GUIDE_LAST].inputs.strength = END_STRENGTH;
+  g[GUIDE_LAST].inputs.strength = endStrength;
   let prev = GUIDE_FIRST;
   frames.slice(1, -1).forEach((frame, i) => {
     const [load, scale, prep, guide] = [0, 1, 2, 3].map((d) => String(200 + i * 4 + d));
