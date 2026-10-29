@@ -14,8 +14,8 @@ const OUT = new THREE.Color("#f87171");
 // Painting view: Play flies the viewer's own camera along the path, at the shot's real speed, and
 // puts it back where it was when done. In Overview each end of the path has a gizmo, dragged along
 // the ground and up and down: onStart and onEnd give the camera's new start and end. A walking
-// character's path is a dashed line on the floor with its own gizmo at the end (onWalk); `live`
-// holds where they stand this frame, for the character card.
+// character's path is a dashed line on the floor with its own gizmo at the end (onWalk); onLive
+// gets where they stand each frame (null when they stand still), for the character card.
 export function CameraPath(props: {
   poses: Pose[];
   inside: boolean[];
@@ -25,7 +25,7 @@ export function CameraPath(props: {
   onStart?: (p: Vec) => void;
   onEnd?: (p: Vec) => void;
   onWalk?: (p: Vec) => void;
-  live?: React.RefObject<Vec | null>;
+  onLive?: (at: Vec | null) => void;
 }) {
   const points = useMemo(() => props.poses.map((p) => new THREE.Vector3(...p.position)), [props.poses]);
   const colours = useMemo(() => props.inside.map((ok) => (ok ? OK : OUT)), [props.inside]);
@@ -35,8 +35,8 @@ export function CameraPath(props: {
   const a0 = props.poses[0]?.at;
   const a1 = props.poses.at(-1)?.at;
   const walks = !!a0 && !!a1 && (a0[0] !== a1[0] || a0[2] !== a1[2]);
-  const live = props.live;
-  useEffect(() => () => void (live && (live.current = null)), [live]);
+  const { onLive } = props;
+  useEffect(() => () => onLive?.(null), [onLive]);
   const saved = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion } | null>(null);
 
   useEffect(() => {
@@ -59,13 +59,13 @@ export function CameraPath(props: {
   }, [props.playing, props.overview, get]);
 
   useFrame((state) => {
-    if (props.live) props.live.current = walks ? props.poses[0].at! : null;
+    props.onLive?.(walks ? props.poses[0].at! : null);
     if (!props.playing || !props.poses.length) return;
     clock.current ??= state.clock.elapsedTime;
     const i = Math.floor((state.clock.elapsedTime - clock.current) * FPS);
     if (i >= props.poses.length) return props.onDone();
     const p = props.poses[i];
-    if (props.live && walks) props.live.current = p.at!;
+    if (walks) props.onLive?.(p.at!);
     if (props.overview && marker.current) {
       marker.current.position.set(...p.position);
       marker.current.lookAt(...p.target);

@@ -53,8 +53,8 @@ export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>;
   useEffect(() => {
     for (const t of textures) t.colorSpace = THREE.SRGBColorSpace;
     setCrops(textures.map((t) => cropOf(t.image as HTMLImageElement)));
-    shown.current = -1; // new cutouts (another pose): put the matching one on at the next frame
   }, [textures]);
+  const worn = useRef<THREE.Texture[] | null>(null); // the cutouts the card last put on
   const mesh = useRef<THREE.Mesh>(null);
   const material = useMemo(() => new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.4, side: THREE.DoubleSide }), []);
   useEffect(() => void (shown.current = -1), [props.height]); // resize on the next frame
@@ -62,6 +62,11 @@ export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>;
   useFrame(({ camera }) => {
     const m = mesh.current;
     if (!m || !crops) return;
+    // New cutouts (another pose): put the matching one on now, whatever the angle.
+    if (worn.current !== textures) {
+      worn.current = textures;
+      shown.current = -1;
+    }
     const at = props.live?.current ?? props.at;
     m.position.set(at[0], at[1] + props.height / 2, at[2]);
     const dx = camera.position.x - at[0];

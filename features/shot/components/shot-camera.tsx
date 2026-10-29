@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Blocks } from "@/features/scene/components/blocks";
 import { CameraPath } from "@/features/scene/components/camera-path";
 import { SceneAssets } from "@/features/scene/components/scene-assets";
@@ -24,6 +24,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   const [overview, setOverview] = useState(false);
   const [playing, setPlaying] = useState(false);
   const live = useRef<Vec | null>(null); // where the character stands this frame, when they walk
+  const setLive = useCallback((at: Vec | null) => void (live.current = at), []);
   const path = useMemo(() => {
     if (!ready) return null;
     const ps = poses(cam!, { at: pl!.at!, height: pl!.height, turn: pl!.turn }, move);
@@ -58,7 +59,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
           onStart={(from: Vec) => pick({ ...move, framing: "free", from })}
           onEnd={(to: Vec) => pick({ ...move, to })}
           onWalk={(to: Vec) => move.walk && pick({ ...move, walk: { ...move.walk, to } })}
-          live={live}
+          onLive={setLive}
         />
       </StageViewer>
       <ViewSwitch overview={overview} onOverview={view} />
