@@ -120,8 +120,11 @@ export type Shot = { action: string; beats?: { start: string; then?: string; end
 
 // One shot of the scene: its name, and (while not active) its move, render, keyframes and takes.
 export type ShotRef = { id: string; name: string };
-export type ShotData = Pick<Project, "camera" | "cameraRender" | "keyframes" | "shot">;
-export const SHOT_FIELDS = ["camera", "cameraRender", "keyframes", "shot"] as const;
+export type ShotData = Pick<Project, "camera" | "cameraRender" | "keyframes" | "shot" | "seededFrom">;
+export const SHOT_FIELDS = ["camera", "cameraRender", "keyframes", "shot", "seededFrom"] as const;
+// A shot that continues another: the take it continues, and that take's last frame (a PNG), which
+// becomes this shot's key 1 as it is, with no repaint.
+export type SeededFrom = { shot: string; take: number; frame: string };
 
 // Every shot with its data, the active one read from the top level.
 export function allShots(p: Project): (ShotRef & ShotData & { active: boolean })[] {
@@ -209,6 +212,7 @@ export type Project = {
   cameraRender?: CameraRender; // the move rendered along its path, for the shot
   keyframes?: Keyframes; // the shot's keyframes along the camera move
   shot?: Shot; // LTX-2.5 takes of the scene
+  seededFrom?: SeededFrom; // the active shot starts on another shot's last frame
   // A scene has several shots. camera, cameraRender, keyframes and shot above are the active
   // shot's; the others wait in stash under their id and are swapped in when selected.
   shots?: ShotRef[];
