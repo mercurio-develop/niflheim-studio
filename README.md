@@ -72,6 +72,19 @@ machine.
 Run a step end to end without the UI: `node --env-file=.env scripts/<name>.ts`, for example
 `try-character`, `try-turnaround`, `try-set`, `try-shot`, or `try-workflows` (every graph once).
 
+## Sample project
+
+A finished project (character, stage, shots, takes; all made with this app) is attached to the
+[latest release](../../releases/latest) as a zip. Unzip it into `data/projects/` and it shows on
+the home page:
+
+```bash
+unzip sample-*.zip -d data/projects/
+```
+
+To pack one of your own: `python scripts/pack_sample.py data/projects/<id> sample.zip` (only the
+files the project uses, not every version it kept).
+
 ## Layout
 
 ```
