@@ -22,6 +22,9 @@ import type { StageCamera } from "@/lib/stage-fill";
 // the stage and everything in it has loaded and been drawn a few times.
 // "Overview" leaves the painting's view for one from above and behind it, so the camera's path
 // (drawn by the children) can be seen; the orbit limits do not apply there.
+// "Camera" mode starts at the painting's view and flies freely (orbit, pan, zoom, no limits) with
+// the shot's frame drawn over it, to frame a shot by eye. A double-click on the floor, in any mode,
+// gives the point (onFloorDouble): where to put a camera.
 const FOG = "#0d0c0b";
 
 export type StagePoint = [number, number, number];
@@ -66,7 +69,7 @@ function PoseCamera(props: { pose: StagePose; fov: number; far: number; onDrawn?
   return <PerspectiveCamera makeDefault fov={props.fov} near={0.05} far={props.far} position={props.pose.position} />;
 }
 
-function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look: StageLook; overview?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; children?: React.ReactNode }) {
+function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look: StageLook; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode }) {
   // useGLTF caches one scene per URL, and a three object lives in one scene at a time: a second
   // viewer of the same stage (Shots' camera and its off-screen keyframe capture) would take it
   // away from the first, which then draws an empty frame. Each viewer gets its own copy (the
@@ -130,6 +133,11 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
     e.stopPropagation();
     props.onFloor([e.point.x, e.point.y, e.point.z]);
   };
+  const double = (e: ThreeEvent<MouseEvent>) => {
+    if (!props.onFloorDouble || !e.object.name.startsWith("floor")) return;
+    e.stopPropagation();
+    props.onFloorDouble([e.point.x, e.point.y, e.point.z]);
+  };
   if (props.pose)
     return (
       <>
@@ -138,12 +146,21 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
         {props.children}
       </>
     );
+  if (props.free)
+    return (
+      <>
+        <PerspectiveCamera key="free-camera" makeDefault fov={view.fov} near={0.05} far={view.far * 2} position={view.position} quaternion={view.quaternion} />
+        <primitive object={scene} onDoubleClick={double} />
+        {props.children}
+        <OrbitControls key="free-orbit" makeDefault target={view.target} minDistance={0.3} maxDistance={view.middle * 4} rotateSpeed={0.4} screenSpacePanning enableDamping />
+      </>
+    );
   if (props.overview)
     return (
       <>
         <PerspectiveCamera key="over-camera" makeDefault fov={50} near={0.05} far={view.far * 2} position={over.position} />
         <hemisphereLight args={["#ffffff", "#3a3631", 1.2]} />
-        <primitive object={scene} />
+        <primitive object={scene} onDoubleClick={double} />
         {props.children}
         <OrbitControls key="over-orbit" makeDefault target={over.target} maxPolarAngle={Math.PI * 0.48} minDistance={1} maxDistance={view.middle * 4} rotateSpeed={0.5} enableDamping />
       </>
@@ -159,7 +176,7 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
           {view.floorY !== null && <gridHelper args={[Math.ceil(view.far), Math.ceil(view.far), "#2b2a27", "#2b2a27"]} position={[0, view.floorY + 0.005, 0]} />}
         </>
       )}
-      <primitive object={scene} onClick={click} />
+      <primitive object={scene} onClick={click} onDoubleClick={double} />
       {props.children}
       <OrbitControls
         key="home-orbit"
@@ -191,14 +208,22 @@ function StageLoading() {
   );
 }
 
-export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; overview?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
+// The shot's frame (768x448) over camera mode: what the take will see.
+export const SHOT_ASPECT = 768 / 448;
+
+export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
   return (
     <div className={cn("relative", props.className)} style={{ background: FOG }}>
       <StageLoading />
+      {props.free && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <div className="h-full max-w-full rounded-sm border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" style={{ aspectRatio: SHOT_ASPECT }} />
+        </div>
+      )}
       <Canvas dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
         <color attach="background" args={[FOG]} />
         <Suspense fallback={null}>
-          <Mesh url={props.mesh} camera={props.camera} filled={props.filled} look={props.look ?? "painting"} overview={props.overview} pose={props.pose} onDrawn={props.onDrawn} onFloor={props.onFloor}>
+          <Mesh url={props.mesh} camera={props.camera} filled={props.filled} look={props.look ?? "painting"} overview={props.overview} free={props.free} pose={props.pose} onDrawn={props.onDrawn} onFloor={props.onFloor} onFloorDouble={props.onFloorDouble}>
             {props.children}
           </Mesh>
         </Suspense>
