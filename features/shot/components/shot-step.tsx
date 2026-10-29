@@ -1,10 +1,10 @@
 "use client";
 
 import { SectionNav } from "@/components/section-nav";
-import { useState, useTransition } from "react";
-import { Check, Clapperboard, Download } from "lucide-react";
+import { Fragment, useState, useTransition } from "react";
+import { Check, Clapperboard, Download, Repeat } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
 import { Section } from "@/components/section";
@@ -18,12 +18,25 @@ import { ShotTabs, type ShotTab } from "./shot-tabs";
 
 // Actions that only use what is in the keyframes: a prop the keys do not show makes LTX conjure it
 // mid-take (04_shot ACCEPT proof 6). Props go into the keyframes through the In the frame note.
-const EXAMPLES = ["slowly turns to look toward the camera", "looks around warily, the coat stirring in the wind", "takes a slow breath and glances down the street"];
+// One beat each: what they do first, as the camera moves, and by the end (LTX's prompting guide:
+// actions in order, each with a verb, emotion shown in the body).
+const EXAMPLES: { start: string; then: string; end: string }[] = [
+  { start: "stands still, breathing slowly", then: "turns their head toward the camera", end: "narrows their eyes, shoulders tense" },
+  { start: "looks around warily", then: "takes a careful step forward", end: "stops and listens, the wind stirring their clothes" },
+  { start: "lowers their head", then: "takes a slow, deep breath", end: "looks up with a faint smile" },
+];
+const BEATS = [
+  { id: "start", label: "First", placeholder: "stands still, breathing slowly" },
+  { id: "then", label: "As the camera moves", placeholder: "turns their head toward the camera" },
+  { id: "end", label: "By the end", placeholder: "narrows their eyes, shoulders tense" },
+] as const;
 
 // Step 03: set the shot's camera and walk (decision 0011), make the keyframes, say what the character does; LTX-2.5 shoots the shot's camera move, guided by its
 // keyframes. Each take is kept; pick the one the sequence uses, or download it.
 export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; keysRunning: boolean; cameraPanel: React.ReactNode; keyPanel: React.ReactNode; shots: ShotTab[] }) {
-  const [action, setAction] = useState(props.shot?.action ?? "");
+  const [beats, setBeats] = useState<{ start: string; then: string; end: string }>({ start: props.shot?.beats?.start ?? props.shot?.action ?? "", then: props.shot?.beats?.then ?? "", end: props.shot?.beats?.end ?? "" });
+  const action = [beats.start, beats.then, beats.end].map((x) => x.trim()).filter(Boolean).join(", then ");
+  const shoot = (tries: number) => run(() => renderTake(props.projectId, { beats, tries }));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const running = props.job?.status === "running";
@@ -66,7 +79,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           {props.keyPanel}
         </Section>
 
-        <Section id="action" n="3" tone="bg-tone-yellow" title="What happens" line="What the character does during the move, in a few words: a look, a turn, a gesture. Only use what the keyframes show; anything they do not show (a lantern, a sword) appears out of nowhere. Add props in the keyframes' note above."
+        <Section id="action" n="3" tone="bg-tone-yellow" title="What happens" line="What they do, in three short beats with a verb each: first, as the camera moves, by the end. Only use what the keyframes show; anything they do not show (a lantern, a sword) appears out of nowhere."
           summary={props.shot?.action || "Say what the character does"}
           open={!takes.length || running}
           className="nifl-enter"
@@ -76,26 +89,39 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
             className="flex flex-col gap-3"
             onSubmit={(e) => {
               e.preventDefault();
-              run(() => renderTake(props.projectId, { action }));
+              shoot(1);
             }}
           >
-            <Textarea value={action} onChange={(e) => setAction(e.target.value)} rows={2} placeholder="slowly turns to look toward the camera" className="resize-none text-base" aria-label="What happens" />
+            <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
+              {BEATS.map((b) => (
+                <Fragment key={b.id}>
+                  <label htmlFor={`beat-${b.id}`} className="text-xs text-muted-foreground">
+                    {b.label}
+                  </label>
+                  <Input id={`beat-${b.id}`} value={beats[b.id]} maxLength={300} onChange={(e) => setBeats({ ...beats, [b.id]: e.target.value })} placeholder={b.placeholder} />
+                </Fragment>
+              ))}
+            </div>
             {!action && (
               <div className="-mt-1 flex flex-wrap gap-1.5">
                 {EXAMPLES.map((x) => (
-                  <button key={x} type="button" onClick={() => setAction(x)} className="rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-ring/60 hover:text-foreground">
-                    {x}
+                  <button key={x.start} type="button" onClick={() => setBeats(x)} className="rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-ring/60 hover:text-foreground">
+                    {x.start} → {x.end}
                   </button>
                 ))}
               </div>
             )}
             <div className="flex items-center gap-3 border-t pt-3">
               <span className="font-mono text-[11px] text-muted-foreground">
-                ~{Math.round(expected / 10) * 10} s · {props.seconds} s of video with sound · every take is kept
+                ~{Math.round(expected / 10) * 10} s a take · {props.seconds} s of video with sound · every take is kept
               </span>
-              <Button type="submit" size="lg" className="ml-auto" disabled={busy || !props.ready || action.trim().length < 3}>
-                {pending && !running ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
+              <Button type="submit" variant="outline" className="ml-auto" disabled={busy || !props.ready || beats.start.trim().length < 3}>
+                <Clapperboard data-icon="inline-start" />
                 Shoot a take
+              </Button>
+              <Button type="button" size="lg" disabled={busy || !props.ready || beats.start.trim().length < 3} onClick={() => shoot(3)} title="Shoots until a take is steady with nothing popping in, at most 3, and picks the best">
+                {pending && !running ? <LoadingDots /> : <Repeat data-icon="inline-start" />}
+                Shoot until good
               </Button>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
@@ -106,7 +132,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           summary={takes.length ? `${takes.length} take${takes.length === 1 ? "" : "s"}${props.shot?.picked != null ? " · one picked" : ""}` : "No takes yet"}
           actions={
             takes.length > 0 && (
-              <Button size="sm" variant="outline" disabled={busy || !props.ready || action.trim().length < 3} onClick={() => run(() => renderTake(props.projectId, { action }))} title={`Another take of: ${action}`}>
+              <Button size="sm" variant="outline" disabled={busy || !props.ready || beats.start.trim().length < 3} onClick={() => shoot(1)} title={`Another take of: ${action}`}>
                 {pending && !running ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
                 Another take
               </Button>
@@ -142,7 +168,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                       {props.shot?.picked === i ? "Picked" : "Use this"}
                     </Button>
                   </span>
-                  <span className="line-clamp-2" title={t.action}>
+                  <span className="line-clamp-2" title={t.prompt ?? t.action}>
                     {t.action}
                   </span>
                 </figcaption>

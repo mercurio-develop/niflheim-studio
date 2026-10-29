@@ -173,6 +173,12 @@ export function CameraSection(props: {
             <input id="cam-seconds" type="range" min={2} max={10} step={0.5} value={m.seconds} onChange={(e) => set({ seconds: Number(e.target.value) })} className="w-full accent-primary" />
             <span className="w-14 text-right font-mono text-xs text-muted-foreground">{m.seconds} s</span>
           </div>
+          {m.seconds > 5 && (
+            <>
+              <span />
+              <p className="-mt-1 text-xs text-tone-yellow">Past 5 s a take drifts on a 16 GB card (LTX&apos;s own guidance is about 4 s): two shots of 4 s hold together better than one of {m.seconds} s.</p>
+            </>
+          )}
 
           <span className="text-xs text-muted-foreground">Focus</span>
           <div className="flex flex-wrap items-center gap-1.5">
