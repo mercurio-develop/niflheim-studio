@@ -143,6 +143,34 @@ export type AutopilotShot = { shot: string; include: boolean; action: string; ta
 export type AutopilotStep = { shot: string; kind: "keys" | "take" | "pick" | "export"; n?: number; status: "todo" | "running" | "done" | "error"; error?: string };
 export type Autopilot = { plan: AutopilotShot[]; join: Join; steps: AutopilotStep[]; state: "idle" | "running" | "done" | "error" | "stopped"; at: string };
 
+// A project holds several characters. The first ("c1") is the top-level character, turnaround,
+// assets, poses and mesh, as projects always had; the others ("c2", "c3", ...) are cast members
+// with the same fields, so old projects load unchanged.
+export type CharacterData = Pick<Project, "character" | "turnaround" | "assets" | "poses" | "mesh">;
+export type CastMember = { id: string; name: string } & CharacterData;
+export const CID = /^c[0-9]{1,3}$/;
+
+// One character's data: the project itself for c1, so writes through it land on the legacy fields.
+export function charOf(q: Project, cid = "c1"): CharacterData {
+  if (cid === "c1") return q;
+  const m = q.cast?.find((x) => x.id === cid);
+  if (!m) throw new Error("No such character.");
+  return m;
+}
+
+// c1 is named from the start of its prompt until renamed.
+const label = (prompt: string) => {
+  const words = prompt.trim().split(/\s+/).slice(0, 4).join(" ");
+  return words ? words.slice(0, 40) : "Character 1";
+};
+export function allCharacters(p: Project): { id: string; name: string; data: CharacterData }[] {
+  return [{ id: "c1", name: p.characterName ?? label(p.character.prompt ?? ""), data: p }, ...(p.cast ?? []).map((m) => ({ id: m.id, name: m.name, data: m }))];
+}
+
+// Job keys and folders per character, so two characters run jobs side by side; c1 keeps the old ones.
+export const charKey = (cid: string | undefined, key: string) => (!cid || cid === "c1" ? key : `${cid}:${key}`);
+export const charDir = (cid: string | undefined, dir: string) => (!cid || cid === "c1" ? dir : `characters/${cid}/${dir}`);
+
 // One "Generate" press: the prompt and style it used and the four images it made.
 export type ConceptSet = { prompt: string; style: string; seed: number; images: string[] };
 
@@ -170,6 +198,9 @@ export type Project = {
   assets?: Asset[]; // objects hidden from the turnaround, kept to be made on their own later
   poses?: CharacterPose[]; // the character in other poses (running, angry), for shots to swap in
   mesh?: Mesh; // the character in 3D, made from the turnaround views
+  // character .. mesh above are the first character ("c1"); every other one lives in cast.
+  characterName?: string; // c1's own name once renamed; otherwise read from its prompt
+  cast?: CastMember[];
   set?: SetData;
   stage?: StageData;
   blocks?: Block[]; // greybox shapes on the stage, painted into what their label says
@@ -217,23 +248,10 @@ export async function getProject(id: string): Promise<Project | null> {
 
 // Projects made by older builds miss fields added since; fill them so every page can read them.
 function normalize(p: Project): Project {
-  const c = (p.character ??= { prompt: "" } as Project["character"]);
-  c.style ??= "painterly";
-  c.seed ??= Math.floor(Math.random() * 2 ** 31);
-  c.concepts ??= [];
-  c.sets ??= [];
-  c.versions ??= [];
-  c.current ??= null;
+  normalizeChar(p);
+  p.cast ??= [];
+  for (const m of p.cast) normalizeChar(m);
   p.jobs ??= {};
-  const t = p.turnaround as (Project["turnaround"] & { views: Record<string, unknown> }) | undefined;
-  if (t) {
-    t.options ??= { pose: "designed", hide: [], keep: [], extras: [] };
-    t.options.keep ??= [...t.options.hide];
-    // Turnarounds made before views had versions stored one image per view.
-    for (const [k, v] of Object.entries(t.views)) {
-      if (typeof v === "string") t.views[k] = { versions: [{ image: v, label: k, parts: {} }], current: 0 };
-    }
-  }
   // Projects from before shots: what they have is shot 1.
   if (!p.shots?.length) {
     p.shots = [{ id: "s1", name: "Shot 1" }];
@@ -242,6 +260,26 @@ function normalize(p: Project): Project {
   p.activeShot ??= p.shots[0].id;
   p.stash ??= {};
   return p;
+}
+
+// One character's defaults, for c1 (the project) and every cast member alike.
+function normalizeChar(d: CharacterData) {
+  const c = (d.character ??= { prompt: "" } as Project["character"]);
+  c.style ??= "painterly";
+  c.seed ??= Math.floor(Math.random() * 2 ** 31);
+  c.concepts ??= [];
+  c.sets ??= [];
+  c.versions ??= [];
+  c.current ??= null;
+  const t = d.turnaround as (Project["turnaround"] & { views: Record<string, unknown> }) | undefined;
+  if (t) {
+    t.options ??= { pose: "designed", hide: [], keep: [], extras: [] };
+    t.options.keep ??= [...t.options.hide];
+    // Turnarounds made before views had versions stored one image per view.
+    for (const [k, v] of Object.entries(t.views)) {
+      if (typeof v === "string") t.views[k] = { versions: [{ image: v, label: k, parts: {} }], current: 0 };
+    }
+  }
 }
 
 async function save(p: Project) {
