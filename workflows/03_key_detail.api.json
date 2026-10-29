@@ -1,0 +1,265 @@
+{
+ "1": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "key.png"
+  },
+  "_meta": {
+   "title": "Key"
+  }
+ },
+ "2": {
+  "class_type": "SAM3Segment",
+  "inputs": {
+   "image": [
+    "1",
+    0
+   ],
+   "model_name": "sam3.1_multiplex_fp16",
+   "prompt": "face",
+   "output_mode": "Merged",
+   "confidence_threshold": 0.35,
+   "max_segments": 0,
+   "segment_pick": 0,
+   "mask_blur": 0,
+   "mask_offset": 6,
+   "device": "Auto",
+   "invert_output": false,
+   "unload_model": false,
+   "background": "Alpha",
+   "background_color": "#222222"
+  },
+  "_meta": {
+   "title": "Find: face"
+  }
+ },
+ "3": {
+  "class_type": "SAM3Segment",
+  "inputs": {
+   "image": [
+    "1",
+    0
+   ],
+   "model_name": "sam3.1_multiplex_fp16",
+   "prompt": "hand",
+   "output_mode": "Merged",
+   "confidence_threshold": 0.35,
+   "max_segments": 0,
+   "segment_pick": 0,
+   "mask_blur": 0,
+   "mask_offset": 6,
+   "device": "Auto",
+   "invert_output": false,
+   "unload_model": false,
+   "background": "Alpha",
+   "background_color": "#222222"
+  },
+  "_meta": {
+   "title": "Find: hand"
+  }
+ },
+ "4": {
+  "class_type": "MaskToSEGS",
+  "inputs": {
+   "mask": [
+    "2",
+    1
+   ],
+   "combined": false,
+   "crop_factor": 2.5,
+   "bbox_fill": false,
+   "drop_size": 8,
+   "contour_fill": false
+  }
+ },
+ "5": {
+  "class_type": "MaskToSEGS",
+  "inputs": {
+   "mask": [
+    "3",
+    1
+   ],
+   "combined": false,
+   "crop_factor": 2.5,
+   "bbox_fill": false,
+   "drop_size": 8,
+   "contour_fill": false
+  }
+ },
+ "11": {
+  "class_type": "CLIPLoader",
+  "inputs": {
+   "clip_name": "qwen_3_4b_fp8_mixed.safetensors",
+   "type": "lumina2",
+   "device": "default"
+  }
+ },
+ "10": {
+  "class_type": "UNETLoader",
+  "inputs": {
+   "unet_name": "z_image_turbo_int8_convrot.safetensors",
+   "weight_dtype": "default"
+  }
+ },
+ "12": {
+  "class_type": "VAELoader",
+  "inputs": {
+   "vae_name": "ae.safetensors"
+  }
+ },
+ "13": {
+  "class_type": "ModelSamplingAuraFlow",
+  "inputs": {
+   "model": [
+    "10",
+    0
+   ],
+   "shift": 3
+  }
+ },
+ "14": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "text": "a clean, well-drawn face with clear eyes, nose and mouth, same character, same art style",
+   "clip": [
+    "11",
+    0
+   ]
+  },
+  "_meta": {
+   "title": "Face prompt"
+  }
+ },
+ "16": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "text": "a well-drawn hand with five fingers, natural pose, same art style",
+   "clip": [
+    "11",
+    0
+   ]
+  },
+  "_meta": {
+   "title": "Hand prompt"
+  }
+ },
+ "15": {
+  "class_type": "ConditioningZeroOut",
+  "inputs": {
+   "conditioning": [
+    "14",
+    0
+   ]
+  }
+ },
+ "6": {
+  "class_type": "DetailerForEach",
+  "inputs": {
+   "image": [
+    "1",
+    0
+   ],
+   "segs": [
+    "4",
+    0
+   ],
+   "model": [
+    "13",
+    0
+   ],
+   "clip": [
+    "11",
+    0
+   ],
+   "vae": [
+    "12",
+    0
+   ],
+   "guide_size": 512,
+   "guide_size_for": true,
+   "max_size": 1024,
+   "seed": 7,
+   "steps": 8,
+   "cfg": 1,
+   "sampler_name": "res_multistep",
+   "scheduler": "simple",
+   "positive": [
+    "14",
+    0
+   ],
+   "negative": [
+    "15",
+    0
+   ],
+   "denoise": 0.35,
+   "feather": 6,
+   "noise_mask": true,
+   "force_inpaint": true,
+   "wildcard": "",
+   "cycle": 1
+  },
+  "_meta": {
+   "title": "Refine faces"
+  }
+ },
+ "7": {
+  "class_type": "DetailerForEach",
+  "inputs": {
+   "image": [
+    "6",
+    0
+   ],
+   "segs": [
+    "5",
+    0
+   ],
+   "model": [
+    "13",
+    0
+   ],
+   "clip": [
+    "11",
+    0
+   ],
+   "vae": [
+    "12",
+    0
+   ],
+   "guide_size": 512,
+   "guide_size_for": true,
+   "max_size": 1024,
+   "seed": 7,
+   "steps": 8,
+   "cfg": 1,
+   "sampler_name": "res_multistep",
+   "scheduler": "simple",
+   "positive": [
+    "16",
+    0
+   ],
+   "negative": [
+    "15",
+    0
+   ],
+   "denoise": 0.35,
+   "feather": 6,
+   "noise_mask": true,
+   "force_inpaint": true,
+   "wildcard": "",
+   "cycle": 1
+  },
+  "_meta": {
+   "title": "Refine hands"
+  }
+ },
+ "8": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "7",
+    0
+   ],
+   "filename_prefix": "nifl/key-detail"
+  }
+ }
+}
