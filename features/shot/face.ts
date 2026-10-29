@@ -1,9 +1,9 @@
 import path from "node:path";
-import { homedir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { runWorkflow } from "@/lib/comfy";
 import type { Project } from "@/lib/store";
+import { PYTHON } from "@/lib/python";
 
 // The key face pass (server only, not an action: it takes file paths): SAM3 finds the head in a
 // key, the crop is repainted by Qwen-Image-Edit from the crop and the character's face reference
@@ -12,7 +12,6 @@ import type { Project } from "@/lib/store";
 // keeper (05_submit data/proof/key-face). About 45 s on Comfy Cloud.
 
 const run = promisify(execFile);
-const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
 const PATCH = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "face_patch.py");
 const PROMPT =
   "Repaint the face in image 1 so it is the same character as image 2: the same face shape, eyes, nose, mouth, skin, hair and markings as image 2. Keep everything else in image 1 exactly as it is: the head's angle, the expression, the light and shadows, the colours of the scene, the framing and the art style. No text.";

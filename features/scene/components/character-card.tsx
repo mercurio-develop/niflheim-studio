@@ -58,10 +58,11 @@ export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>;
   }, [textures]);
   const worn = useRef<THREE.Texture[] | null>(null); // the cutouts the card last put on
   const mesh = useRef<THREE.Mesh>(null);
-  // Clay: the cutout's colours replaced by one flat grey, keeping only its shape (the alpha).
+  // Clay: the cutout's colours replaced by one flat grey, keeping only its shape (the alpha): the
+  // stage's guide grey (#b9b4ab, stage-viewer.tsx), so the clip reads as one clay set.
   const material = useMemo(() => {
     const m = new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.4, side: THREE.DoubleSide });
-    if (props.clay) m.onBeforeCompile = (s) => void (s.fragmentShader = s.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n diffuseColor.rgb = vec3(0.56, 0.54, 0.51);"));
+    if (props.clay) m.onBeforeCompile = (s) => void (s.fragmentShader = s.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n diffuseColor.rgb = vec3(0.725, 0.706, 0.671);"));
     return m;
   }, [props.clay]);
   useEffect(() => void (shown.current = -1), [props.height]); // resize on the next frame

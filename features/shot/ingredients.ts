@@ -5,12 +5,13 @@
 // who and what they are. On Comfy Cloud only the 2.3 file exists; Lightricks' 2.5 graph runs it
 // on the 2.5 distilled model too.
 
+import type { SheetRow } from "@/lib/store";
+
 type Graph = Record<string, { class_type: string; inputs: Record<string, unknown>; _meta?: { title: string } }>;
 
 export const INGREDIENTS_LORA = process.env.LTX_INGREDIENTS_LORA || "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors";
 // The 2.3 file ships unscaled (its card: 1.4; Lightricks' 2.5 graph: 1.3); the 2.5 file is pre-scaled to 1.0.
 export const INGREDIENTS_STRENGTH = INGREDIENTS_LORA.includes("2.5") ? 1 : 1.3;
-export const SHEET_STRENGTH = 1;
 export const SHEET_NODE = "300";
 export const SHEET_FRAMES = 121; // the trained length: 768x448, 121 frames, 24 fps
 
@@ -28,15 +29,24 @@ export function addIngredients(g: Graph, length: number) {
   g["304"] = { class_type: "GetICLoRAParameters", inputs: { iclora_model: ["301", 0] } };
   g["305"] = {
     class_type: "LTXVAddGuide",
-    inputs: { positive: ["22", 0], negative: ["22", 1], vae: ["11", 0], latent: ["30", 0], image: ["303", 0], frame_idx: 0, strength: SHEET_STRENGTH, iclora_parameters: ["304", 0] },
+    inputs: { positive: ["22", 0], negative: ["22", 1], vae: ["11", 0], latent: ["30", 0], image: ["303", 0], frame_idx: 0, strength: 1, iclora_parameters: ["304", 0] },
     _meta: { title: "Guide: reference sheet" },
   };
   g[FIRST_GUIDE].inputs = { ...g[FIRST_GUIDE].inputs, positive: ["305", 0], negative: ["305", 1], latent: ["305", 2] };
 }
 
-// The rows scripts/make_sheet.py drew, top to bottom.
-export type SheetRows = { kind: "faces+items" | "bodies" | "set"; cells: string[] }[];
+// The rows scripts/make_sheet.py drew, top to bottom; its cell labels (face, front,
+// three-quarter, side, back, item1..3, prop1:1.., place) are the contract sheetPrompt reads.
+export type SheetRows = SheetRow[];
 export type SheetElement = { name: string; description?: string; kind?: "object" | "character" };
+
+// "a young lantern keeper in a hooded wool coat, leather satchel" becomes the young lantern keeper,
+// described as in a hooded wool coat, leather satchel: how a sheet's prompt names its character.
+export function whoOf(prompt: string): SheetElement {
+  const [first, ...rest] = prompt.split(",");
+  const [name, wearing] = first.split(/ in (?=a |an |the )/);
+  return { name: name.trim().replace(/^(a|an) /, "the ") || "the character", description: [wearing && `in ${wearing}`, ...rest].filter(Boolean).join(",").trim() };
+}
 
 const sentence = (x: string) => x.trim().replace(/[.\s]+$/, "");
 const VIEWS = ["front", "three-quarter", "side", "back"];

@@ -1,7 +1,6 @@
 "use server";
 
 import path from "node:path";
-import { homedir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
@@ -13,12 +12,13 @@ import { cancelJob, startJob } from "@/lib/jobs";
 import { getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { DEFAULT_NEGATIVE, END_NEW_POSE_STRENGTH, END_STRENGTH, middleImageNode, shapeShot } from "../graph";
-import { layoutKey } from "./layout";
-import { addIngredients, firstKeyOnly, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, withSheet, type SheetRows } from "../ingredients";
+import { sceneKey } from "@/lib/progress";
+import { keysProblem, suggestedKind } from "../state";
+import { addIngredients, firstKeyOnly, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, whoOf, withSheet } from "../ingredients";
+import { PYTHON } from "@/lib/python";
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const run = promisify(execFile);
-const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
 const SCORE = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "score_take.py");
 
 // How a take moves and whether things pop in (scripts/score_take.py, a few seconds); a take that
@@ -32,7 +32,11 @@ async function scoreTake(file: string): Promise<TakeScore | undefined> {
     return undefined;
   }
 }
-const done = (id: string) => revalidatePath(`/p/${id}/shot`);
+// The reel shows the picked takes too.
+const done = (id: string) => {
+  revalidatePath(`/p/${id}/shot`);
+  revalidatePath(`/p/${id}/export`);
+};
 
 
 // The camera, said relative to them (LTX prompting guide: the move, its speed, and what the frame
@@ -124,12 +128,11 @@ const rank = (s?: TakeScore) => (s ? s.popins * 100 + s.worst : 1e9);
 function sheetFor(p: Project, video: string, expression?: string) {
   const sheet = p.sheet;
   if (!sheet?.drawn || !sheet.rows) throw new Error("Make the character's sheet first (Character > Turnaround > Sheet).");
-  const [first, ...rest] = (p.character.prompt ?? "").split(",");
-  const [name, wearing] = first.split(/ in (?=a |an |the )/);
-  const who = { name: name.trim().replace(/^(a|an) /, "the ") || "the character", description: [wearing && `in ${wearing}`, ...rest].filter(Boolean).join(",").trim() };
-  const items = sheet.cells.filter((c) => c.kind === "item").map((c) => c.label);
+  const who = whoOf(p.character.prompt ?? "");
+  // Numbered as the sheet drew them: the painted ones only (make_sheet.py's item1, item2...).
+  const items = sheet.cells.filter((c) => c.kind === "item" && c.image).map((c) => c.label);
   const said = expression ? `${video} Their expression: ${expression}.` : video;
-  return { file: sheet.drawn, prompt: withSheet(sheetPrompt(sheet.rows as SheetRows, who, [], p.set?.prompt, items), said) };
+  return { file: sheet.drawn, prompt: withSheet(sheetPrompt(sheet.rows, who, [], p.set?.prompt, items), said) };
 }
 
 export async function renderTake(id: string, raw: unknown) {
@@ -137,12 +140,14 @@ export async function renderTake(id: string, raw: unknown) {
   const negative = DEFAULT_NEGATIVE;
   const p = await getProject(id);
   if (!p) throw new Error("Project not found.");
+  if (!p.camera) throw new Error("Choose a camera move first.");
   const k = p.keyframes;
-  if (!p.camera || !k?.keys.length || !k.keys.every(Boolean)) throw new Error("Make the keyframes first.");
+  const kind = p.shot?.kind ?? suggestedKind(p);
+  // Keys guide every take but a character take from the sheet alone; they must be today's.
+  const problem = keysProblem(p);
+  if (problem && (kind === "camera" || fromKey)) throw new Error(problem);
   const length = frameCount(p.camera.seconds);
-  if (k.frames.at(-1) !== length - 1) throw new Error("The camera move changed since the keyframes were made: make them again.");
-  const keys = k.keys as string[];
-  const kind = p.shot?.kind ?? "camera";
+  const keys = (k?.keys ?? []) as string[];
   // A character take is the sheet's trained length, from the sheet alone or from the first key too
   // (only when that key shows the same character: a key painted with someone else wins the face,
   // 05_submit take mvu4qdjl); a camera take follows every key over the move.
@@ -150,7 +155,7 @@ export async function renderTake(id: string, raw: unknown) {
   // A camera take with an up-to-date clay clip runs Layout-to-Render (03_shot_layout): the clip
   // guides every frame and only the first key is painted (the take follows the move and the
   // blocking; 05_submit proof: camera travel 33 px and no pop-ins against 1.2 px and 41 keys-only).
-  const clip = !sheet && p.layout && p.layout.frames === length && p.layout.key === (await layoutKey(p)) ? p.layout : null;
+  const clip = !sheet && p.layout && p.layout.frames === length && p.layout.key === sceneKey(p) ? p.layout : null;
   const frames = sheet ? SHEET_FRAMES : length;
   // Lightricks: never "clay", "3D" or "Unreal" in a Layout-to-Render prompt, or the take looks like the clip.
   const prompt = sheet?.prompt ?? (clip ? shotPrompt(p, beats).replace(/\b(clay|3D|Unreal)\b\s*/gi, "") : shotPrompt(p, beats));
@@ -171,7 +176,7 @@ export async function renderTake(id: string, raw: unknown) {
             g["33"].inputs.frames_number = frames;
             return;
           }
-          if (!sheet) return shapeShot(g, k.frames, length, endStrength);
+          if (!sheet) return shapeShot(g, k!.frames, length, endStrength);
           shapeShot(g, [0, frames - 1], frames);
           firstKeyOnly(g);
           addIngredients(g, frames);
@@ -195,7 +200,7 @@ export async function renderTake(id: string, raw: unknown) {
       const score = await scoreTake(video);
       let index = 0;
       await updateProject(id, (q) => {
-        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k.at, seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind, layout: !!clip };
+        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k?.at ?? "", seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind, layout: !!clip };
         q.shot = { action, negative, ...q.shot, takes: [...(q.shot?.takes ?? []), take] };
         index = q.shot.takes.length - 1;
       });
