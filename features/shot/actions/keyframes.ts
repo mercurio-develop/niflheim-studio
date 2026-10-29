@@ -26,7 +26,7 @@ async function load(id: string): Promise<Project> {
 function sceneKey(p: Project) {
   const fill = currentFill(p);
   if (!fill?.camera?.floor || !p.stage?.at || !p.camera) return null;
-  return renderKey(p.camera, p.stage.at, p.stage.height, fill.mesh);
+  return renderKey(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn);
 }
 
 // Every key is the capture repainted on its own with one strict prompt and one seed: keep

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Line } from "@react-three/drei";
+import { Line, PivotControls } from "@react-three/drei";
 import * as THREE from "three";
-import { FPS, type Pose } from "@/lib/camera";
+import { FPS, type Pose, type Vec } from "@/lib/camera";
 
 const OK = new THREE.Color("#5eead4");
 const OUT = new THREE.Color("#f87171");
@@ -12,8 +12,9 @@ const OUT = new THREE.Color("#f87171");
 // The camera move inside the stage viewer. Overview: the path as a line (red where it leaves the
 // space the stage holds), a dot at each end, and a small camera that runs along it while playing.
 // Painting view: Play flies the viewer's own camera along the path, at the shot's real speed, and
-// puts it back where it was when done.
-export function CameraPath(props: { poses: Pose[]; inside: boolean[]; overview: boolean; playing: boolean; onDone: () => void }) {
+// puts it back where it was when done. onStart: Overview's gizmo on the start, dragged along the
+// ground and up and down, gives where the camera now starts.
+export function CameraPath(props: { poses: Pose[]; inside: boolean[]; overview: boolean; playing: boolean; onDone: () => void; onStart?: (p: Vec) => void }) {
   const points = useMemo(() => props.poses.map((p) => new THREE.Vector3(...p.position)), [props.poses]);
   const colours = useMemo(() => props.inside.map((ok) => (ok ? OK : OUT)), [props.inside]);
   const marker = useRef<THREE.Group>(null);
@@ -59,6 +60,22 @@ export function CameraPath(props: { poses: Pose[]; inside: boolean[]; overview: 
   const start = props.poses[0];
   return (
     <>
+      {props.onStart && !props.playing && (
+        <PivotControls
+          matrix={new THREE.Matrix4().makeTranslation(points[0])}
+          autoTransform={false}
+          disableRotations
+          disableScaling
+          depthTest={false}
+          fixed
+          scale={90}
+          lineWidth={3}
+          onDrag={(_l, _dl, w) => {
+            const p = new THREE.Vector3().setFromMatrixPosition(w);
+            props.onStart!([p.x, Math.max(0.2, p.y), p.z]);
+          }}
+        />
+      )}
       <Line points={points} vertexColors={colours} lineWidth={3} />
       <mesh position={points[0]}>
         <sphereGeometry args={[0.08, 12, 12]} />

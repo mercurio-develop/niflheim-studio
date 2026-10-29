@@ -6,19 +6,20 @@ import { Button } from "@/components/ui/button";
 import { More, Section } from "@/components/section";
 import { LoadingDots } from "@/components/loading-dots";
 import { JobStatus } from "@/features/wizard/components/job-status";
-import { FPS, MOVES, frameCount, type CameraMove } from "@/lib/camera";
+import { FPS, FRAMINGS, MOVES, frameCount, type CameraMove, type Vec } from "@/lib/camera";
 import type { CameraRender, Job } from "@/lib/store";
 import { renderCamera, saveCamera } from "../actions/camera";
 import { chip } from "./chip";
 
-// Step 3 of the scene: the camera move, aimed at the character. Pick a move, tune how far and how
-// long; the path shows in the stage above (Overview), Play flies it, and frames that leave the
+// Step 3 of the scene: the camera move, aimed at the character. Pick where it starts (a framing,
+// or Free: dragged in Overview, its height set here), a move, how far and how long; the path shows in the stage above (Overview), Play flies it, and frames that leave the
 // space the stage holds are counted. Saved a moment after the last change. Render makes the depth
 // video the shot follows, and a colour preview of what the stage gives along the path.
 export function CameraSection(props: {
   projectId: string;
   move: CameraMove;
   onMove: (m: CameraMove) => void;
+  start: Vec | null; // where the move starts today, which the Height slider raises or lowers
   outside: number; // frames outside the stage's space
   overview: boolean;
   onOverview: (on: boolean) => void;
@@ -32,6 +33,7 @@ export function CameraSection(props: {
 }) {
   const m = props.move;
   const spec = MOVES.find((x) => x.id === m.move)!;
+  const framing = FRAMINGS.find((x) => x.id === (m.framing ?? "painting"))!;
   const frames = frameCount(m.seconds);
   const [error, setError] = useState<string | null>(null);
   const [starting, start] = useTransition();
@@ -47,7 +49,7 @@ export function CameraSection(props: {
     const t = setTimeout(() => start(() => saveCamera(props.projectId, m).then(() => setError(null), (e: Error) => setError(e.message))), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m.move, m.amount, m.seconds, m.ease]);
+  }, [m.move, m.amount, m.seconds, m.ease, m.framing, m.from?.join()]);
 
   return (
     <Section
@@ -56,7 +58,7 @@ export function CameraSection(props: {
       tone="bg-tone-pink"
       title="Camera"
       line={props.ready ? "A move aimed at the character. Overview shows the path in the stage; Play flies it from the painting's view." : "Stand the character on the stage first: every move is aimed at them."}
-      summary={`${spec.label}${m.move === "static" ? "" : ` ${m.amount}${spec.unit}`} · ${m.seconds} s${m.ease ? " · eased" : ""}`}
+      summary={`${framing.label} · ${spec.label}${m.move === "static" ? "" : ` ${m.amount}${spec.unit}`} · ${m.seconds} s${m.ease ? " · eased" : ""}`}
       open={props.ready}
       actions={
         props.ready && (
@@ -78,6 +80,38 @@ export function CameraSection(props: {
       {props.tabs}
       {props.ready && (
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:max-w-xl">
+          <span className="text-xs text-muted-foreground">Framing</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {FRAMINGS.map((x) => (
+              <button key={x.id} type="button" aria-pressed={framing.id === x.id} className={chip(framing.id === x.id)} onClick={() => set({ framing: x.id, from: x.id === "free" ? (m.from ?? props.start ?? undefined) : m.from })}>
+                {x.label}
+              </button>
+            ))}
+          </div>
+          <span />
+          <p className="-mt-1 text-xs text-muted-foreground">{framing.line}</p>
+
+          {props.start && (
+            <>
+              <label htmlFor="cam-height" className="text-xs text-muted-foreground">
+                Height
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  id="cam-height"
+                  type="range"
+                  min={0.2}
+                  max={4}
+                  step={0.05}
+                  value={Math.min(4, Math.max(0.2, props.start[1]))}
+                  onChange={(e) => set({ framing: "free", from: [props.start![0], Number(e.target.value), props.start![2]] })}
+                  className="w-full accent-primary"
+                />
+                <span className="w-14 text-right font-mono text-xs text-muted-foreground">{props.start[1].toFixed(2)} m</span>
+              </div>
+            </>
+          )}
+
           <span className="text-xs text-muted-foreground">Move</span>
           <div className="flex flex-wrap items-center gap-1.5">
             {MOVES.map((x) => (
@@ -168,7 +202,7 @@ export function CameraSection(props: {
       {props.ready && props.outside > 0 && (
         <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
           <TriangleAlert className="mt-px size-3.5 shrink-0 text-tone-yellow" />
-          {props.outside} of {frames} frames leave the space the stage holds (red in Overview): those will show holes or stretched shapes. A smaller move stays clean.
+          {props.outside} of {frames} frames leave the space the stage holds (red in Overview): those will show holes or stretched shapes. A smaller move, or a start nearer the painting's camera, stays clean.
         </p>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}

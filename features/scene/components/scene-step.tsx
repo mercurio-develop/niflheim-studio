@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
 import { ShotTabs, type ShotTab } from "@/features/shot/components/shot-tabs";
-import { DEFAULT_MOVE, aim, inside, poses, renderKey, type CameraMove } from "@/lib/camera";
+import { DEFAULT_MOVE, inside, poses, renderKey, type CameraMove, type Vec } from "@/lib/camera";
 import type { CameraRender, Job, Keyframes, SetData, StageData } from "@/lib/store";
 import { CameraPath } from "./camera-path";
 import { CameraSection } from "./camera-section";
@@ -43,9 +43,17 @@ export function SceneStep(props: {
   const [playing, setPlaying] = useState(false);
   const path = useMemo(() => {
     if (!ready) return null;
-    const ps = poses(cam!, aim(cam!, at, props.placement!.height), move);
+    const ps = poses(cam!, { at: at!, height: props.placement!.height, turn: props.placement!.turn }, move);
     return { poses: ps, inside: ps.map((p) => inside(cam!, p.position)) };
   }, [ready, cam, at, props.placement, move]);
+  const pick = (m: CameraMove) => {
+    setPlaying(false);
+    setMove(m);
+  };
+  const view = (on: boolean) => {
+    setPlaying(false);
+    setOverview(on);
+  };
   // Play and Overview happen in the stage viewer: bring it into view.
   const toStage = () => document.getElementById("stage")?.scrollIntoView({ behavior: "smooth", block: "start" });
   return (
@@ -68,20 +76,18 @@ export function SceneStep(props: {
           setJob={props.setJob}
           stageJob={props.stageJob}
           overview={ready && overview}
-          layer={path && <CameraPath poses={path.poses} inside={path.inside} overview={overview} playing={playing} onDone={() => setPlaying(false)} />}
+          onOverview={ready ? view : undefined}
+          layer={path && <CameraPath poses={path.poses} inside={path.inside} overview={overview} playing={playing} onDone={() => setPlaying(false)} onStart={(from: Vec) => pick({ ...move, framing: "free", from })} />}
         />
         <CameraSection
           projectId={props.projectId}
           move={move}
-          onMove={(m) => {
-            setPlaying(false);
-            setMove(m);
-          }}
+          onMove={pick}
+          start={path?.poses[0].position ?? null}
           outside={path ? path.inside.filter((x) => !x).length : 0}
           overview={overview}
           onOverview={(on) => {
-            setPlaying(false);
-            setOverview(on);
+            view(on);
             if (on) toStage();
           }}
           playing={playing}
@@ -92,7 +98,7 @@ export function SceneStep(props: {
           tabs={ready && <ShotTabs projectId={props.projectId} shots={props.shots} locked={stageBusy || props.keyJob?.status === "running"} />}
           ready={ready}
           render={props.cameraRender}
-          renderKey={ready ? renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh) : null}
+          renderKey={ready ? renderKey(move, at!, props.placement!.height, props.set!.stage!.fill!.mesh, props.placement!.turn) : null}
           job={props.stageJob}
         />
         </div>

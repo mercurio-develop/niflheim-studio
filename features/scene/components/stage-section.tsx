@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Box, PaintBucket, PersonStanding, RefreshCw, Scissors } from "lucide-react";
+import { Box, Eye, Map as MapIcon, PaintBucket, PersonStanding, RefreshCw, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
 import { More, Section } from "@/components/section";
@@ -26,6 +26,7 @@ export function StageSection(props: {
   setJob?: Job;
   stageJob?: Job;
   overview?: boolean; // show the stage from above, for the camera path
+  onOverview?: (on: boolean) => void; // switch between the painting's view and Overview, once there is a camera
   layer?: React.ReactNode; // drawn in the viewer: the camera path
 }) {
   const s = props.set;
@@ -145,6 +146,22 @@ export function StageSection(props: {
                 Your stage appears here.
               </>
             )}
+          </div>
+        )}
+        {fresh && props.onOverview && (
+          <div role="group" aria-label="View" className="absolute top-3 left-3 flex rounded-full border bg-background/80 p-0.5 text-xs backdrop-blur">
+            {([false, true] as const).map((on) => (
+              <button
+                key={String(on)}
+                type="button"
+                aria-pressed={!!props.overview === on}
+                onClick={() => props.onOverview!(on)}
+                className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors", !!props.overview === on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                {on ? <MapIcon className="size-3.5" /> : <Eye className="size-3.5" />}
+                {on ? "Overview" : "Painting view"}
+              </button>
+            ))}
           </div>
         )}
         {building && s?.image && !fresh && <div aria-hidden className="nifl-loading pointer-events-none absolute inset-0 bg-transparent" />}

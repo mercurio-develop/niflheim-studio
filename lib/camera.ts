@@ -7,8 +7,12 @@ import type { StageCamera } from "./stage-fill";
 
 export type Vec = [number, number, number];
 export type MoveId = "static" | "push" | "pull" | "arc" | "crane" | "track";
-export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean };
+export type FramingId = "painting" | "long" | "mid" | "close" | "pov" | "free";
+// framing: where the move starts (none: the painting's camera); from: the start a Free framing keeps.
+export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec };
 export type Pose = { position: Vec; target: Vec };
+// Who the camera is about: where they stand, how tall, which way they face (degrees, CharacterCard's).
+export type Subject = { at: Vec; height: number; turn: number };
 
 export const FPS = 24;
 
@@ -21,6 +25,19 @@ export const MOVES: { id: MoveId; label: string; line: string; unit: string; min
   { id: "crane", label: "Crane", line: "Rises while looking at them. Negative sinks.", unit: "m", min: -1, max: 2, step: 0.05, value: 0.5 },
   { id: "track", label: "Track", line: "Slides sideways, keeping them in frame. Negative goes left.", unit: "m", min: -2, max: 2, step: 0.05, value: 0.8 },
 ];
+// Where a shot starts. Long, mid and close stand between the character and the painting's camera
+// (the side the stage holds best), at distances for a 1.7 m character, scaled with their height;
+// first person is their eyes, looking the way they face.
+export const FRAMINGS: { id: FramingId; label: string; line: string }[] = [
+  { id: "painting", label: "Painting", line: "From the painting's own camera: the view the stage is surest of." },
+  { id: "long", label: "Long", line: "Long shot: all of them and the place around them." },
+  { id: "mid", label: "Mid", line: "Mid shot: waist up." },
+  { id: "close", label: "Close-up", line: "Close-up: head and shoulders." },
+  { id: "pov", label: "First person", line: "First person: through their eyes, looking the way they face." },
+  { id: "free", label: "Free", line: "Where you put it: drag the camera in Overview, set its height below." },
+];
+const SHOT = { long: { dist: 6, eye: 0.95, look: 0.5 }, mid: { dist: 2.4, eye: 0.75, look: 0.7 }, close: { dist: 1.1, eye: 0.9, look: 0.88 } };
+
 // 4 s = 97 frames: the length LTX-2.5 shot best on 16 GB (04_shot ACCEPT: 768x448, 97 frames).
 export const DEFAULT_MOVE: CameraMove = { move: "push", amount: 1.2, seconds: 4, ease: true };
 
@@ -50,9 +67,31 @@ export function aim(cam: StageCamera, at?: Vec | null, height = 1.7): Vec {
   return at ? [at[0], at[1] + height * 0.6, at[2]] : home(cam).look;
 }
 
+// Where a move starts and what it looks at, for the move's framing.
+export function start(cam: StageCamera, who: Subject, m: CameraMove): Pose {
+  const chest = aim(cam, who.at, who.height);
+  const f = m.framing ?? "painting";
+  if (f === "free" && m.from) return { position: m.from, target: chest };
+  if (f === "pov") {
+    const a = (who.turn * Math.PI) / 180;
+    const facing: Vec = [Math.sin(a), 0, Math.cos(a)];
+    const eyes = add(who.at, [0, who.height * 0.93, 0]);
+    return { position: add(eyes, scale(facing, 0.1)), target: add(eyes, scale(facing, 3)) };
+  }
+  if (f === "long" || f === "mid" || f === "close") {
+    const s = SHOT[f];
+    const k = who.height / 1.7;
+    const back = sub(home(cam).position, who.at);
+    const flat: Vec = [back[0], 0, back[2]];
+    const dir = scale(flat, 1 / (len(flat) || 1));
+    const position = add(who.at, add(scale(dir, s.dist * k), [0, Math.max(0.3, who.height * s.eye), 0]));
+    return { position, target: add(who.at, [0, who.height * s.look, 0]) };
+  }
+  return { position: home(cam).position, target: chest };
+}
+
 // The first and last pose of a move; frames ease between them (an arc turns on its circle).
-function ends(cam: StageCamera, aimAt: Vec, m: CameraMove): { from: Vec; to: Vec; arc?: { centre: Vec; angle: number } } {
-  const p0 = home(cam).position;
+function ends(p0: Vec, aimAt: Vec, m: CameraMove): { from: Vec; to: Vec; arc?: { centre: Vec; angle: number } } {
   const toAim = sub(aimAt, p0);
   const dir = scale(toAim, 1 / (len(toAim) || 1));
   const right: Vec = [-dir[2], 0, dir[0]]; // horizontal, screen right
@@ -73,10 +112,11 @@ function ends(cam: StageCamera, aimAt: Vec, m: CameraMove): { from: Vec; to: Vec
   }
 }
 
-// Every frame's pose, eased in and out when asked.
-export function poses(cam: StageCamera, aimAt: Vec, m: CameraMove): Pose[] {
+// Every frame's pose, from the framing's start, eased in and out when asked.
+export function poses(cam: StageCamera, who: Subject, m: CameraMove): Pose[] {
   const n = frameCount(m.seconds);
-  const e = ends(cam, aimAt, m);
+  const { position: p0, target: aimAt } = start(cam, who, m);
+  const e = ends(p0, aimAt, m);
   const out: Pose[] = [];
   for (let i = 0; i < n; i++) {
     const t0 = n === 1 ? 0 : i / (n - 1);
@@ -125,10 +165,14 @@ export function c2w(p: Pose): number[][] {
   ];
 }
 
-// What a camera render was made from: the move, where the character stands and the stage. A render
-// whose key differs from today's is out of date.
-export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string) =>
-  [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh].join("|");
+// What a camera render was made from: the move and its framing, where the character stands and the
+// stage. A render whose key differs from today's is out of date. The painting's framing adds
+// nothing, so renders from before framings stay current.
+export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string, turn = 0) => {
+  const f = m.framing ?? "painting";
+  const framing = f === "painting" ? [] : f === "free" ? [f, ...(m.from ?? []).map((x) => x.toFixed(2))] : f === "pov" ? [f, turn] : [f];
+  return [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh, ...framing].join("|");
+};
 
 // The frames the shot is guided at: every 32nd frame of the move and its last (97 frames: 0, 32,
 // 64, 96), as LTX-2.5 kept a move continuous with guides that close (04_shot proof 2).

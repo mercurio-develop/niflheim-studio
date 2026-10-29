@@ -11,7 +11,7 @@ import type { StagePose } from "@/features/scene/components/stage-viewer";
 import { saveKeys } from "@/features/shot/actions/keyframes";
 import { renderTake } from "@/features/shot/actions/shot";
 import { selectShot } from "@/features/shot/actions/shots";
-import { aim, keyFrames, poses, type CameraMove } from "@/lib/camera";
+import { keyFrames, poses, type CameraMove } from "@/lib/camera";
 import type { StageCamera } from "@/lib/stage-fill";
 import type { Autopilot as Pilot, AutopilotShot, AutopilotStep, Join, ViewId } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -66,7 +66,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
   const captureKeys = (move: CameraMove) =>
     new Promise<Blob[]>((resolve, reject) => {
       const s = props.scene!;
-      const ps = poses(s.camera, aim(s.camera, s.at, s.height), move);
+      const ps = poses(s.camera, s, move);
       setCapture({ poses: keyFrames(move).map((f) => ps[f]), done: (b) => (setCapture(null), resolve(b)), fail: (m) => (setCapture(null), reject(new Error(m))) });
     });
 

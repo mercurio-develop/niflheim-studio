@@ -62,6 +62,8 @@ export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>;
     if (!m || !crops) return;
     const dx = camera.position.x - props.at[0];
     const dz = camera.position.z - props.at[2];
+    // A camera standing in them (first person) sees through them: the card would fill the frame.
+    m.visible = Math.hypot(dx, dz) > 0.3;
     m.rotation.y = Math.atan2(dx, dz); // face the camera (the plane looks down +z)
     // Where the camera is, seen from the character: their facing is `turn` from the camera's +z.
     let rel = ((Math.atan2(dx, dz) * 180) / Math.PI - props.turn + 540) % 360 - 180;

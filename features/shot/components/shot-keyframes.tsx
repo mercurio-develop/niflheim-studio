@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { DEFAULT_MOVE, aim, keyFrames, poses, renderKey, type CameraMove } from "@/lib/camera";
+import { DEFAULT_MOVE, keyFrames, poses, renderKey, type CameraMove } from "@/lib/camera";
 import type { Job, Keyframes, SetData, StageData } from "@/lib/store";
 import { KeyframesPanel } from "./keyframes";
 
@@ -14,13 +14,13 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
   const at = props.placement?.at;
   const move = props.camera ?? DEFAULT_MOVE;
   const path = useMemo(
-    () => (cam?.floor && at && props.placement ? poses(cam, aim(cam, at, props.placement.height), move) : null),
+    () => (cam?.floor && at && props.placement ? poses(cam, { at, height: props.placement.height, turn: props.placement.turn }, move) : null),
     [cam, at, props.placement, move],
   );
   if (!fill || !cam || !at || !path || !props.placement) {
     return <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">Build the scene first: a stage, the character standing in it and a camera move.</p>;
   }
-  const key = renderKey(move, at, props.placement.height, fill.mesh);
+  const key = renderKey(move, at, props.placement.height, fill.mesh, props.placement.turn);
   return (
     <KeyframesPanel
       projectId={props.projectId}
