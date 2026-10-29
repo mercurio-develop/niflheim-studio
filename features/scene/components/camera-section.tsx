@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { More, Section } from "@/components/section";
 import { LoadingDots } from "@/components/loading-dots";
 import { JobStatus } from "@/features/wizard/components/job-status";
-import { FPS, FRAMINGS, MOVES, frameCount, type CameraMove, type Vec } from "@/lib/camera";
+import { FOCUS, FPS, FRAMINGS, MOVES, frameCount, type CameraMove, type Vec } from "@/lib/camera";
 import type { CameraRender, Job } from "@/lib/store";
 import { renderCamera, saveCamera } from "../actions/camera";
 import { chip } from "./chip";
@@ -49,7 +49,7 @@ export function CameraSection(props: {
     const t = setTimeout(() => start(() => saveCamera(props.projectId, m).then(() => setError(null), (e: Error) => setError(e.message))), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m.move, m.amount, m.seconds, m.ease, m.framing, m.from?.join(), m.to?.join(), m.walk?.to.join(), m.walk?.from.join()]);
+  }, [m.move, m.amount, m.seconds, m.ease, m.framing, m.from?.join(), m.to?.join(), m.walk?.to.join(), m.walk?.from.join(), m.focus]);
 
   return (
     <Section
@@ -171,6 +171,16 @@ export function CameraSection(props: {
           <div className="flex items-center gap-3">
             <input id="cam-seconds" type="range" min={2} max={10} step={0.5} value={m.seconds} onChange={(e) => set({ seconds: Number(e.target.value) })} className="w-full accent-primary" />
             <span className="w-14 text-right font-mono text-xs text-muted-foreground">{m.seconds} s</span>
+          </div>
+
+          <span className="text-xs text-muted-foreground">Focus</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {FOCUS.map((x) => (
+              <button key={x.id} type="button" aria-pressed={(m.focus ?? "deep") === x.id} className={chip((m.focus ?? "deep") === x.id)} onClick={() => set({ focus: x.id })}>
+                {x.label}
+              </button>
+            ))}
+            {(m.focus ?? "deep") !== "deep" && <span className="ml-2 text-[11px] text-muted-foreground">The keyframes and the take paint the blur; the 3D view stays sharp.</span>}
           </div>
 
           <span className="text-xs text-muted-foreground">Ease</span>

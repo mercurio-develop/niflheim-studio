@@ -7,7 +7,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { FRAMINGS, MOVES, c2w, poses, renderKey, type CameraMove } from "@/lib/camera";
+import { FOCUS, FRAMINGS, MOVES, c2w, poses, renderKey, type CameraMove } from "@/lib/camera";
 import { startJob } from "@/lib/jobs";
 import { currentFill } from "@/lib/progress";
 import { getProject, projectDir, updateProject } from "@/lib/store";
@@ -31,6 +31,7 @@ const Move = z
     from: Point.optional(),
     to: Point.optional(),
     walk: z.object({ from: Point, to: Point }).optional(),
+    focus: z.enum(FOCUS.map((f) => f.id) as [string, ...string[]]).optional(),
   })
   .refine((m) => {
     const spec = MOVES.find((x) => x.id === m.move)!;

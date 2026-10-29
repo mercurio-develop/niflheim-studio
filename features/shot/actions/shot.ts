@@ -6,7 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { frameCount } from "@/lib/camera";
+import { focusPhrase, frameCount } from "@/lib/camera";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob } from "@/lib/jobs";
 import { getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
@@ -39,13 +39,17 @@ const MOVE_WORDS: Record<string, string> = {
   arc: "The camera arcs slowly around",
   crane: "The camera cranes slowly while looking at",
   track: "The camera tracks sideways, keeping in frame",
+  follow: "The camera follows",
 };
 
 // LTX reads one paragraph: the take is continuous, how the camera moves and onto whom, what they
 // do, where, and the look (04_shot proof 2: "one continuous take" kept the move from cutting).
 function shotPrompt(p: Project, action: string) {
   const style = styleById(p.set?.style || p.character.style).phrase;
-  return `One continuous take with no cuts. ${MOVE_WORDS[p.camera?.move ?? "static"]} ${p.character.prompt}, who ${action}. ${p.set?.prompt ?? ""}. ${style}, consistent art style.`;
+  const m = p.camera;
+  const who = m?.framing === "pov" ? `A first-person view through the eyes of ${p.character.prompt}, who` : `${MOVE_WORDS[m?.move ?? "static"]} ${p.character.prompt}, who`;
+  const walk = m?.walk ? " They walk steadily across the ground as they do." : "";
+  return `One continuous take with no cuts. ${who} ${action}.${walk} ${p.set?.prompt ?? ""}. ${style}, consistent art style. ${focusPhrase(m)}`.trim();
 }
 
 // No negative from the user: the distilled graph runs at CFG 1, where a negative prompt has no

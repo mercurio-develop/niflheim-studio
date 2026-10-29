@@ -4,7 +4,7 @@ import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { keyFrames, renderKey } from "@/lib/camera";
+import { focusPhrase, keyFrames, renderKey } from "@/lib/camera";
 import { runWorkflow } from "@/lib/comfy";
 import { startJob } from "@/lib/jobs";
 import { currentFill } from "@/lib/progress";
@@ -39,6 +39,7 @@ function keyPrompt(p: Project, note: string) {
   return [
     "Keep everything in this picture exactly where it is and add nothing new: no new objects, nothing in the hands that is not already there.",
     `Make it one finished frame, ${style}: light the character so they belong in the scene with a soft shadow on the ground, repaint smeared, jagged or broken patches cleanly, and fill any black holes at the edges with the scene around them. Same camera framing.`,
+    focusPhrase(p.camera),
     note,
   ]
     .filter(Boolean)

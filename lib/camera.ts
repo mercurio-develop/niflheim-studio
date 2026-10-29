@@ -8,10 +8,11 @@ import type { StageCamera } from "./stage-fill";
 export type Vec = [number, number, number];
 export type MoveId = "static" | "push" | "pull" | "arc" | "crane" | "track" | "follow";
 export type FramingId = "painting" | "long" | "mid" | "close" | "pov" | "free";
+export type FocusId = "deep" | "soft" | "strong";
 // framing: where the move starts (none: the painting's camera); from: the start a Free framing keeps.
 // to: where the camera ends, when moved off the preset's end. walk: the character crosses the stage
 // from one spot to another over the shot (none: they stand at the placement).
-export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec } };
+export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec }; focus?: FocusId };
 // at: where the character stands at that frame.
 export type Pose = { position: Vec; target: Vec; at?: Vec };
 // Who the camera is about: where they stand, how tall, which way they face (degrees, CharacterCard's).
@@ -40,6 +41,15 @@ export const FRAMINGS: { id: FramingId; label: string; line: string }[] = [
   { id: "pov", label: "First person", line: "First person: through their eyes, looking the way they face." },
   { id: "free", label: "Free", line: "Where you put it: drag the camera in Overview, set its height below." },
 ];
+// How much of the frame is sharp. The 3D preview has no blur: the keyframes and the take paint it,
+// from these words.
+export const FOCUS: { id: FocusId; label: string; phrase: string }[] = [
+  { id: "deep", label: "Everything sharp", phrase: "" },
+  { id: "soft", label: "Soft background", phrase: "Shallow depth of field: the character in sharp focus, the background softly out of focus." },
+  { id: "strong", label: "Strong bokeh", phrase: "Very shallow depth of field with strong bokeh: the character crisp, the background melted into a soft blur." },
+];
+export const focusPhrase = (m?: CameraMove | null) => FOCUS.find((f) => f.id === (m?.focus ?? "deep"))!.phrase;
+
 const SHOT = { long: { dist: 6, eye: 0.95, look: 0.5 }, mid: { dist: 2.4, eye: 0.75, look: 0.7 }, close: { dist: 1.1, eye: 0.9, look: 0.88 } };
 
 // 4 s = 97 frames: the length LTX-2.5 shot best on 16 GB (04_shot ACCEPT: 768x448, 97 frames).
@@ -184,7 +194,7 @@ export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string, 
   const f = m.framing ?? "painting";
   const v = (p?: Vec) => (p ?? []).map((x) => x.toFixed(2));
   const framing = f === "painting" ? [] : f === "free" ? [f, ...v(m.from)] : f === "pov" ? [f, turn] : [f];
-  const more = [...(m.to ? ["to", ...v(m.to)] : []), ...(m.walk ? ["walk", ...v(m.walk.from), ...v(m.walk.to)] : [])];
+  const more = [...(m.to ? ["to", ...v(m.to)] : []), ...(m.walk ? ["walk", ...v(m.walk.from), ...v(m.walk.to)] : []), ...(m.focus && m.focus !== "deep" ? [m.focus] : [])];
   return [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh, ...framing, ...more].join("|");
 };
 
