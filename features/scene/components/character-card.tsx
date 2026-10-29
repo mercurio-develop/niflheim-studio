@@ -49,13 +49,14 @@ export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>;
   const views = PICK.filter((p) => props.cutouts[p.view]);
   const textures = useTexture(views.map((p) => props.cutouts[p.view]!));
   const [crops, setCrops] = useState<Crop[] | null>(null);
+  const shown = useRef(-1);
   useEffect(() => {
     for (const t of textures) t.colorSpace = THREE.SRGBColorSpace;
     setCrops(textures.map((t) => cropOf(t.image as HTMLImageElement)));
+    shown.current = -1; // new cutouts (another pose): put the matching one on at the next frame
   }, [textures]);
   const mesh = useRef<THREE.Mesh>(null);
   const material = useMemo(() => new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.4, side: THREE.DoubleSide }), []);
-  const shown = useRef(-1);
   useEffect(() => void (shown.current = -1), [props.height]); // resize on the next frame
 
   useFrame(({ camera }) => {

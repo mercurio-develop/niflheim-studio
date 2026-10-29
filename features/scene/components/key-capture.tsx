@@ -63,7 +63,7 @@ export function KeyCapture(props: {
   };
   return (
     <div aria-hidden className="pointer-events-none fixed top-0 -left-[9999px]" style={{ width: 768, height: 448 }}>
-      <StageViewer mesh={props.mesh} camera={props.camera} filled pose={props.poses[i]} onDrawn={drawn} className="size-full">
+      <StageViewer mesh={props.mesh} camera={props.camera} filled pose={{ ...props.poses[i], n: i }} onDrawn={drawn} className="size-full">
         <Blocks blocks={props.blocks} />
         <SceneAssets projectId={props.projectId} assets={props.assets} wait />
         <CharacterCard cutouts={(props.poses[i].card as typeof props.cutouts | undefined) ?? props.cutouts} at={props.poses[i].at ?? props.at} height={props.height} turn={props.turn} />

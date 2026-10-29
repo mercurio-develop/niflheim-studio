@@ -49,13 +49,14 @@ function useLook(scene: THREE.Object3D, look: StageLook) {
 }
 
 // card: the cutouts the character card wears at this pose (a shot's pose), when not its own.
-export type StagePose = { position: StagePoint; target: StagePoint; at?: StagePoint; card?: Partial<Record<string, string>> };
+// n: which capture this is, so two keys with the same pose (a static shot) are still drawn apart.
+export type StagePose = { position: StagePoint; target: StagePoint; at?: StagePoint; card?: Partial<Record<string, string>>; n?: number };
 
 // A camera fixed at one pose, looking at its target; tells when a few frames have been drawn.
 function PoseCamera(props: { pose: StagePose; fov: number; far: number; onDrawn?: (canvas: HTMLCanvasElement) => void }) {
   const gl = useThree((s) => s.gl);
   const drawn = useRef(0);
-  const key = props.pose.position.join() + props.pose.target.join();
+  const key = `${props.pose.n ?? ""}|${props.pose.position.join()}|${props.pose.target.join()}`;
   useEffect(() => void (drawn.current = 0), [key]);
   useFrame(({ camera }) => {
     camera.position.set(...props.pose.position);
