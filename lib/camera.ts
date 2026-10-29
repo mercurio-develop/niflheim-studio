@@ -15,7 +15,13 @@ export type FocusId = "deep" | "soft" | "strong";
 // character's poses (none: as designed); poseThen: the pose the second half of the keys show.
 // subject: what the camera works around: "main" (the default, the step-1 character), an asset id
 // (a cast member or an object on the stage) or "none" (the painting's look point, a free camera).
-export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec }; focus?: FocusId; pose?: string; poseThen?: string; subject?: string };
+// moments: the shot blocked as key moments (decision 0013): at each, optionally where the camera is
+// and looks, and for anyone on the stage (who: "main" or an asset id) where they stand, which way
+// they face and which pose they wear. The keys are taken at the moments; between them positions
+// and turns ease, a pose holds until the next moment sets another. None: the move above as before.
+export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec }; focus?: FocusId; pose?: string; poseThen?: string; subject?: string; moments?: Moment[] };
+export type Mark = { at?: Vec; turn?: number; pose?: string };
+export type Moment = { frame: number; camera?: { from: Vec; look: Vec }; marks: Record<string, Mark> };
 // at: where the character stands at that frame.
 export type Pose = { position: Vec; target: Vec; at?: Vec };
 // Who the camera is about: where they stand, how tall, which way they face (degrees, CharacterCard's).
@@ -151,6 +157,7 @@ function ends(p0: Vec, aimAt: Vec, m: CameraMove): { from: Vec; to: Vec; arc?: {
 // along with them; a camera end moved off the preset's goes straight there.
 export function poses(cam: StageCamera, who: Subject, m: CameraMove, others: Others = []): Pose[] {
   const n = frameCount(m.seconds);
+  if (m.moments?.some((x) => x.camera)) return momentPoses(who, m, n);
   const a0 = m.walk?.from ?? who.at;
   const a1 = m.walk?.to ?? a0;
   const main = !m.subject || m.subject === "main" || subjectOf(cam, who, m, others) === who;
@@ -169,7 +176,7 @@ export function poses(cam: StageCamera, who: Subject, m: CameraMove, others: Oth
       const a = -e.arc.angle * t;
       position = add(e.arc.centre, [off[0] * Math.cos(a) - off[2] * Math.sin(a), off[1], off[0] * Math.sin(a) + off[2] * Math.cos(a)]);
     }
-    const at = lerp(a0, a1, t);
+    const at = m.moments?.length ? placeAt(m, "main", { at: who.at, turn: who.turn }, i).at : lerp(a0, a1, t);
     const moved = main ? sub(at, a0) : ([0, 0, 0] as Vec);
     out.push({ position: carry ? add(position, moved) : position, target: add(aimAt, moved), at });
   }
@@ -243,7 +250,7 @@ export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string, 
   const f = m.framing ?? "painting";
   const v = (p?: Vec) => (p ?? []).map((x) => x.toFixed(2));
   const framing = f === "painting" ? [] : f === "free" ? [f, ...v(m.from)] : f === "pov" ? [f, turn] : [f];
-  const more = [...(m.to ? ["to", ...v(m.to)] : []), ...(m.walk ? ["walk", ...v(m.walk.from), ...v(m.walk.to)] : []), ...(m.focus && m.focus !== "deep" ? [m.focus] : []), ...(m.pose ? ["pose", m.pose] : []), ...(m.poseThen ? ["then", m.poseThen] : []), ...(m.subject && m.subject !== "main" ? ["subject", m.subject] : [])];
+  const more = [...(m.to ? ["to", ...v(m.to)] : []), ...(m.walk ? ["walk", ...v(m.walk.from), ...v(m.walk.to)] : []), ...(m.focus && m.focus !== "deep" ? [m.focus] : []), ...(m.pose ? ["pose", m.pose] : []), ...(m.poseThen ? ["then", m.poseThen] : []), ...(m.subject && m.subject !== "main" ? ["subject", m.subject] : []), ...(m.moments?.length ? ["moments", JSON.stringify(momentsOf(m))] : [])];
   return [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh, ...framing, ...more].join("|");
 };
 
@@ -256,17 +263,103 @@ export function propsKey(blocks: { kind: string; at: Vec; size: Vec; turn: numbe
   return (b ? `|blocks:${b}` : "") + (a ? `|assets:${a}` : "");
 }
 
-// The cutouts the card wears at a frame of the move: the shot's pose, or the one it switches to for
-// the second half; the turnaround's own (as designed) when the shot has none or it is gone.
-export function cardAt<C>(m: CameraMove, frame: number, base: C, poses: { id: string; cutouts: C }[] = []): C {
-  const id = m.poseThen && frame >= (frameCount(m.seconds) - 1) / 2 ? m.poseThen : m.pose;
+// The cutouts the card wears at a frame of the move: with moments, the main character's pose there
+// (placeAt); otherwise the shot's pose, or the one it switches to for the second half; the
+// turnaround's own (as designed) when the shot has none or it is gone.
+export function cardAt<C>(m: CameraMove, frame: number, base: C, poses: { id: string; cutouts: C }[] = [], who = "main"): C {
+  const id = m.moments?.length ? placeAt(m, who, { at: [0, 0, 0], turn: 0 }, frame).pose : m.poseThen && frame >= (frameCount(m.seconds) - 1) / 2 ? m.poseThen : m.pose;
   return poses.find((p) => p.id === id)?.cutouts ?? base;
 }
 
-// The frames the shot is guided at: every 32nd frame of the move and its last (97 frames: 0, 32,
-// 64, 96), as LTX-2.5 kept a move continuous with guides that close (04_shot proof 2).
+// The moments in frame order, each frame snapped to the 8n grid LTX guides sit on and kept inside
+// the shot; two on the same frame keep the later one.
+export function momentsOf(m: CameraMove): Moment[] {
+  const n = frameCount(m.seconds);
+  const snapped = (m.moments ?? []).map((x) => ({ ...x, frame: Math.min(n - 1, Math.max(0, Math.round(x.frame / 8) * 8)) }));
+  const out: Moment[] = [];
+  for (const x of snapped.sort((a, b) => a.frame - b.frame)) {
+    if (out.at(-1)?.frame === x.frame) out[out.length - 1] = x;
+    else out.push(x);
+  }
+  if (out.length && out.at(-1)!.frame > n - 9) out[out.length - 1] = { ...out.at(-1)!, frame: n - 1 };
+  return out;
+}
+
+const ease = (t: number) => t * t * (3 - 2 * t);
+const turnLerp = (a: number, b: number, t: number) => a + ((((b - a) % 360) + 540) % 360 - 180) * t;
+
+// Where someone (who: "main" or an asset id) stands, faces and which pose they wear at a frame:
+// eased between the moments that set them, held before the first and after the last; a pose holds
+// until a later moment sets another. Without moments: base, the main character walking as the
+// move says (m.walk) and wearing the shot's pose.
+export function placeAt(m: CameraMove, who: string, base: { at: Vec; turn: number }, frame: number): { at: Vec; turn: number; pose?: string } {
+  const ms = momentsOf(m);
+  if (!ms.length) {
+    if (who !== "main") return base;
+    const n = frameCount(m.seconds);
+    const t0 = n === 1 ? 0 : frame / (n - 1);
+    const t = m.ease ? ease(t0) : t0;
+    const at = m.walk ? lerp(m.walk.from, m.walk.to, t) : base.at;
+    return { at, turn: base.turn, pose: m.poseThen && frame >= (n - 1) / 2 ? m.poseThen : m.pose };
+  }
+  const along = <T>(get: (k: Mark) => T | undefined, mix: (a: T, b: T, t: number) => T, fallback: T): T => {
+    const set = ms.filter((x) => x.marks[who] && get(x.marks[who]) !== undefined);
+    if (!set.length) return fallback;
+    const next = set.findIndex((x) => x.frame >= frame);
+    if (next === -1) return get(set.at(-1)!.marks[who])!;
+    if (next === 0 || set[next].frame === frame) return get(set[next].marks[who])!;
+    const a = set[next - 1];
+    const b = set[next];
+    const t = (frame - a.frame) / (b.frame - a.frame);
+    return mix(get(a.marks[who])!, get(b.marks[who])!, m.ease ? ease(t) : t);
+  };
+  const posed = ms.filter((x) => x.frame <= frame && x.marks[who]?.pose !== undefined).at(-1);
+  return {
+    at: along((k) => k.at, lerp, base.at),
+    turn: along((k) => k.turn, turnLerp, base.turn),
+    pose: posed?.marks[who]?.pose || undefined,
+  };
+}
+
+// A move blocked with cameras at its moments: the camera eases from one moment's camera to the
+// next (held before the first and after the last that sets one); the main character stands where
+// placeAt puts them. A moment without a camera keeps the line between its neighbours.
+function momentPoses(who: Subject, m: CameraMove, n: number): Pose[] {
+  const shots = momentsOf(m).filter((x) => x.camera);
+  const out: Pose[] = [];
+  for (let f = 0; f < n; f++) {
+    const next = shots.findIndex((x) => x.frame >= f);
+    let position: Vec;
+    let target: Vec;
+    if (next === -1 || next === 0 || shots[next].frame === f) {
+      const c = shots[next === -1 ? shots.length - 1 : next].camera!;
+      position = c.from;
+      target = c.look;
+    } else {
+      const a = shots[next - 1];
+      const b = shots[next];
+      const t0 = (f - a.frame) / (b.frame - a.frame);
+      const t = m.ease ? ease(t0) : t0;
+      position = lerp(a.camera!.from, b.camera!.from, t);
+      target = lerp(a.camera!.look, b.camera!.look, t);
+    }
+    out.push({ position, target, at: placeAt(m, "main", { at: who.at, turn: who.turn }, f).at });
+  }
+  return out;
+}
+
+// The frames the shot is guided at: with moments, the moments' frames; otherwise every 32nd frame
+// of the move and its last (97 frames: 0, 32, 64, 96), as LTX-2.5 kept a move continuous with
+// guides that close (04_shot proof 2).
 export function keyFrames(m: CameraMove): number[] {
   const n = frameCount(m.seconds);
+  const ms = momentsOf(m);
+  if (ms.length >= 2) {
+    const frames = ms.map((x) => x.frame);
+    if (frames[0] !== 0) frames.unshift(0);
+    if (frames.at(-1) !== n - 1) frames.push(n - 1);
+    return frames;
+  }
   const out: number[] = [];
   for (let f = 0; f < n; f += 32) out.push(f);
   if (out.at(-1) !== n - 1) out.push(n - 1);
