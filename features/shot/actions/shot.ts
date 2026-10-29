@@ -13,6 +13,7 @@ import { cancelJob, startJob } from "@/lib/jobs";
 import { getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { DEFAULT_NEGATIVE, END_NEW_POSE_STRENGTH, END_STRENGTH, middleImageNode, shapeShot } from "../graph";
+import { layoutKey } from "./layout";
 import { addIngredients, firstKeyOnly, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, withSheet, type SheetRows } from "../ingredients";
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
@@ -146,8 +147,13 @@ export async function renderTake(id: string, raw: unknown) {
   // (only when that key shows the same character: a key painted with someone else wins the face,
   // 05_submit take mvu4qdjl); a camera take follows every key over the move.
   const sheet = kind === "character" ? sheetFor(p, shotPrompt(p, beats), expression) : null;
+  // A camera take with an up-to-date clay clip runs Layout-to-Render (03_shot_layout): the clip
+  // guides every frame and only the first key is painted (the take follows the move and the
+  // blocking; 05_submit proof: camera travel 33 px and no pop-ins against 1.2 px and 41 keys-only).
+  const clip = !sheet && p.layout && p.layout.frames === length && p.layout.key === (await layoutKey(p)) ? p.layout : null;
   const frames = sheet ? SHEET_FRAMES : length;
-  const prompt = sheet?.prompt ?? shotPrompt(p, beats);
+  // Lightricks: never "clay", "3D" or "Unreal" in a Layout-to-Render prompt, or the take looks like the clip.
+  const prompt = sheet?.prompt ?? (clip ? shotPrompt(p, beats).replace(/\b(clay|3D|Unreal)\b\s*/gi, "") : shotPrompt(p, beats));
   const ms = momentsOf(p.camera);
   const endStrength = ms.length > 1 && (ms[0].marks.main?.pose ?? "") !== (ms.at(-1)!.marks.main?.pose ?? "") ? END_NEW_POSE_STRENGTH : END_STRENGTH;
   await updateProject(id, (q) => void (q.shot = { takes: [], ...q.shot, action, beats, negative, expression }));
@@ -157,9 +163,14 @@ export async function renderTake(id: string, raw: unknown) {
       if (tries > 1) await ctx.progress(`Shooting take ${n} of up to ${tries}`);
       const seed = Math.floor(Math.random() * 2 ** 31);
       const [video] = await runWorkflow({
-        workflow: "03_shot.api.json",
+        workflow: clip ? "03_shot_layout.api.json" : "03_shot.api.json",
         onSubmit: ctx.track,
         edit: (g) => {
+          if (clip) {
+            g["30"].inputs.length = frames;
+            g["33"].inputs.frames_number = frames;
+            return;
+          }
           if (!sheet) return shapeShot(g, k.frames, length, endStrength);
           shapeShot(g, [0, frames - 1], frames);
           firstKeyOnly(g);
@@ -167,7 +178,10 @@ export async function renderTake(id: string, raw: unknown) {
           if (!fromKey) sheetOnly(g);
         },
         set: [["20", "text", prompt], ["21", "text", negative], ["40", "noise_seed", seed]],
-        images: sheet
+        videos: clip ? [["401", abs(id, clip.clip)]] : undefined,
+        images: clip
+          ? [["1", abs(id, keys[0])]]
+          : sheet
           ? [...(fromKey ? [["1", abs(id, keys[0])] as [string, string]] : []), [SHEET_NODE, abs(id, sheet.file)]]
           : [["1", abs(id, keys[0])], ["2", abs(id, keys.at(-1)!)], ...keys.slice(1, -1).map((f, i) => [middleImageNode(i), abs(id, f)] as [string, string])],
         output: "55",
@@ -181,7 +195,7 @@ export async function renderTake(id: string, raw: unknown) {
       const score = await scoreTake(video);
       let index = 0;
       await updateProject(id, (q) => {
-        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k.at, seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind };
+        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k.at, seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind, layout: !!clip };
         q.shot = { action, negative, ...q.shot, takes: [...(q.shot?.takes ?? []), take] };
         index = q.shot.takes.length - 1;
       });

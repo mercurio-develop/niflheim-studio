@@ -124,7 +124,7 @@ export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)
 // 8n+1 frames at 24 fps), each guided by the keyframes it was made from (keys: Keyframes.at).
 // score: scripts/score_take.py on arrival: camera travel (px of flow), pop-in frames and worst spike.
 export type TakeScore = { travel: number; popins: number; worst: number };
-export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore; prompt?: string; kind?: ShotKind };
+export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore; prompt?: string; kind?: ShotKind; layout?: boolean };
 // beats: what happens first, then, and by the end (action joins them, for older readers).
 // kind: what guides its takes (decision 0014): "camera", the keyframes along the move (and later the
 // stage's clay clip, Layout-to-Render); "character", the character's sheet (Ingredients IC-LoRA), from
