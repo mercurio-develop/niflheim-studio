@@ -62,6 +62,7 @@ export function KeyframesPanel(props: {
           {capturing || (pending && !running) ? <LoadingDots /> : <Images data-icon="inline-start" />}
           {k ? "Make keyframes again" : "Make keyframes"}
         </Button>
+        <p className="w-full text-xs text-muted-foreground">Only what they hold or wear. Someone else, or an object in the place, goes on the stage as a Scene asset or block: each key is painted on its own, so a note like &ldquo;a human&rdquo; paints a different one in every key.</p>
       </div>
       {running && props.job && <JobStatus message={props.job.detail ?? "Painting the keyframes"} startedAt={props.job.startedAt} expected={props.frames.length * 30} />}
       {k && (

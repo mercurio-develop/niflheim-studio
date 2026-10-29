@@ -155,6 +155,15 @@ export function poses(cam: StageCamera, who: Subject, m: CameraMove): Pose[] {
   return out;
 }
 
+// The first frame where the camera comes closer to the character than half their height (at least
+// 0.7 m) across the ground, or -1. Keys there show a flat card from inside or edge on, and a path
+// that crosses them turns round them in a frame. First person stands in them on purpose.
+export function tooClose(ps: Pose[], who: Subject, m: CameraMove) {
+  if (m.framing === "pov") return -1;
+  const near = Math.max(0.7, who.height * 0.45);
+  return ps.findIndex((p) => p.at && Math.hypot(p.position[0] - p.at[0], p.position[2] - p.at[2]) < near);
+}
+
 // Is a camera position inside the space the stage holds? Measured like the viewer's orbit:
 // around the painting's look point, against where the painting's camera sits.
 export function inside(cam: StageCamera, p: Vec): boolean {

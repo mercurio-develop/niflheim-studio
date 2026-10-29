@@ -65,7 +65,12 @@ function PoseCamera(props: { pose: StagePose; fov: number; far: number; onDrawn?
 }
 
 function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look: StageLook; overview?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; children?: React.ReactNode }) {
-  const { scene } = useGLTF(props.url);
+  // useGLTF caches one scene per URL, and a three object lives in one scene at a time: a second
+  // viewer of the same stage (Shots' camera and its off-screen keyframe capture) would take it
+  // away from the first, which then draws an empty frame. Each viewer gets its own copy (the
+  // geometry and textures are shared).
+  const gltf = useGLTF(props.url);
+  const scene = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
   useLook(scene, props.look);
   const view = useMemo(() => {
     const box = new THREE.Box3().setFromObject(scene);

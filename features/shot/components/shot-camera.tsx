@@ -8,7 +8,7 @@ import { CameraSection } from "@/features/scene/components/camera-section";
 import { CharacterCard } from "@/features/scene/components/character-card";
 import { StageViewer } from "@/features/scene/components/stage-viewer";
 import { ViewSwitch } from "@/features/scene/components/view-switch";
-import { DEFAULT_MOVE, inside, poses, renderKey, type CameraMove, type Vec } from "@/lib/camera";
+import { DEFAULT_MOVE, inside, poses, renderKey, tooClose, type CameraMove, type Vec } from "@/lib/camera";
 import type { Block, CameraRender, Job, SceneAsset, SetData, StageData } from "@/lib/store";
 
 // The active shot's camera (decision 0011): the Scene's stage with the character standing where
@@ -27,7 +27,8 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   const path = useMemo(() => {
     if (!ready) return null;
     const ps = poses(cam!, { at: pl!.at!, height: pl!.height, turn: pl!.turn }, move);
-    return { poses: ps, inside: ps.map((p) => inside(cam!, p.position)) };
+    const who = { at: pl!.at!, height: pl!.height, turn: pl!.turn };
+    return { poses: ps, inside: ps.map((p) => inside(cam!, p.position)), close: tooClose(ps, who, move) };
   }, [ready, cam, pl, move]);
   const pick = (m: CameraMove) => {
     setPlaying(false);
@@ -70,6 +71,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
       start={path?.poses[0].position ?? null}
       subject={ready ? { at: pl!.at!, turn: pl!.turn } : null}
       outside={path ? path.inside.filter((x) => !x).length : 0}
+      close={path?.close ?? -1}
       playing={playing}
       onPlay={setPlaying}
       top={viewer}

@@ -22,6 +22,7 @@ export function CameraSection(props: {
   start: Vec | null; // where the move starts today, which the Height slider raises or lowers
   subject: { at: Vec; turn: number } | null; // where the character stands and faces, to start a walk
   outside: number; // frames outside the stage's space
+  close?: number; // the first frame the camera is too close to the character, or -1
   playing: boolean;
   onPlay: (on: boolean) => void;
   ready: boolean; // a character stands on the stage
@@ -236,6 +237,12 @@ export function CameraSection(props: {
         </More>
       )}
 
+      {props.ready && (props.close ?? -1) >= 0 && (
+        <p className="flex items-start gap-1.5 text-xs text-destructive">
+          <TriangleAlert className="mt-px size-3.5 shrink-0" />
+          From frame {props.close} the camera is inside or right against them: the keys would show a flat card edge on. Drag the path&apos;s end (Overview) away from them, or shorten the move.
+        </p>
+      )}
       {props.ready && props.outside > 0 && (
         <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
           <TriangleAlert className="mt-px size-3.5 shrink-0 text-tone-yellow" />
