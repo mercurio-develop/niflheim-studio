@@ -13,10 +13,11 @@ const sh = promisify(execFile);
 const OUT = path.join(process.cwd(), "data/proof/workflows", process.argv[2] ?? "baseline");
 const ONLY = process.argv[3]?.split(",");
 const TROLL = "a forest troll with mossy green skin and a huge underbite, painterly concept art";
+type Sets = NonNullable<RunSpec["set"]>;
 const box = { x: 192, y: 352, width: 512, height: 512 };
-const crop = (n: string): RunSpec["set"] => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
-const paste: RunSpec["set"] = [["27", "x", box.x], ["27", "y", box.y]];
-const qwen = (prompt: string): RunSpec["set"] => [["17", "prompt", prompt], ["22", "seed", 7]];
+const crop = (n: string): Sets => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
+const paste: Sets = [["27", "x", box.x], ["27", "y", box.y]];
+const qwen = (prompt: string): Sets => [["17", "prompt", prompt], ["22", "seed", 7]];
 
 type Row = { name: string; ok: boolean; seconds: number; files: string[]; error?: string };
 const report: Row[] = [];
