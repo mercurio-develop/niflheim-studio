@@ -35,6 +35,16 @@ const Move = z
     pose: z.string().regex(/^[a-z0-9]{1,16}$/).optional(),
     poseThen: z.string().regex(/^[a-z0-9]{1,16}$/).optional(),
     subject: z.string().regex(/^(main|none|[a-z0-9]{1,24})$/).optional(),
+    moments: z
+      .array(
+        z.object({
+          frame: z.number().int().min(0).max(400),
+          camera: z.object({ from: Point, look: Point }).optional(),
+          marks: z.record(z.string().regex(/^(main|[a-z0-9]{1,24})$/), z.object({ at: Point.optional(), turn: z.number().min(-360).max(360).optional(), pose: z.string().regex(/^[a-z0-9]{0,16}$/).optional() })),
+        }),
+      )
+      .max(8)
+      .optional(),
   })
   .refine((m) => {
     const spec = MOVES.find((x) => x.id === m.move)!;
