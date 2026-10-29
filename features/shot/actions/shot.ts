@@ -13,6 +13,7 @@ import { cancelJob, startJob } from "@/lib/jobs";
 import { getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { DEFAULT_NEGATIVE, END_NEW_POSE_STRENGTH, END_STRENGTH, middleImageNode, shapeShot } from "../graph";
+import { addIngredients, firstKeyOnly, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, withSheet, type SheetRows } from "../ingredients";
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const run = promisify(execFile);
@@ -103,10 +104,10 @@ const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 // effect (04_shot ACCEPT proof 3: take D = take B frame for frame). The graph keeps a default.
 const Beat = z.string().trim().max(300);
 const Input = z
-  .object({ action: z.string().trim().max(500).optional(), beats: z.object({ start: Beat, then: Beat.optional(), end: Beat.optional() }).optional(), tries: z.number().int().min(1).max(4).optional() })
+  .object({ action: z.string().trim().max(500).optional(), beats: z.object({ start: Beat, then: Beat.optional(), end: Beat.optional() }).optional(), tries: z.number().int().min(1).max(4).optional(), expression: z.string().trim().max(60).optional(), fromKey: z.boolean().optional() })
   .transform((x) => {
     const beats: Beats = x.beats ?? { start: x.action ?? "" };
-    return { beats, action: [beats.start, beats.then, beats.end].map((s) => s?.trim()).filter(Boolean).join(", then "), tries: x.tries ?? 1 };
+    return { beats, action: [beats.start, beats.then, beats.end].map((s) => s?.trim()).filter(Boolean).join(", then "), tries: x.tries ?? 1, expression: x.expression || undefined, fromKey: x.fromKey ?? false };
   })
   .refine((x) => x.beats.start.length >= 3, "Say what happens first, in a few words.");
 
@@ -118,8 +119,20 @@ const rank = (s?: TakeScore) => (s ? s.popins * 100 + s.worst : 1e9);
 // Takes of the shot: LTX-2.5 distilled guided by every keyframe (ends 0.7, middle 0.5), with
 // audio, about 1.5 to 2 minutes each on the 4080 for 97 to 121 frames. With tries > 1 it shoots
 // until one is good (new seed each time), at most `tries`, and picks the best of them.
+// A character take (kind "character"): the sheet's cells said by place, then the shot.
+function sheetFor(p: Project, video: string, expression?: string) {
+  const sheet = p.sheet;
+  if (!sheet?.drawn || !sheet.rows) throw new Error("Make the character's sheet first (Character > Turnaround > Sheet).");
+  const [first, ...rest] = (p.character.prompt ?? "").split(",");
+  const [name, wearing] = first.split(/ in (?=a |an |the )/);
+  const who = { name: name.trim().replace(/^(a|an) /, "the ") || "the character", description: [wearing && `in ${wearing}`, ...rest].filter(Boolean).join(",").trim() };
+  const items = sheet.cells.filter((c) => c.kind === "item").map((c) => c.label);
+  const said = expression ? `${video} Their expression: ${expression}.` : video;
+  return { file: sheet.drawn, prompt: withSheet(sheetPrompt(sheet.rows as SheetRows, who, [], p.set?.prompt, items), said) };
+}
+
 export async function renderTake(id: string, raw: unknown) {
-  const { beats, action, tries } = Input.parse(raw);
+  const { beats, action, tries, expression, fromKey } = Input.parse(raw);
   const negative = DEFAULT_NEGATIVE;
   const p = await getProject(id);
   if (!p) throw new Error("Project not found.");
@@ -128,10 +141,16 @@ export async function renderTake(id: string, raw: unknown) {
   const length = frameCount(p.camera.seconds);
   if (k.frames.at(-1) !== length - 1) throw new Error("The camera move changed since the keyframes were made: make them again.");
   const keys = k.keys as string[];
-  const prompt = shotPrompt(p, beats);
+  const kind = p.shot?.kind ?? "camera";
+  // A character take is the sheet's trained length, from the sheet alone or from the first key too
+  // (only when that key shows the same character: a key painted with someone else wins the face,
+  // 05_submit take mvu4qdjl); a camera take follows every key over the move.
+  const sheet = kind === "character" ? sheetFor(p, shotPrompt(p, beats), expression) : null;
+  const frames = sheet ? SHEET_FRAMES : length;
+  const prompt = sheet?.prompt ?? shotPrompt(p, beats);
   const ms = momentsOf(p.camera);
   const endStrength = ms.length > 1 && (ms[0].marks.main?.pose ?? "") !== (ms.at(-1)!.marks.main?.pose ?? "") ? END_NEW_POSE_STRENGTH : END_STRENGTH;
-  await updateProject(id, (q) => void (q.shot = { takes: [], ...q.shot, action, beats, negative }));
+  await updateProject(id, (q) => void (q.shot = { takes: [], ...q.shot, action, beats, negative, expression }));
   await startJob(id, "shot", async (ctx) => {
     const made: { index: number; score?: TakeScore }[] = [];
     for (let n = 1; n <= tries; n++) {
@@ -140,9 +159,17 @@ export async function renderTake(id: string, raw: unknown) {
       const [video] = await runWorkflow({
         workflow: "03_shot.api.json",
         onSubmit: ctx.track,
-        edit: (g) => shapeShot(g, k.frames, length, endStrength),
+        edit: (g) => {
+          if (!sheet) return shapeShot(g, k.frames, length, endStrength);
+          shapeShot(g, [0, frames - 1], frames);
+          firstKeyOnly(g);
+          addIngredients(g, frames);
+          if (!fromKey) sheetOnly(g);
+        },
         set: [["20", "text", prompt], ["21", "text", negative], ["40", "noise_seed", seed]],
-        images: [["1", abs(id, keys[0])], ["2", abs(id, keys.at(-1)!)], ...keys.slice(1, -1).map((f, i) => [middleImageNode(i), abs(id, f)] as [string, string])],
+        images: sheet
+          ? [...(fromKey ? [["1", abs(id, keys[0])] as [string, string]] : []), [SHEET_NODE, abs(id, sheet.file)]]
+          : [["1", abs(id, keys[0])], ["2", abs(id, keys.at(-1)!)], ...keys.slice(1, -1).map((f, i) => [middleImageNode(i), abs(id, f)] as [string, string])],
         output: "55",
         ext: "mp4",
         outDir: abs(id, `shot/takes/${Date.now().toString(36)}`),
@@ -154,7 +181,7 @@ export async function renderTake(id: string, raw: unknown) {
       const score = await scoreTake(video);
       let index = 0;
       await updateProject(id, (q) => {
-        const take = { video: path.relative(projectDir(id), video), action, seed, frames: length, keys: k.at, seconds: p.camera!.seconds, at: new Date().toISOString(), score, prompt };
+        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k.at, seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind };
         q.shot = { action, negative, ...q.shot, takes: [...(q.shot?.takes ?? []), take] };
         index = q.shot.takes.length - 1;
       });
@@ -166,6 +193,13 @@ export async function renderTake(id: string, raw: unknown) {
       await updateProject(id, (q) => void (q.shot && (q.shot.picked = best.index)));
     }
   }, tries > 1 ? `Shooting up to ${tries} takes` : "Shooting the take");
+  done(id);
+}
+
+// What guides the shot's takes: the keyframes along the move, or the character's sheet.
+export async function setShotKind(id: string, raw: unknown) {
+  const kind = z.enum(["camera", "character"]).parse(raw);
+  await updateProject(id, (q) => void (q.shot = { action: "", negative: DEFAULT_NEGATIVE, takes: [], ...q.shot, kind }));
   done(id);
 }
 

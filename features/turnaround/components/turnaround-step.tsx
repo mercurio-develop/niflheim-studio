@@ -13,8 +13,9 @@ import { JobStatus } from "@/features/wizard/components/job-status";
 import { Editor } from "@/features/character/components/editor";
 import { stackMoves } from "@/lib/history";
 import { VIEWS, viewsFor } from "@/lib/progress";
-import type { Asset, CharacterPose, Job, Mesh, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
+import type { Asset, CharacterPose, CharacterSheet, Job, Mesh, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
 import { PosesPanel } from "./poses-panel";
+import { SheetSection } from "./sheet-section";
 import { cn } from "@/lib/utils";
 import { cancelTurnaround, findMasks, generateTurnaround, generateView } from "../actions/turnaround";
 import { AssetsShelf } from "./assets-shelf";
@@ -43,6 +44,7 @@ export function TurnaroundSections(props: {
   assets: Asset[];
   poses: CharacterPose[]; // the character in other poses, for shots
   mesh: Mesh | null; // the character in 3D, from these views
+  sheet: CharacterSheet | null; // the Ingredients reference sheet's pictures
   jobs: Record<string, Job>;
   cid?: string; // which character (default c1)
 }) {
@@ -231,12 +233,12 @@ export function TurnaroundSections(props: {
                       <FogLoader className="absolute inset-0" compact message={`Painting the ${v.label.toLowerCase()}`} startedAt={j.startedAt} expected={PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, `view:${v.id}`, props.cid)} />
                     )}
                   </div>
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-x-2">
                     <span className="flex items-baseline gap-1.5 text-sm">
                       {v.label}
                       {stack && stack.versions.length > 1 && <span className="font-mono text-[11px] text-muted-foreground">v{stack.current + 1}/{stack.versions.length}</span>}
                     </span>
-                    <span className="flex items-center">
+                    <span className="-ml-2 flex flex-wrap items-center">
                       <Button variant="ghost" size="sm" disabled={busy || fixing || running || pending || starting || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id, props.cid).catch(fail))}>
                         <RefreshCw data-icon="inline-start" />
                         Again
@@ -311,6 +313,15 @@ export function TurnaroundSections(props: {
             open={props.poses.some((p) => props.jobs[`pose:${p.id}`]?.status === "running")}
           >
             <PosesPanel cid={props.cid} projectId={props.projectId} poses={props.poses} jobs={props.jobs} locked={running} />
+          </More>
+        )}
+        {image("front") && (
+          <More
+            label="Sheet"
+            summary={props.sheet?.drawn ? `${props.sheet.cells.filter((c) => c.image).length} pictures · keeps the face and clothes in takes` : "face, body and what they carry in one picture, so takes keep them"}
+            open={props.jobs.sheet?.status === "running"}
+          >
+            <SheetSection cid={props.cid} projectId={props.projectId} sheet={props.sheet} tags={props.tags} jobs={props.jobs} locked={running} />
           </More>
         )}
       </Section>

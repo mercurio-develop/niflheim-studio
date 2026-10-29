@@ -11,9 +11,10 @@ import { Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
-import type { Job, Keyframes, Shot } from "@/lib/store";
+import type { Job, Keyframes, Shot, ShotKind } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { cancelShot, pickTake, renderTake } from "../actions/shot";
+import { cancelShot, pickTake, renderTake, setShotKind } from "../actions/shot";
+import { chip } from "@/features/scene/components/chip";
 import { ShotTabs, type ShotTab } from "./shot-tabs";
 
 // Actions that only use what is in the keyframes: a prop the keys do not show makes LTX conjure it
@@ -25,6 +26,13 @@ const EXAMPLES: { start: string; then: string; end: string }[] = [
   { start: "looks around warily", then: "takes a careful step forward", end: "stops and listens, the wind stirring their clothes" },
   { start: "lowers their head", then: "takes a slow, deep breath", end: "looks up with a faint smile" },
 ];
+// What guides a shot's takes, one or the other (decision 0014): the camera's keyframes for a shot
+// about the move, the character's sheet for a shot about them.
+const KINDS: { id: ShotKind; label: string; line: string }[] = [
+  { id: "camera", label: "Camera move", line: "The takes follow the keyframes along the move: for push-ins, arcs and walks through the set." },
+  { id: "character", label: "Character", line: "The takes hold the character's face, clothes and things to their sheet, 5 s from the first keyframe: for close-ups and acting." },
+];
+const EXPRESSIONS = ["calm", "smiling", "curious", "worried", "frightened", "angry", "sad", "determined"];
 const BEATS = [
   { id: "start", label: "First", placeholder: "stands still, breathing slowly" },
   { id: "then", label: "As the camera moves", placeholder: "turns their head toward the camera" },
@@ -33,10 +41,14 @@ const BEATS = [
 
 // Step 03: set the shot's camera and walk (decision 0011), make the keyframes, say what the character does; LTX-2.5 shoots the shot's camera move, guided by its
 // keyframes. Each take is kept; pick the one the sequence uses, or download it.
-export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; keysRunning: boolean; cameraPanel: React.ReactNode; keyPanel: React.ReactNode; shots: ShotTab[] }) {
+export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; keysRunning: boolean; cameraPanel: React.ReactNode; keyPanel: React.ReactNode; shots: ShotTab[]; suggested: ShotKind; sheet: string | null }) {
   const [beats, setBeats] = useState<{ start: string; then: string; end: string }>({ start: props.shot?.beats?.start ?? props.shot?.action ?? "", then: props.shot?.beats?.then ?? "", end: props.shot?.beats?.end ?? "" });
   const action = [beats.start, beats.then, beats.end].map((x) => x.trim()).filter(Boolean).join(", then ");
-  const shoot = (tries: number) => run(() => renderTake(props.projectId, { beats, tries }));
+  const kind = props.shot?.kind ?? props.suggested;
+  const [expression, setExpression] = useState(props.shot?.expression ?? "");
+  const [fromKey, setFromKey] = useState(false);
+  const character = kind === "character";
+  const shoot = (tries: number) => run(() => renderTake(props.projectId, { beats, tries, expression: character ? expression : undefined, fromKey: character && fromKey }));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const running = props.job?.status === "running";
@@ -44,7 +56,9 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const takes = props.shot?.takes ?? [];
   const run = (fn: () => Promise<unknown>) => start(() => fn().then(() => setError(null), (e: Error) => setError(e.message)));
-  const expected = Math.round(25 + props.seconds * 18);
+  const seconds = character ? 5 : props.seconds;
+  const expected = Math.round(25 + seconds * 18);
+  const canShoot = !busy && props.ready && beats.start.trim().length >= 3 && (!character || !!props.sheet);
 
   return (
     <>
@@ -92,6 +106,41 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
               shoot(1);
             }}
           >
+            <div className="flex flex-col gap-2 border-b pb-3">
+              <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="What guides the takes">
+                <span className="mr-1 text-xs text-muted-foreground">Kind</span>
+                {KINDS.map((x) => (
+                  <button key={x.id} type="button" role="radio" aria-checked={kind === x.id} disabled={busy} onClick={() => run(() => setShotKind(props.projectId, x.id))} className={chip(kind === x.id)}>
+                    {x.label}
+                    {props.suggested === x.id && !props.shot?.kind ? " · suggested" : ""}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">{KINDS.find((x) => x.id === kind)!.line} One guide per take: the two are never mixed.</p>
+              {character &&
+                (props.sheet ? (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <FadeImage src={file(props.sheet)} alt="The character's sheet" className="aspect-[768/448] w-full max-w-64 shrink-0 rounded border bg-black object-contain" />
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <span className="text-xs text-muted-foreground">Their expression (the sheet holds the face, so say it)</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {EXPRESSIONS.map((e) => (
+                          <button key={e} type="button" aria-pressed={expression === e} onClick={() => setExpression(expression === e ? "" : e)} className={chip(expression === e)}>
+                            {e}
+                          </button>
+                        ))}
+                      </div>
+                      <Input aria-label="Expression in your own words" value={EXPRESSIONS.includes(expression) ? "" : expression} maxLength={60} placeholder="or in your own words: a nervous half-smile" onChange={(e) => setExpression(e.target.value)} className="sm:max-w-sm" />
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input type="checkbox" checked={fromKey} onChange={(e) => setFromKey(e.target.checked)} className="accent-primary" />
+                        Start from the first keyframe (only when it shows this same character; otherwise its face wins)
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-destructive">Make the character&apos;s sheet first: Character, Turnaround, Sheet.</p>
+                ))}
+            </div>
             <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
               {BEATS.map((b) => (
                 <Fragment key={b.id}>
@@ -113,13 +162,13 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
             )}
             <div className="flex items-center gap-3 border-t pt-3">
               <span className="font-mono text-[11px] text-muted-foreground">
-                ~{Math.round(expected / 10) * 10} s a take · {props.seconds} s of video with sound · every take is kept
+                ~{Math.round(expected / 10) * 10} s a take · {seconds} s of video with sound · every take is kept
               </span>
-              <Button type="submit" variant="outline" className="ml-auto" disabled={busy || !props.ready || beats.start.trim().length < 3}>
+              <Button type="submit" variant="outline" className="ml-auto" disabled={!canShoot}>
                 <Clapperboard data-icon="inline-start" />
                 Shoot a take
               </Button>
-              <Button type="button" size="lg" disabled={busy || !props.ready || beats.start.trim().length < 3} onClick={() => shoot(3)} title="Shoots until a take is steady with nothing popping in, at most 3, and picks the best">
+              <Button type="button" size="lg" disabled={!canShoot} onClick={() => shoot(3)} title="Shoots until a take is steady with nothing popping in, at most 3, and picks the best">
                 {pending && !running ? <LoadingDots /> : <Repeat data-icon="inline-start" />}
                 Shoot until good
               </Button>
@@ -132,7 +181,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           summary={takes.length ? `${takes.length} take${takes.length === 1 ? "" : "s"}${props.shot?.picked != null ? " · one picked" : ""}` : "No takes yet"}
           actions={
             takes.length > 0 && (
-              <Button size="sm" variant="outline" disabled={busy || !props.ready || beats.start.trim().length < 3} onClick={() => shoot(1)} title={`Another take of: ${action}`}>
+              <Button size="sm" variant="outline" disabled={!canShoot} onClick={() => shoot(1)} title={`Another take of: ${action}`}>
                 {pending && !running ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
                 Another take
               </Button>

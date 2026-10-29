@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Dices, Images } from "lucide-react";
+import { Dices, Images, ScanFace } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +15,7 @@ import type { StageCamera } from "@/lib/stage-fill";
 import { cn } from "@/lib/utils";
 import { saveCamera } from "@/features/scene/actions/camera";
 import type { CameraMove } from "@/lib/camera";
-import { rerollKey, saveCaption, saveKeys } from "../actions/keyframes";
+import { fixKeyFace, rerollKey, saveCaption, saveKeys } from "../actions/keyframes";
 
 // The shot's keyframes: the stage at frames 0, 32, 64... of the camera move, each repainted into a
 // finished frame with one strict prompt and seed. Make keyframes captures them in the browser and
@@ -93,6 +93,17 @@ export function KeyframesPanel(props: {
                 >
                   <Dices className="size-3" />
                   Paint again
+                </button>
+              )}
+              {k.keys[i] && !busy && (
+                <button
+                  type="button"
+                  title="Repaint the face to match the character's sheet (its front close-up)"
+                  onClick={() => act(() => fixKeyFace(props.projectId, i))}
+                  className="absolute right-1.5 bottom-1.5 flex items-center gap-1 rounded-md border bg-background/80 px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100"
+                >
+                  <ScanFace className="size-3" />
+                  Fix face
                 </button>
               )}
               {k.keys[i] && <KeyCaption key={`${raw}-${k.captions?.[i] ?? ""}`} text={k.captions?.[i] ?? ""} frame={k.frames[i]} disabled={busy} onSave={(t) => act(() => saveCaption(props.projectId, i, t))} />}

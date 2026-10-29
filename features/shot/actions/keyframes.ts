@@ -10,10 +10,14 @@ import { startJob } from "@/lib/jobs";
 import { currentFill } from "@/lib/progress";
 import { getProject, projectDir, updateProject, type Project } from "@/lib/store";
 import { styleById } from "@/lib/styles";
+import { faceFixable, faceReference, matchFace } from "../face";
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const rel = (id: string, f: string) => path.relative(projectDir(id), f);
-const done = (id: string) => revalidatePath(`/p/${id}/scene`);
+const done = (id: string) => {
+  revalidatePath(`/p/${id}/scene`);
+  revalidatePath(`/p/${id}/shot`);
+};
 const seed = () => Math.floor(Math.random() * 2 ** 31);
 
 async function load(id: string): Promise<Project> {
@@ -153,6 +157,12 @@ async function refine(id: string, which: number[], reroll = false) {
         });
         if (!(await ctx.alive())) return;
       }
+      // The face matched to the character's sheet, when there is one and they are alone on the stage.
+      if (faceFixable(p) && !seeded) {
+        await ctx.progress(`Matching the face in key ${n + 1} of ${which.length} to the sheet`);
+        image = (await matchFace(image, abs(id, faceReference(p)!), `${outDir}-face`, ctx.track)) ?? image;
+        if (!(await ctx.alive())) return;
+      }
       await updateProject(id, (q) => {
         if (q.keyframes?.raw[i] === k.raw[i]) q.keyframes.keys[i] = rel(id, image);
       });
@@ -175,6 +185,26 @@ export async function rerollKey(id: string, rawIndex: unknown) {
   const p = await load(id);
   if (!p.keyframes?.raw[i]) throw new Error("No such key.");
   await refine(id, [i], true);
+  done(id);
+}
+
+// Match one key's face to the character's sheet again (Fix face), as it is now.
+export async function fixKeyFace(id: string, rawIndex: unknown) {
+  const i = z.number().int().min(0).max(8).parse(rawIndex);
+  const p = await load(id);
+  const key = p.keyframes?.keys[i];
+  const ref = faceReference(p);
+  if (!key) throw new Error("No such key.");
+  if (!ref) throw new Error("Make the character's sheet first: its front close-up is the face to match.");
+  await startJob(id, "keyframes", async (ctx) => {
+    await ctx.progress(`Matching the face in key ${i + 1} to the sheet`);
+    const out = await matchFace(abs(id, key), abs(id, ref), path.join(path.dirname(abs(id, key)), `face-${Date.now().toString(36)}`), ctx.track);
+    if (!out) throw new Error("No face found in this key, or it is too small to repaint.");
+    if (!(await ctx.alive())) return;
+    await updateProject(id, (q) => {
+      if (q.keyframes?.keys[i] === key) q.keyframes.keys[i] = rel(id, out);
+    });
+  }, `Matching the face in key ${i + 1}`);
   done(id);
 }
 

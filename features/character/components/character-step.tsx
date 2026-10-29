@@ -149,6 +149,7 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
               assets={data.assets ?? []}
               poses={data.poses ?? []}
               mesh={data.mesh ?? null}
+              sheet={data.sheet ?? null}
               jobs={jobs}
             />
           )}
