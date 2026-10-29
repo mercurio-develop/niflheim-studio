@@ -62,6 +62,7 @@ const [[set], , , , [side]] = await Promise.all([
   run("01_remove", { set: [...qwen("Remove what is in the masked area and paint the troll's bare mossy skin there."), ...crop("4"), ...crop("5"), ...paste], images: [["1", concept], ["2", mask]], output: "28" }),
   run("01_swap", { set: qwen("Replace the masked area with a rusty chain armour, same art style."), images: [["1", concept], ["2", mask]], output: "28" }),
   run("02_asset_crop", { images: [["1", concept], ["2", mask]], output: "10" }),
+  run("03_key_caption", { images: [["1", concept]], output: "4", ext: "txt" }),
   run("03_key_detail", { set: [["14", "text", `the face of ${TROLL}, clean and well drawn`], ["6", "denoise", 0.22], ["7", "denoise", 0.35], ["6", "seed", 7], ["7", "seed", 7]], images: [["1", concept]], output: "8" }),
 ]);
 
