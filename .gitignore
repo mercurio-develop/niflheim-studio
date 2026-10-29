@@ -45,6 +45,19 @@ coverage/
 *.webm
 *.exr
 !/samples/**
+# 3D meshes and packed samples stay out everywhere, samples/ too (a sample is a release zip:
+# scripts/pack_sample.py).
+*.glb
+*.gltf
+*.obj
+*.fbx
+*.usd
+*.usda
+*.usdc
+*.usdz
+*.blend
+*.blend1
+sample-*.zip
 
 # --- editors / OS / agents ---
 .idea/
