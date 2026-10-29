@@ -21,6 +21,7 @@ export function CameraSection(props: {
   onMove: (m: CameraMove) => void;
   start: Vec | null; // where the move starts today, which the Height slider raises or lowers
   subject: { at: Vec; turn: number } | null; // where the character stands and faces, to start a walk
+  poses?: { id: string; label: string }[]; // the character's finished poses (Character → Turnaround)
   outside: number; // frames outside the stage's space
   close?: number; // the first frame the camera is too close to the character, or -1
   playing: boolean;
@@ -50,7 +51,7 @@ export function CameraSection(props: {
     const t = setTimeout(() => start(() => saveCamera(props.projectId, m).then(() => setError(null), (e: Error) => setError(e.message))), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m.move, m.amount, m.seconds, m.ease, m.framing, m.from?.join(), m.to?.join(), m.walk?.to.join(), m.walk?.from.join(), m.focus]);
+  }, [m.move, m.amount, m.seconds, m.ease, m.framing, m.from?.join(), m.to?.join(), m.walk?.to.join(), m.walk?.from.join(), m.focus, m.pose, m.poseThen]);
 
   return (
     <Section
@@ -128,6 +129,27 @@ export function CameraSection(props: {
               <span>Drag either end of the path in Overview to change it.</span>
             )}
           </p>
+
+          {!!props.poses?.length && (
+            <>
+              <span className="text-xs text-muted-foreground">Pose</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[{ id: "", label: "As designed" }, ...props.poses].map((x) => (
+                  <button key={x.id || "designed"} type="button" aria-pressed={(m.pose ?? "") === x.id} className={chip((m.pose ?? "") === x.id)} onClick={() => set({ pose: x.id || undefined })}>
+                    {x.label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-muted-foreground">Then, halfway</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[{ id: "", label: "Same pose" }, { id: "designed", label: "As designed" }, ...props.poses].filter((x) => x.id !== (m.pose ?? "designed")).map((x) => (
+                  <button key={x.id || "same"} type="button" aria-pressed={(m.poseThen ?? "") === x.id} className={chip((m.poseThen ?? "") === x.id)} onClick={() => set({ poseThen: x.id || undefined })}>
+                    {x.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <span className="text-xs text-muted-foreground">Character</span>
           <div className="flex flex-wrap items-center gap-1.5">

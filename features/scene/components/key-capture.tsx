@@ -66,7 +66,7 @@ export function KeyCapture(props: {
       <StageViewer mesh={props.mesh} camera={props.camera} filled pose={props.poses[i]} onDrawn={drawn} className="size-full">
         <Blocks blocks={props.blocks} />
         <SceneAssets projectId={props.projectId} assets={props.assets} wait />
-        <CharacterCard cutouts={props.cutouts} at={props.poses[i].at ?? props.at} height={props.height} turn={props.turn} />
+        <CharacterCard cutouts={(props.poses[i].card as typeof props.cutouts | undefined) ?? props.cutouts} at={props.poses[i].at ?? props.at} height={props.height} turn={props.turn} />
       </StageViewer>
     </div>
   );

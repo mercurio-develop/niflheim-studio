@@ -60,14 +60,17 @@ function shotPrompt(p: Project, b: Beats) {
     `${FRAMING_WORDS[m?.framing ?? "painting"]}${p.set?.prompt ? ` of ${clean(p.set.prompt)}` : ""}.`,
     pov ? `Seen through the eyes of ${clean(p.character.prompt)}, who ${clean(b.start)}.` : `${capital(clean(p.character.prompt)!)} ${clean(b.start)}.`,
     m?.walk ? "They walk steadily across the ground." : "",
-    clean(b.then) ? `As the camera ${cam.move}, ${clean(b.then)}.` : `The camera ${cam.move}.`,
-    clean(b.end) ? `A moment later, ${clean(b.end)}.` : "",
+    poseOf(p, m?.pose) ? `They ${poseOf(p, m?.pose)}.` : "",
+    m?.poseThen ? `Halfway through, they ${poseOf(p, m.poseThen) ?? "return to how they stood at first"}.` : "",
+    clean(b.then) ? `As the camera ${cam.move}, the character ${clean(b.then)}.` : `The camera ${cam.move}.`,
+    clean(b.end) ? `A moment later, the character ${clean(b.end)}.` : "",
     pov ? "" : `The shot ends ${cam.ends}.`,
     `One continuous take with no cuts, ${style}, consistent art style.`,
     focusPhrase(m),
   ];
   return lines.filter(Boolean).join(" ");
 }
+const poseOf = (p: Project, id?: string) => p.poses?.find((x) => x.id === id)?.prompt;
 const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 
 // No negative from the user: the distilled graph runs at CFG 1, where a negative prompt has no

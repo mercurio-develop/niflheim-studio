@@ -93,6 +93,7 @@ export function CharacterStep({ project }: { project: Project }) {
               views={views}
               fresh={fresh}
               assets={project.assets ?? []}
+              poses={project.poses ?? []}
               mesh={project.mesh ?? null}
               jobs={jobs}
             />

@@ -9,7 +9,9 @@ import { meshFromViews, paintViews } from "@/lib/asset-3d";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { getProject, projectDir, updateProject, type SceneAsset } from "@/lib/store";
-import { styleById } from "@/lib/styles";
+import { mediumOf, styleById } from "@/lib/styles";
+
+const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const rel = (id: string, f: string) => path.relative(projectDir(id), f);
@@ -30,7 +32,7 @@ const Source = z.discriminatedUnion("from", [
 
 // A single object, whole and centred on grey, the way the views and the 3D model want it.
 const conceptPrompt = (prompt: string, style: string) =>
-  `Concept art of ${prompt}: one single object on its own, whole, centred, front view, plain light grey background, clean silhouette, nothing else. ${styleById(style).phrase}.`;
+  `${capital(mediumOf(style))} of ${prompt}: one single object on its own, whole, centred, front view, plain light grey background, clean silhouette, nothing else. ${styleById(style).phrase}.`;
 
 // The object from its picture to a coloured 3D model: a concept first when it was described, its
 // four views (kept from the character's asset when it has them), then the model. About 3 min.

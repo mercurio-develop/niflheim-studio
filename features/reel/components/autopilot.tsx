@@ -11,7 +11,7 @@ import type { StagePose } from "@/features/scene/components/stage-viewer";
 import { saveKeys } from "@/features/shot/actions/keyframes";
 import { renderTake } from "@/features/shot/actions/shot";
 import { selectShot } from "@/features/shot/actions/shots";
-import { keyFrames, poses, type CameraMove } from "@/lib/camera";
+import { cardAt, keyFrames, poses, type CameraMove } from "@/lib/camera";
 import type { StageCamera } from "@/lib/stage-fill";
 import type { Autopilot as Pilot, AutopilotShot, AutopilotStep, Block, Join, SceneAsset, ViewId } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ import { jobState, markStep, pickBest, savePlan, startAutopilot, stopAutopilot }
 import { exportReel, saveReel } from "../actions/reel";
 
 export type PilotShot = { id: string; name: string; move: CameraMove | null };
-export type SceneCapture = { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; blocks: Block[]; assets: SceneAsset[] };
+export type SceneCapture = { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; blocks: Block[]; assets: SceneAsset[]; poses: { id: string; cutouts: Partial<Record<ViewId, string>> }[] };
 
 const JOINS: { id: Join; label: string }[] = [
   { id: "cut", label: "Cut" },
@@ -67,7 +67,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
     new Promise<Blob[]>((resolve, reject) => {
       const s = props.scene!;
       const ps = poses(s.camera, s, move);
-      setCapture({ poses: keyFrames(move).map((f) => ps[f]), done: (b) => (setCapture(null), resolve(b)), fail: (m) => (setCapture(null), reject(new Error(m))) });
+      setCapture({ poses: keyFrames(move).map((f) => ({ ...ps[f], card: cardAt(move, f, s.cutouts, s.poses) })), done: (b) => (setCapture(null), resolve(b)), fail: (m) => (setCapture(null), reject(new Error(m))) });
     });
 
   async function runStep(i: number, list: typeof steps) {

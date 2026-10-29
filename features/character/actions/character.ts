@@ -11,7 +11,7 @@ import { cropBox, maskBox, pngSize, removePrompt, type Box } from "@/lib/brush";
 import { parentIn, stackMoves } from "@/lib/history";
 import { mergeParts, partsFromTags } from "@/lib/parts";
 import { getProject, projectDir, updateProject, type Edit, type Project, type Version, type ViewId } from "@/lib/store";
-import { styleById } from "@/lib/styles";
+import { mediumOf, styleById } from "@/lib/styles";
 import { Count, Index, Prompt, REFERENCE_TYPES, StyleId, referenceError } from "../schemas";
 
 const rel = (id: string, files: string[]) => files.map((f) => path.relative(projectDir(id), f));
@@ -56,12 +56,12 @@ function currentVersion(s: Stack) {
 }
 
 const sketchPrompt = (prompt: string, style: string) =>
-  `Turn this sketch into finished full-body character concept art of ${prompt}. Keep the pose, proportions and silhouette of the sketch. A face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
+  `Turn this sketch into a finished full-body character ${mediumOf(style)} of ${prompt}. Keep the pose, proportions and silhouette of the sketch. A face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
 
 // "A face with eyes, nose and mouth": flat styles (pixel art, low poly) otherwise often leave the
 // face blank (2026-10-27, a pixel-art elf).
 const conceptPrompt = (prompt: string, style: string) =>
-  `Full-body character concept art of ${prompt}. Standing, neutral pose, front view, whole figure in frame, a face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
+  `Full-body character ${mediumOf(style)} of ${prompt}. Standing, neutral pose, front view, whole figure in frame, a face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
 
 
 

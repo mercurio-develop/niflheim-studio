@@ -11,8 +11,9 @@ export type FramingId = "painting" | "long" | "mid" | "close" | "pov" | "free";
 export type FocusId = "deep" | "soft" | "strong";
 // framing: where the move starts (none: the painting's camera); from: the start a Free framing keeps.
 // to: where the camera ends, when moved off the preset's end. walk: the character crosses the stage
-// from one spot to another over the shot (none: they stand at the placement).
-export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec }; focus?: FocusId };
+// from one spot to another over the shot (none: they stand at the placement). pose: one of the
+// character's poses (none: as designed); poseThen: the pose the second half of the keys show.
+export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec }; focus?: FocusId; pose?: string; poseThen?: string };
 // at: where the character stands at that frame.
 export type Pose = { position: Vec; target: Vec; at?: Vec };
 // Who the camera is about: where they stand, how tall, which way they face (degrees, CharacterCard's).
@@ -203,7 +204,7 @@ export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string, 
   const f = m.framing ?? "painting";
   const v = (p?: Vec) => (p ?? []).map((x) => x.toFixed(2));
   const framing = f === "painting" ? [] : f === "free" ? [f, ...v(m.from)] : f === "pov" ? [f, turn] : [f];
-  const more = [...(m.to ? ["to", ...v(m.to)] : []), ...(m.walk ? ["walk", ...v(m.walk.from), ...v(m.walk.to)] : []), ...(m.focus && m.focus !== "deep" ? [m.focus] : [])];
+  const more = [...(m.to ? ["to", ...v(m.to)] : []), ...(m.walk ? ["walk", ...v(m.walk.from), ...v(m.walk.to)] : []), ...(m.focus && m.focus !== "deep" ? [m.focus] : []), ...(m.pose ? ["pose", m.pose] : []), ...(m.poseThen ? ["then", m.poseThen] : [])];
   return [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh, ...framing, ...more].join("|");
 };
 
@@ -214,6 +215,13 @@ export function propsKey(blocks: { kind: string; at: Vec; size: Vec; turn: numbe
   const b = blocks.map((x) => [x.kind, ...v(x.at), ...v(x.size), x.turn, x.label].join(",")).join(";");
   const a = assets.filter((x) => x.glb && x.at).map((x) => [x.id, x.glb, ...v(x.at!), x.height.toFixed(2), x.turn].join(",")).join(";");
   return (b ? `|blocks:${b}` : "") + (a ? `|assets:${a}` : "");
+}
+
+// The cutouts the card wears at a frame of the move: the shot's pose, or the one it switches to for
+// the second half; the turnaround's own (as designed) when the shot has none or it is gone.
+export function cardAt<C>(m: CameraMove, frame: number, base: C, poses: { id: string; cutouts: C }[] = []): C {
+  const id = m.poseThen && frame >= (frameCount(m.seconds) - 1) / 2 ? m.poseThen : m.pose;
+  return poses.find((p) => p.id === id)?.cutouts ?? base;
 }
 
 // The frames the shot is guided at: every 32nd frame of the move and its last (97 frames: 0, 32,

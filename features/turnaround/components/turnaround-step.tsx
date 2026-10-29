@@ -13,7 +13,8 @@ import { JobStatus } from "@/features/wizard/components/job-status";
 import { Editor } from "@/features/character/components/editor";
 import { stackMoves } from "@/lib/history";
 import { VIEWS, viewsFor } from "@/lib/progress";
-import type { Asset, Job, Mesh, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
+import type { Asset, CharacterPose, Job, Mesh, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
+import { PosesPanel } from "./poses-panel";
 import { cn } from "@/lib/utils";
 import { cancelTurnaround, findMasks, generateTurnaround, generateView } from "../actions/turnaround";
 import { AssetsShelf } from "./assets-shelf";
@@ -39,6 +40,7 @@ export function TurnaroundSections(props: {
   views: Partial<Record<ViewId, ViewStack>>;
   fresh: boolean; // made from the current character
   assets: Asset[];
+  poses: CharacterPose[]; // the character in other poses, for shots
   mesh: Mesh | null; // the character in 3D, from these views
   jobs: Record<string, Job>;
 }) {
@@ -288,6 +290,15 @@ export function TurnaroundSections(props: {
             </div>
           );
         })()}
+        {image("front") && props.fresh && (
+          <More
+            label="Poses"
+            summary={props.poses.length ? props.poses.map((p) => p.label).join(", ") : "running, angry, happy: the character in other poses for shots"}
+            open={props.poses.some((p) => props.jobs[`pose:${p.id}`]?.status === "running")}
+          >
+            <PosesPanel projectId={props.projectId} poses={props.poses} jobs={props.jobs} locked={running} />
+          </More>
+        )}
       </Section>
 
         <MeshSection

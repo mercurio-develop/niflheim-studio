@@ -8,13 +8,13 @@ import { CameraSection } from "@/features/scene/components/camera-section";
 import { CharacterCard } from "@/features/scene/components/character-card";
 import { StageViewer } from "@/features/scene/components/stage-viewer";
 import { ViewSwitch } from "@/features/scene/components/view-switch";
-import { DEFAULT_MOVE, inside, poses, renderKey, tooClose, type CameraMove, type Vec } from "@/lib/camera";
-import type { Block, CameraRender, Job, SceneAsset, SetData, StageData } from "@/lib/store";
+import { DEFAULT_MOVE, cardAt, inside, poses, renderKey, tooClose, type CameraMove, type Vec } from "@/lib/camera";
+import type { Block, CameraRender, CharacterPose, Job, SceneAsset, SetData, StageData } from "@/lib/store";
 
 // The active shot's camera (decision 0011): the Scene's stage with the character standing where
 // the Scene put them, and this shot's framing, move and walk. Overview shows the path with a gizmo
 // on each end and on the walk; Play flies it. Each shot keeps its own; saved as it is tuned.
-export function ShotCamera(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; cameraRender: CameraRender | null; blocks: Block[]; assets: SceneAsset[]; stageJob?: Job }) {
+export function ShotCamera(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; cameraRender: CameraRender | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[]; stageJob?: Job }) {
   const s = props.set;
   const fill = s?.stage && s.stage.image === s.image ? s.stage.fill : undefined;
   const cam = fill?.camera;
@@ -39,13 +39,16 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
     setOverview(on);
   };
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
+  const urls = (c: Partial<Record<string, string>>) => Object.fromEntries(Object.entries(c).map(([v, f]) => [v, file(f!)]));
+  // Finished poses only (all four views cut out); the card wears the shot's first pose here.
+  const ready4 = props.poses.filter((p) => ["front", "threequarter", "side", "back"].every((v) => p.cutouts[v as keyof typeof p.cutouts]));
 
   const viewer = ready && path && (
     <div className="relative aspect-[7/4] overflow-hidden rounded-lg border">
       <StageViewer mesh={file(fill!.mesh)} camera={cam} filled overview={overview} className="absolute inset-0">
         <Blocks blocks={props.blocks} />
         <SceneAssets projectId={props.projectId} assets={props.assets} />
-        <CharacterCard cutouts={Object.fromEntries(Object.entries(pl!.cutouts).map(([v, f]) => [v, file(f!)]))} at={pl!.at!} height={pl!.height} turn={pl!.turn} live={live} />
+        <CharacterCard cutouts={cardAt(move, 0, urls(pl!.cutouts), ready4.map((p) => ({ id: p.id, cutouts: urls(p.cutouts) })))} at={pl!.at!} height={pl!.height} turn={pl!.turn} live={live} />
         <CameraPath
           poses={path.poses}
           inside={path.inside}
@@ -70,6 +73,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
       onMove={pick}
       start={path?.poses[0].position ?? null}
       subject={ready ? { at: pl!.at!, turn: pl!.turn } : null}
+      poses={ready4.map((p) => ({ id: p.id, label: p.label }))}
       outside={path ? path.inside.filter((x) => !x).length : 0}
       close={path?.close ?? -1}
       playing={playing}

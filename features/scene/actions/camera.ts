@@ -32,6 +32,8 @@ const Move = z
     to: Point.optional(),
     walk: z.object({ from: Point, to: Point }).optional(),
     focus: z.enum(FOCUS.map((f) => f.id) as [string, ...string[]]).optional(),
+    pose: z.string().regex(/^[a-z0-9]{1,16}$/).optional(),
+    poseThen: z.string().regex(/^[a-z0-9]{1,16}$/).optional(),
   })
   .refine((m) => {
     const spec = MOVES.find((x) => x.id === m.move)!;

@@ -66,6 +66,10 @@ export type StageFill = { mesh: string; cameras: string; views: string[]; holes:
 // A greybox shape standing on the stage (metres, floor y = 0): at is the middle of its base, size
 // width, height, depth, turn degrees about y. The keyframes paint it as its label ("a wooden cart").
 export type Block = { id: string; kind: "box" | "cylinder" | "ramp"; at: [number, number, number]; size: [number, number, number]; turn: number; label: string };
+// The character in another pose: its front painted from the turnaround's front, the other three
+// views from that, and each cut out for the stage card. A shot picks a pose (and one to switch to).
+export type CharacterPose = { id: string; label: string; prompt: string; views: Partial<Record<AssetView, string>>; cutouts: Partial<Record<AssetView, string>> };
+
 // An object made for the scene, from a prompt (its concept painted first), an uploaded picture or
 // one of the character's assets: its four views, then a coloured 3D model standing on the stage
 // (at: the middle of its base, height in metres, turn degrees about y) once placed.
@@ -161,6 +165,7 @@ export type Project = {
     views: Partial<Record<ViewId, ViewStack>>; // each view keeps its own versions, like the character
   };
   assets?: Asset[]; // objects hidden from the turnaround, kept to be made on their own later
+  poses?: CharacterPose[]; // the character in other poses (running, angry), for shots to swap in
   mesh?: Mesh; // the character in 3D, made from the turnaround views
   set?: SetData;
   stage?: StageData;
