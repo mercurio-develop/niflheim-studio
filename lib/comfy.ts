@@ -3,6 +3,7 @@ import path from "node:path";
 import { Comfy } from "@comfyorg/sdk";
 
 // All ComfyUI traffic goes through here (Comfy SDK -> COMFY_BASE_URL). Server only.
+// A blank COMFY_BASE_URL means Comfy Cloud (the SDK's own rule), with COMFY_API_KEY as the key.
 
 const WORKFLOWS = path.join(/* turbopackIgnore: true */ process.cwd(), "workflows");
 
@@ -10,6 +11,17 @@ let client: Comfy | null = null;
 function comfy(): Comfy {
   client ??= new Comfy(process.env.COMFY_API_KEY ? { apiKey: process.env.COMFY_API_KEY } : {});
   return client;
+}
+
+const CLOUD = "https://cloud.comfy.org";
+function comfyBase(): string {
+  return process.env.COMFY_BASE_URL?.trim().replace(/\/+$/, "") || CLOUD;
+}
+export function onCloud(): boolean {
+  return comfyBase() === CLOUD;
+}
+function auth(): Record<string, string> {
+  return process.env.COMFY_API_KEY ? { Authorization: `Bearer ${process.env.COMFY_API_KEY}` } : {};
 }
 
 export type RunSpec = {
@@ -51,14 +63,19 @@ export async function runWorkflow(spec: RunSpec): Promise<string[]> {
 
 // SaveGLB writes under a "3d" key, which the SDK's outputs leave out. ComfyUI's own history
 // has it (the proxy's job id is ComfyUI's prompt id), so those files are fetched from there.
+// On Comfy Cloud the same history and files sit behind /api/history_v2 and /api/view.
 async function fromHistory(jobId: string, spec: RunSpec): Promise<string[]> {
-  const base = process.env.COMFYUI_URL ?? "http://127.0.0.1:8188";
-  const history = await (await fetch(`${base}/history/${jobId}`, { cache: "no-store" })).json();
-  const outputs: Record<string, { filename: string; subfolder: string; type: string }[]> = history[jobId]?.outputs?.[spec.output] ?? {};
+  const cloud = onCloud();
+  const base = cloud ? `${CLOUD}/api` : (process.env.COMFYUI_URL ?? "http://127.0.0.1:8188");
+  const res = await fetch(`${base}/${cloud ? "history_v2" : "history"}/${jobId}`, { headers: auth(), cache: "no-store" });
+  if (!res.ok) throw new Error(`ComfyUI history ${jobId}: ${res.status}`);
+  const history = await res.json();
+  const entry = history[jobId] ?? history;
+  const outputs: Record<string, { filename: string; subfolder: string; type: string }[]> = entry?.outputs?.[spec.output] ?? {};
   const files: string[] = [];
   for (const item of Object.values(outputs).flat()) {
     if (!item?.filename) continue;
-    const res = await fetch(`${base}/view?${new URLSearchParams({ filename: item.filename, subfolder: item.subfolder, type: item.type })}`);
+    const res = await fetch(`${base}/view?${new URLSearchParams({ filename: item.filename, subfolder: item.subfolder, type: item.type })}`, { headers: auth() });
     if (!res.ok) throw new Error(`ComfyUI output ${item.filename}: ${res.status}`);
     const file = path.join(/* turbopackIgnore: true */ spec.outDir, `${String(files.length).padStart(2, "0")}.${spec.ext ?? "png"}`);
     await writeFile(file, Buffer.from(await res.arrayBuffer()));
@@ -77,14 +94,13 @@ const OFFLINE = "Can't reach ComfyUI: start the Comfy proxy (mw serve start comf
 function unreachable(e: unknown): Error | null {
   const err = e as { message?: string; cause?: { code?: string } };
   const down = err?.message === "fetch failed" || ["ECONNREFUSED", "ECONNRESET", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT"].includes(err?.cause?.code ?? "");
-  return down ? new Error(OFFLINE) : null;
+  return down ? new Error(onCloud() ? "Can't reach Comfy Cloud: check the network, then try again." : OFFLINE) : null;
 }
 
-// Is the Comfy API v2 surface answering? For the status badge; never throws.
+// Is the Comfy API v2 surface answering (and taking our key)? For the status badge; never throws.
 export async function comfyHealth(): Promise<boolean> {
-  const base = process.env.COMFY_BASE_URL ?? "http://127.0.0.1:8189";
   try {
-    const res = await fetch(`${base}/api/v2/health`, { signal: AbortSignal.timeout(1500), cache: "no-store" });
+    const res = await fetch(`${comfyBase()}/api/v2/health`, { headers: auth(), signal: AbortSignal.timeout(onCloud() ? 4000 : 1500), cache: "no-store" });
     return res.ok;
   } catch {
     return false;
