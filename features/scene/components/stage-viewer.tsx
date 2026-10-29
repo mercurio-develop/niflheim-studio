@@ -48,7 +48,7 @@ function useLook(scene: THREE.Object3D, look: StageLook) {
   for (const [m, mat] of painted) m.material = look === "painting" ? mat : m.name.startsWith("floor") ? floor : guide;
 }
 
-export type StagePose = { position: StagePoint; target: StagePoint };
+export type StagePose = { position: StagePoint; target: StagePoint; at?: StagePoint };
 
 // A camera fixed at one pose, looking at its target; tells when a few frames have been drawn.
 function PoseCamera(props: { pose: StagePose; fov: number; far: number; onDrawn?: (canvas: HTMLCanvasElement) => void }) {

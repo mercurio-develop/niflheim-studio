@@ -1,7 +1,7 @@
 "use client";
 
 import { SectionNav } from "@/components/section-nav";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
 import { ShotTabs, type ShotTab } from "@/features/shot/components/shot-tabs";
@@ -41,6 +41,7 @@ export function SceneStep(props: {
   const [move, setMove] = useState<CameraMove>(props.camera ?? DEFAULT_MOVE);
   const [overview, setOverview] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const live = useRef<Vec | null>(null); // where the character stands this frame, when they walk
   const path = useMemo(() => {
     if (!ready) return null;
     const ps = poses(cam!, { at: at!, height: props.placement!.height, turn: props.placement!.turn }, move);
@@ -77,13 +78,29 @@ export function SceneStep(props: {
           stageJob={props.stageJob}
           overview={ready && overview}
           onOverview={ready ? view : undefined}
-          layer={path && <CameraPath poses={path.poses} inside={path.inside} overview={overview} playing={playing} onDone={() => setPlaying(false)} onStart={(from: Vec) => pick({ ...move, framing: "free", from })} />}
+          live={live}
+          layer={
+            path && (
+              <CameraPath
+                poses={path.poses}
+                inside={path.inside}
+                overview={overview}
+                playing={playing}
+                onDone={() => setPlaying(false)}
+                onStart={(from: Vec) => pick({ ...move, framing: "free", from })}
+                onEnd={(to: Vec) => pick({ ...move, to })}
+                onWalk={(to: Vec) => move.walk && pick({ ...move, walk: { ...move.walk, to } })}
+                live={live}
+              />
+            )
+          }
         />
         <CameraSection
           projectId={props.projectId}
           move={move}
           onMove={pick}
           start={path?.poses[0].position ?? null}
+          subject={ready ? { at: at!, turn: props.placement!.turn } : null}
           outside={path ? path.inside.filter((x) => !x).length : 0}
           overview={overview}
           onOverview={(on) => {

@@ -44,7 +44,8 @@ function cropOf(img: HTMLImageElement): Crop {
   return { x: x0 / width, y: y0 / height, w: (x1 - x0 + 2) / width, h: (y1 - y0 + 2) / height };
 }
 
-export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>; at: StagePoint; height: number; turn: number }) {
+// live: where they stand this frame, when they walk (CameraPath writes it); `at` otherwise.
+export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>; at: StagePoint; height: number; turn: number; live?: React.RefObject<StagePoint | null> }) {
   const views = PICK.filter((p) => props.cutouts[p.view]);
   const textures = useTexture(views.map((p) => props.cutouts[p.view]!));
   const [crops, setCrops] = useState<Crop[] | null>(null);
@@ -60,8 +61,10 @@ export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>;
   useFrame(({ camera }) => {
     const m = mesh.current;
     if (!m || !crops) return;
-    const dx = camera.position.x - props.at[0];
-    const dz = camera.position.z - props.at[2];
+    const at = props.live?.current ?? props.at;
+    m.position.set(at[0], at[1] + props.height / 2, at[2]);
+    const dx = camera.position.x - at[0];
+    const dz = camera.position.z - at[2];
     // A camera standing in them (first person) sees through them: the card would fill the frame.
     m.visible = Math.hypot(dx, dz) > 0.3;
     m.rotation.y = Math.atan2(dx, dz); // face the camera (the plane looks down +z)

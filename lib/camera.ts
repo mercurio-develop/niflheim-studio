@@ -6,11 +6,14 @@ import type { StageCamera } from "./stage-fill";
 // the viewer's ORBIT). A move becomes frames for the shot: LTX takes 8n + 1 frames at 24 fps.
 
 export type Vec = [number, number, number];
-export type MoveId = "static" | "push" | "pull" | "arc" | "crane" | "track";
+export type MoveId = "static" | "push" | "pull" | "arc" | "crane" | "track" | "follow";
 export type FramingId = "painting" | "long" | "mid" | "close" | "pov" | "free";
 // framing: where the move starts (none: the painting's camera); from: the start a Free framing keeps.
-export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec };
-export type Pose = { position: Vec; target: Vec };
+// to: where the camera ends, when moved off the preset's end. walk: the character crosses the stage
+// from one spot to another over the shot (none: they stand at the placement).
+export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec } };
+// at: where the character stands at that frame.
+export type Pose = { position: Vec; target: Vec; at?: Vec };
 // Who the camera is about: where they stand, how tall, which way they face (degrees, CharacterCard's).
 export type Subject = { at: Vec; height: number; turn: number };
 
@@ -24,6 +27,7 @@ export const MOVES: { id: MoveId; label: string; line: string; unit: string; min
   { id: "arc", label: "Arc", line: "Circles them, keeping the distance. Negative goes left.", unit: "°", min: -40, max: 40, step: 1, value: 12 },
   { id: "crane", label: "Crane", line: "Rises while looking at them. Negative sinks.", unit: "m", min: -1, max: 2, step: 0.05, value: 0.5 },
   { id: "track", label: "Track", line: "Slides sideways, keeping them in frame. Negative goes left.", unit: "m", min: -2, max: 2, step: 0.05, value: 0.8 },
+  { id: "follow", label: "Follow", line: "Keeps its distance as they walk.", unit: "", min: 0, max: 0, step: 1, value: 0 },
 ];
 // Where a shot starts. Long, mid and close stand between the character and the painting's camera
 // (the side the stage holds best), at distances for a 1.7 m character, scaled with their height;
@@ -112,11 +116,17 @@ function ends(p0: Vec, aimAt: Vec, m: CameraMove): { from: Vec; to: Vec; arc?: {
   }
 }
 
-// Every frame's pose, from the framing's start, eased in and out when asked.
+// Every frame's pose, from the framing's start, eased in and out when asked. A walking character
+// carries the aim (and a following or first-person camera) along with them; a camera end moved off
+// the preset's goes straight there.
 export function poses(cam: StageCamera, who: Subject, m: CameraMove): Pose[] {
   const n = frameCount(m.seconds);
-  const { position: p0, target: aimAt } = start(cam, who, m);
-  const e = ends(p0, aimAt, m);
+  const a0 = m.walk?.from ?? who.at;
+  const a1 = m.walk?.to ?? a0;
+  const { position: p0, target: aimAt } = start(cam, { ...who, at: a0 }, m);
+  const preset = ends(p0, aimAt, m);
+  const e = m.to ? { from: preset.from, to: m.to } : preset;
+  const carry = m.move === "follow" || m.framing === "pov";
   const out: Pose[] = [];
   for (let i = 0; i < n; i++) {
     const t0 = n === 1 ? 0 : i / (n - 1);
@@ -128,7 +138,9 @@ export function poses(cam: StageCamera, who: Subject, m: CameraMove): Pose[] {
       const a = -e.arc.angle * t;
       position = add(e.arc.centre, [off[0] * Math.cos(a) - off[2] * Math.sin(a), off[1], off[0] * Math.sin(a) + off[2] * Math.cos(a)]);
     }
-    out.push({ position, target: aimAt });
+    const at = lerp(a0, a1, t);
+    const moved = sub(at, a0);
+    out.push({ position: carry ? add(position, moved) : position, target: add(aimAt, moved), at });
   }
   return out;
 }
@@ -170,8 +182,10 @@ export function c2w(p: Pose): number[][] {
 // nothing, so renders from before framings stay current.
 export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string, turn = 0) => {
   const f = m.framing ?? "painting";
-  const framing = f === "painting" ? [] : f === "free" ? [f, ...(m.from ?? []).map((x) => x.toFixed(2))] : f === "pov" ? [f, turn] : [f];
-  return [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh, ...framing].join("|");
+  const v = (p?: Vec) => (p ?? []).map((x) => x.toFixed(2));
+  const framing = f === "painting" ? [] : f === "free" ? [f, ...v(m.from)] : f === "pov" ? [f, turn] : [f];
+  const more = [...(m.to ? ["to", ...v(m.to)] : []), ...(m.walk ? ["walk", ...v(m.walk.from), ...v(m.walk.to)] : [])];
+  return [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh, ...framing, ...more].join("|");
 };
 
 // The frames the shot is guided at: every 32nd frame of the move and its last (97 frames: 0, 32,

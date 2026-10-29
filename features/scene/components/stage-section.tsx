@@ -28,6 +28,7 @@ export function StageSection(props: {
   overview?: boolean; // show the stage from above, for the camera path
   onOverview?: (on: boolean) => void; // switch between the painting's view and Overview, once there is a camera
   layer?: React.ReactNode; // drawn in the viewer: the camera path
+  live?: React.RefObject<StagePoint | null>; // where the character stands this frame, when they walk
 }) {
   const s = props.set;
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
@@ -133,7 +134,7 @@ export function StageSection(props: {
             onFloor={ready ? setAt : undefined}
             className="absolute inset-0"
           >
-            {ready && at && <CharacterCard cutouts={Object.fromEntries(Object.entries(props.placement!.cutouts).map(([v, f]) => [v, file(f!)]))} at={at} height={height} turn={turn} />}
+            {ready && at && <CharacterCard cutouts={Object.fromEntries(Object.entries(props.placement!.cutouts).map(([v, f]) => [v, file(f!)]))} at={at} height={height} turn={turn} live={props.live} />}
             {props.layer}
           </StageViewer>
         ) : s?.image ? (

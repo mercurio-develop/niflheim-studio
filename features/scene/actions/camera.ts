@@ -17,6 +17,7 @@ const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv
 const SCRIPT = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "stage_path.py");
 const done = (id: string) => revalidatePath(`/p/${id}/scene`);
 
+const Point = z.tuple([z.number(), z.number(), z.number()]).refine((v) => v.every((x) => Number.isFinite(x) && Math.abs(x) < 500));
 const Move = z
   .object({
     move: z.enum(MOVES.map((m) => m.id) as [string, ...string[]]),
@@ -24,7 +25,9 @@ const Move = z
     seconds: z.number().min(2).max(10),
     ease: z.boolean(),
     framing: z.enum(FRAMINGS.map((f) => f.id) as [string, ...string[]]).optional(),
-    from: z.tuple([z.number(), z.number(), z.number()]).refine((v) => v.every((x) => Number.isFinite(x) && Math.abs(x) < 500)).optional(),
+    from: Point.optional(),
+    to: Point.optional(),
+    walk: z.object({ from: Point, to: Point }).optional(),
   })
   .refine((m) => {
     const spec = MOVES.find((x) => x.id === m.move)!;

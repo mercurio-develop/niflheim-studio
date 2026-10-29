@@ -12,14 +12,31 @@ const OUT = new THREE.Color("#f87171");
 // The camera move inside the stage viewer. Overview: the path as a line (red where it leaves the
 // space the stage holds), a dot at each end, and a small camera that runs along it while playing.
 // Painting view: Play flies the viewer's own camera along the path, at the shot's real speed, and
-// puts it back where it was when done. onStart: Overview's gizmo on the start, dragged along the
-// ground and up and down, gives where the camera now starts.
-export function CameraPath(props: { poses: Pose[]; inside: boolean[]; overview: boolean; playing: boolean; onDone: () => void; onStart?: (p: Vec) => void }) {
+// puts it back where it was when done. In Overview each end of the path has a gizmo, dragged along
+// the ground and up and down: onStart and onEnd give the camera's new start and end. A walking
+// character's path is a dashed line on the floor with its own gizmo at the end (onWalk); `live`
+// holds where they stand this frame, for the character card.
+export function CameraPath(props: {
+  poses: Pose[];
+  inside: boolean[];
+  overview: boolean;
+  playing: boolean;
+  onDone: () => void;
+  onStart?: (p: Vec) => void;
+  onEnd?: (p: Vec) => void;
+  onWalk?: (p: Vec) => void;
+  live?: React.RefObject<Vec | null>;
+}) {
   const points = useMemo(() => props.poses.map((p) => new THREE.Vector3(...p.position)), [props.poses]);
   const colours = useMemo(() => props.inside.map((ok) => (ok ? OK : OUT)), [props.inside]);
   const marker = useRef<THREE.Group>(null);
   const get = useThree((s) => s.get); // the live camera and controls, read where they change
   const clock = useRef<number | null>(null);
+  const a0 = props.poses[0]?.at;
+  const a1 = props.poses.at(-1)?.at;
+  const walks = !!a0 && !!a1 && (a0[0] !== a1[0] || a0[2] !== a1[2]);
+  const live = props.live;
+  useEffect(() => () => void (live && (live.current = null)), [live]);
   const saved = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion } | null>(null);
 
   useEffect(() => {
@@ -42,11 +59,13 @@ export function CameraPath(props: { poses: Pose[]; inside: boolean[]; overview: 
   }, [props.playing, props.overview, get]);
 
   useFrame((state) => {
+    if (props.live) props.live.current = walks ? props.poses[0].at! : null;
     if (!props.playing || !props.poses.length) return;
     clock.current ??= state.clock.elapsedTime;
     const i = Math.floor((state.clock.elapsedTime - clock.current) * FPS);
     if (i >= props.poses.length) return props.onDone();
     const p = props.poses[i];
+    if (props.live && walks) props.live.current = p.at!;
     if (props.overview && marker.current) {
       marker.current.position.set(...p.position);
       marker.current.lookAt(...p.target);
@@ -58,23 +77,25 @@ export function CameraPath(props: { poses: Pose[]; inside: boolean[]; overview: 
 
   if (!props.overview || points.length < 2) return null;
   const start = props.poses[0];
+  const walk = a1;
+  const walking = walks;
   return (
     <>
-      {props.onStart && !props.playing && (
-        <PivotControls
-          matrix={new THREE.Matrix4().makeTranslation(points[0])}
-          autoTransform={false}
-          disableRotations
-          disableScaling
-          depthTest={false}
-          fixed
-          scale={90}
-          lineWidth={3}
-          onDrag={(_l, _dl, w) => {
-            const p = new THREE.Vector3().setFromMatrixPosition(w);
-            props.onStart!([p.x, Math.max(0.2, p.y), p.z]);
-          }}
-        />
+      {!props.playing && (
+        <>
+          {props.onStart && <Handle at={points[0]} onDrag={(p) => props.onStart!([p.x, Math.max(0.2, p.y), p.z])} />}
+          {props.onEnd && <Handle at={points.at(-1)!} onDrag={(p) => props.onEnd!([p.x, Math.max(0.2, p.y), p.z])} />}
+          {props.onWalk && walking && <Handle at={new THREE.Vector3(...walk!)} flat onDrag={(p) => props.onWalk!([p.x, walk![1], p.z])} />}
+        </>
+      )}
+      {walking && (
+        <>
+          <Line points={[start.at!, walk!].map((v) => new THREE.Vector3(v[0], v[1] + 0.03, v[2]))} color="#fbbf24" lineWidth={2} dashed dashSize={0.2} gapSize={0.12} />
+          <mesh position={[walk![0], walk![1] + 0.03, walk![2]]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.12, 0.2, 24]} />
+            <meshBasicMaterial color="#fbbf24" side={THREE.DoubleSide} />
+          </mesh>
+        </>
       )}
       <Line points={points} vertexColors={colours} lineWidth={3} />
       <mesh position={points[0]}>
@@ -99,5 +120,24 @@ export function CameraPath(props: { poses: Pose[]; inside: boolean[]; overview: 
         </mesh>
       </group>
     </>
+  );
+}
+
+// A move gizmo on a point of the path: arrows and planes, no rotation or scale, the same size on
+// screen at any distance. flat: along the ground only (a walk stays on the floor).
+function Handle(props: { at: THREE.Vector3; flat?: boolean; onDrag: (p: THREE.Vector3) => void }) {
+  return (
+    <PivotControls
+      matrix={new THREE.Matrix4().makeTranslation(props.at)}
+      autoTransform={false}
+      disableRotations
+      disableScaling
+      activeAxes={props.flat ? [true, false, true] : [true, true, true]}
+      depthTest={false}
+      fixed
+      scale={props.flat ? 70 : 90}
+      lineWidth={3}
+      onDrag={(_l, _dl, w) => props.onDrag(new THREE.Vector3().setFromMatrixPosition(w))}
+    />
   );
 }

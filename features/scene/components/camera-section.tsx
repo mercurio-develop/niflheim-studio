@@ -20,6 +20,7 @@ export function CameraSection(props: {
   move: CameraMove;
   onMove: (m: CameraMove) => void;
   start: Vec | null; // where the move starts today, which the Height slider raises or lowers
+  subject: { at: Vec; turn: number } | null; // where the character stands and faces, to start a walk
   outside: number; // frames outside the stage's space
   overview: boolean;
   onOverview: (on: boolean) => void;
@@ -49,7 +50,7 @@ export function CameraSection(props: {
     const t = setTimeout(() => start(() => saveCamera(props.projectId, m).then(() => setError(null), (e: Error) => setError(e.message))), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m.move, m.amount, m.seconds, m.ease, m.framing, m.from?.join()]);
+  }, [m.move, m.amount, m.seconds, m.ease, m.framing, m.from?.join(), m.to?.join(), m.walk?.to.join(), m.walk?.from.join()]);
 
   return (
     <Section
@@ -115,13 +116,44 @@ export function CameraSection(props: {
           <span className="text-xs text-muted-foreground">Move</span>
           <div className="flex flex-wrap items-center gap-1.5">
             {MOVES.map((x) => (
-              <button key={x.id} type="button" aria-pressed={m.move === x.id} className={chip(m.move === x.id)} onClick={() => set({ move: x.id, amount: x.value })}>
+              <button key={x.id} type="button" aria-pressed={m.move === x.id} className={chip(m.move === x.id)} onClick={() => set({ move: x.id, amount: x.value, to: undefined })}>
                 {x.label}
               </button>
             ))}
           </div>
           <span />
-          <p className="-mt-1 text-xs text-muted-foreground">{spec.line}</p>
+          <p className="-mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            {spec.line}
+            {m.to ? (
+              <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => set({ to: undefined })}>
+                End moved in Overview · back to the preset
+              </button>
+            ) : (
+              <span>Drag either end of the path in Overview to change it.</span>
+            )}
+          </p>
+
+          <span className="text-xs text-muted-foreground">Character</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button type="button" aria-pressed={!m.walk} className={chip(!m.walk)} onClick={() => set({ walk: undefined })}>
+              Stands still
+            </button>
+            <button
+              type="button"
+              aria-pressed={!!m.walk}
+              className={chip(!!m.walk)}
+              disabled={!props.subject}
+              onClick={() => {
+                if (m.walk || !props.subject) return;
+                const { at, turn } = props.subject;
+                const a = (turn * Math.PI) / 180;
+                set({ walk: { from: at, to: [at[0] + Math.sin(a) * 2, at[1], at[2] + Math.cos(a) * 2] } });
+              }}
+            >
+              Walks
+            </button>
+            {m.walk && <span className="ml-2 font-mono text-[11px] text-muted-foreground">{Math.hypot(m.walk.to[0] - m.walk.from[0], m.walk.to[2] - m.walk.from[2]).toFixed(1)} m · drag the yellow ring in Overview</span>}
+          </div>
 
           {spec.max !== spec.min && (
             <>
@@ -129,7 +161,7 @@ export function CameraSection(props: {
                 {spec.unit === "°" ? "Angle" : "Distance"}
               </label>
               <div className="flex items-center gap-3">
-                <input id="cam-amount" type="range" min={spec.min} max={spec.max} step={spec.step} value={m.amount} onChange={(e) => set({ amount: Number(e.target.value) })} className="w-full accent-primary" />
+                <input id="cam-amount" type="range" min={spec.min} max={spec.max} step={spec.step} value={m.amount} onChange={(e) => set({ amount: Number(e.target.value), to: undefined })} className="w-full accent-primary" />
                 <span className="w-14 text-right font-mono text-xs text-muted-foreground">
                   {m.amount}
                   {spec.unit === "°" ? "°" : ` ${spec.unit}`}
