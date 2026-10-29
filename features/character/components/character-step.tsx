@@ -17,6 +17,9 @@ export function CharacterStep({ project }: { project: Project }) {
   // Part tags load in the background: only the part chips wait for them, the rest keeps working.
   const polling = Object.values(jobs).some((j) => j.status === "running");
   const anyRunning = Object.entries(jobs).some(([k, j]) => k !== "tags" && !k.endsWith(":tags") && j.status === "running");
+  // The history only waits for the jobs that add a character version (each makes its result the
+  // current one); a turnaround, a 3D model or a Scene job leaves it free to browse.
+  const editing = ["concepts", "mask", "brush", "swap", "restyle"].some((k) => jobs[k]?.status === "running");
   // The turnaround is part of this step: Next waits for every view, painted from this version.
   const image = characterImage(project);
   const t = project.turnaround;
@@ -96,7 +99,7 @@ export function CharacterStep({ project }: { project: Project }) {
           )}
         </div>
 
-        <VersionsSidebar projectId={project.id} versions={c.versions} current={c.current} busy={anyRunning} />
+        <VersionsSidebar projectId={project.id} versions={c.versions} current={c.current} busy={editing} />
       </div>
       <NextBar
         summary={!version ? "Pick a concept to continue" : complete ? <><span className="font-mono text-xs">v{c.current! + 1}</span> · {version.label} · every side painted</> : "Generate the turnaround to continue"}
