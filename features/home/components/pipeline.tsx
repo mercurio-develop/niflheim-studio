@@ -2,7 +2,7 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { STEPS } from "@/lib/steps";
 
-// Section select: eight slanted panels, no borders, the dark gaps are the "/" dividers.
+// Section select: one slanted panel per step, no borders, the dark gaps are the "/" dividers.
 // At rest the art is dim and coffee-toned (Ristretto); the panel under the pointer or
 // focus widens and comes up in colour with its one-line pitch. Phones: stacked bars, colour, text shown.
 export function Pipeline() {

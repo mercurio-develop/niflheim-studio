@@ -11,7 +11,7 @@ import { cropBox, maskBox, pngSize, removePrompt, type Box } from "@/lib/brush";
 import { parentIn, stackMoves } from "@/lib/history";
 import { mergeParts, partsFromTags } from "@/lib/parts";
 import { getProject, projectDir, updateProject, type Edit, type Project, type Version, type ViewId } from "@/lib/store";
-import { styleById } from "@/lib/styles";
+import { mediumOf, styleById } from "@/lib/styles";
 import { Count, Index, Prompt, REFERENCE_TYPES, StyleId, referenceError } from "../schemas";
 
 const rel = (id: string, files: string[]) => files.map((f) => path.relative(projectDir(id), f));
@@ -56,12 +56,12 @@ function currentVersion(s: Stack) {
 }
 
 const sketchPrompt = (prompt: string, style: string) =>
-  `Turn this sketch into finished full-body character concept art of ${prompt}. Keep the pose, proportions and silhouette of the sketch. A face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
+  `Turn this sketch into a finished full-body character ${mediumOf(style)} of ${prompt}. Keep the pose, proportions and silhouette of the sketch. A face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
 
 // "A face with eyes, nose and mouth": flat styles (pixel art, low poly) otherwise often leave the
 // face blank (2026-10-27, a pixel-art elf).
 const conceptPrompt = (prompt: string, style: string) =>
-  `Full-body character concept art of ${prompt}. Standing, neutral pose, front view, whole figure in frame, a face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
+  `Full-body character ${mediumOf(style)} of ${prompt}. Standing, neutral pose, front view, whole figure in frame, a face with eyes, nose and mouth, plain light grey background, clean silhouette. ${styleById(style).phrase}.`;
 
 
 
@@ -313,14 +313,12 @@ async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
 }
 
 // Change in a close-up (01_change): a crop around the selection is edited at full size, so small
-// parts (hands, a buckle) really change, and the selection plus a soft 40 px margin is pasted back,
-// so the new part is not cut flat at the selection's edge (2026-10-27, hands on a front view).
+// parts (hands, a buckle) really change. The old part is greyed out first, as Add does: shown the
+// old part, Qwen painted the new one over a faint copy of it (2026-10-28, a club came out ghosted).
+// The selection plus 64 px with a 6 px edge is pasted back, so a bigger new part is not faded out.
 async function runChange(r: Run, what: string, change: string, mask: string) {
-  const ask =
-    what === "selection"
-      ? `Change the highlighted area into ${change}, drawn whole and attached naturally, in the same art style.`
-      : `Change only the ${what} into ${change}, drawn whole, in the same art style.`;
-  const prompt = `${await about(r.id)} ${ask} The pose stays; ${keepFace(what, change)}${what === "selection" ? "everything else" : "every other part"} and the background stay exactly the same.`;
+  const old = what === "selection" ? "what was there" : `the ${what}`;
+  const prompt = `${await about(r.id)} The flat grey shape is where ${old} was: replace all of it. Paint ${change} there, whole, solid and attached naturally, filling the shape; the rest of the grey becomes what is around it. No grey left. The pose stays; ${keepFace(what, change)}${what === "selection" ? "everything else" : "every other part"} and the background stay exactly the same.`;
   const source = abs(r.id, r.version.image);
   const strokes = await maskBox(abs(r.id, mask));
   if (!strokes) throw new Error("The selection is empty; paint or pick a part first.");
@@ -448,6 +446,32 @@ export async function savePart(id: string, form: FormData, rawTarget = "characte
 // Restyle the chosen character, not new concepts: same design and pose, another look.
 export async function restyleCurrent(id: string, rawStyle: string) {
   const style = styleById(StyleId.parse(rawStyle));
+  await repaintWhole(
+    id,
+    style,
+    `Repaint this exact character as ${style.phrase}. Keep the same design, outfit, proportions, pose and the plain background; colours and rendering follow the new style.`,
+    `Style: ${style.label}`,
+    `Repainting as ${style.label}`,
+  );
+}
+
+// Rebuild: after edits, each changed or added part can look a little different from the rest (each
+// edit is its own close-up). One pass over the whole picture in the character's own style makes it
+// read as one painting again. A new version: Undo brings the edited one back.
+export async function rebuildStyle(id: string) {
+  const style = styleById((await load(id)).character.style ?? "painterly");
+  await repaintWhole(
+    id,
+    style,
+    `Repaint this exact character as one consistent picture in ${style.phrase}: every part, including any that look newer or different, drawn with the same shapes, line work, shading, level of detail and lighting as the whole. Keep the same design, outfit, colours, proportions, pose and the plain background; change nothing else.`,
+    `Rebuilt · ${style.label}`,
+    `Rebuilding in one ${style.label.toLowerCase()} style`,
+  );
+}
+
+// The whole picture through 01_edit as a new version made from the current one; it becomes the
+// character's style.
+async function repaintWhole(id: string, style: ReturnType<typeof styleById>, prompt: string, label: string, detail: string) {
   const p = await load(id);
   const at = p.character.current!;
   const version = currentVersion(p.character);
@@ -459,7 +483,7 @@ export async function restyleCurrent(id: string, rawStyle: string) {
         onSubmit: ctx.track,
         workflow: "01_edit.api.json",
         set: [
-          ["17", "prompt", `Repaint this exact character as ${style.phrase}. Keep the same design, outfit, colours, proportions, pose and the plain background.`],
+          ["17", "prompt", prompt],
           ["22", "seed", newSeed()],
         ],
         images: [["1", abs(id, version.image)]],
@@ -468,11 +492,12 @@ export async function restyleCurrent(id: string, rawStyle: string) {
       });
       if (!(await ctx.alive())) return;
       await updateProject(id, (q) => {
-        q.character.versions.push({ image: rel(id, [image])[0], label: `Style: ${style.label}`, parts: {}, tags: version.tags, parent: at });
+        q.character.versions.push({ image: rel(id, [image])[0], label, parts: {}, tags: version.tags, parent: at });
         q.character.current = q.character.versions.length - 1;
+        q.character.style = style.id; // later edits and the style chips follow the new look
       });
     },
-    `Repainting as ${style.label}`,
+    detail,
   );
   done(id);
 }
@@ -511,5 +536,5 @@ export async function finishCharacter(id: string) {
     if (p.character.current === null) throw new Error("Pick a concept first.");
     p.character.doneAt = new Date().toISOString();
   });
-  redirect(`/p/${id}/turnaround`);
+  redirect(`/p/${id}/scene`);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ArrowRight, Brush, CirclePlus, Eraser, Maximize2, Palette, Redo2, RefreshCw, Replace, ScanSearch, Search, SplitSquareHorizontal, Trash2, Undo2, X } from "lucide-react";
+import { ArrowRight, Brush, CirclePlus, Eraser, Layers, Maximize2, Palette, Redo2, RefreshCw, Replace, ScanSearch, Search, SplitSquareHorizontal, Trash2, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,8 +14,8 @@ import type { Job, Version } from "@/lib/store";
 import { STYLES, styleById } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { KIND_DOT, versionKind } from "@/lib/versions";
-import { addSelection, cancel, maskPart, redo, removeSelection, repaintSelection, restyleCurrent, retryEdit, savePart, undo } from "../actions/character";
-import { SectionTitle } from "@/components/section-title";
+import { addSelection, cancel, maskPart, redo, removeSelection, repaintSelection, rebuildStyle, restyleCurrent, retryEdit, savePart, undo } from "../actions/character";
+import { Section } from "@/components/section";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
 
 const FALLBACK = ["hair", "face", "coat", "pants", "boots"];
@@ -36,6 +36,8 @@ export function Editor(props: {
   projectId: string;
   target?: string;
   title?: { n: string; title: string; line: string };
+  id?: string; // anchor for the step's section nav
+  open?: boolean; // where work is due; the Character step folds Edit once the turnaround exists
   version: Version;
   parentImage: string | null;
   moves: { undo: number | null; redo: number | null };
@@ -50,7 +52,7 @@ export function Editor(props: {
   const [paintMode, setPaintMode] = useState<"add" | "erase">("add");
   const [action, setAction] = useState<Action>("change");
   const [text, setText] = useState("");
-  const [style, setStyle] = useState(props.style);
+  const [style, setStyle] = useState<string | null>(null); // Restyle: a style other than the current one
   const [custom, setCustom] = useState("");
   const [partName, setPartName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -114,7 +116,9 @@ export function Editor(props: {
   // Why the Do button is off, said once; null = ready.
   const blocked =
     tool === "restyle"
-      ? null
+      ? !style
+        ? "Pick a style other than the current one"
+        : null
       : !box
         ? `Select something to ${current.verb.toLowerCase()}`
         : action !== "remove" && text.trim().length < 2
@@ -135,7 +139,7 @@ export function Editor(props: {
   const submit = () => {
     if (blocked) return;
     act(async () => {
-      if (tool === "restyle") return restyleCurrent(props.projectId, style);
+      if (tool === "restyle") return restyleCurrent(props.projectId, style!);
       const form = await selectionForm();
       if (action === "add") {
         form.set("thing", text);
@@ -191,8 +195,15 @@ export function Editor(props: {
   if (target !== "character") rail.pop(); // a view keeps the character's style
 
   return (
-    <section className="flex flex-col gap-3">
-      <SectionTitle n={props.title?.n ?? "2"} tone="bg-primary" title={props.title?.title ?? "Edit"} line={props.title?.line ?? "Pick a tool on the left, then set it and act in the card on the right."} />
+    <Section
+      id={props.id}
+      n={props.title?.n ?? "2"}
+      tone="bg-primary"
+      title={props.title?.title ?? "Edit"}
+      line={props.title?.line ?? "Pick a tool on the left, then set it and act in the card on the right."}
+      summary={`${props.version.label} · open to change a part`}
+      open={props.open}
+    >
       {/* Top bar: history and compare */}
       <div className="flex flex-wrap items-center gap-1.5">
         <Button variant="ghost" size="sm" disabled={busy || props.moves.undo === null} onClick={() => act(() => undo(props.projectId, target))} title="Undo (Ctrl/⌘ Z)">
@@ -203,6 +214,12 @@ export function Editor(props: {
           <Redo2 data-icon="inline-start" />
           Redo
         </Button>
+        {target === "character" && props.version.edit && (
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => act(() => rebuildStyle(props.projectId))} title="Repaint the whole character in one style, so edited parts match the rest">
+            <Layers data-icon="inline-start" />
+            Rebuild in one style
+          </Button>
+        )}
         {props.version.edit && props.version.parent !== undefined && (
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => act(() => retryEdit(props.projectId, target))} title="Run this change again from the version before, with a new seed">
             <RefreshCw data-icon="inline-start" />
@@ -317,13 +334,20 @@ export function Editor(props: {
                         type="button"
                         role="radio"
                         aria-checked={style === s.id}
+                        disabled={s.id === props.style}
+                        title={s.id === props.style ? "The character's style now" : undefined}
                         onClick={() => setStyle(s.id)}
                         className={cn(
-                          "rounded-full border px-2.5 py-0.5 text-sm transition-colors",
-                          style === s.id ? "border-tone-lilac bg-tone-lilac text-background" : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
+                          "rounded-full border px-2.5 py-0.5 text-sm transition-colors disabled:cursor-default",
+                          style === s.id
+                            ? "border-tone-lilac bg-tone-lilac text-background"
+                            : s.id === props.style
+                              ? "border-dashed text-foreground"
+                              : "text-muted-foreground hover:border-ring/60 hover:text-foreground",
                         )}
                       >
                         {s.label}
+                        {s.id === props.style && <span className="ml-1 font-mono text-[10px] text-muted-foreground">now</span>}
                       </button>
                     ))}
                   </div>
@@ -461,12 +485,18 @@ export function Editor(props: {
                 <div>
                   <h3 className="text-sm font-semibold">Restyle</h3>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    Repaints the whole character as <span className="text-foreground">{styleById(style).label}</span>. Undo brings this version back.
+                    {style ? (
+                      <>
+                        Repaints the whole character as <span className="text-foreground">{styleById(style).label}</span>. Undo brings this version back.
+                      </>
+                    ) : (
+                      <>Now {styleById(props.style).label}. Pick another style above to repaint the whole character in it.</>
+                    )}
                   </p>
                 </div>
               </div>
-              <Button type="submit" size="lg" className="w-full" disabled={busy}>
-                {pending && !running ? <LoadingDots /> : <>Restyle as {styleById(style).label}<ArrowRight data-icon="inline-end" /></>}
+              <Button type="submit" size="lg" className="w-full" disabled={busy || !style}>
+                {pending && !running ? <LoadingDots /> : style ? <>Restyle as {styleById(style).label}<ArrowRight data-icon="inline-end" /></> : "Pick a style"}
               </Button>
             </form>
           ) : (
@@ -544,6 +574,6 @@ export function Editor(props: {
           )}
         </div>
       </div>
-    </section>
+    </Section>
   );
 }

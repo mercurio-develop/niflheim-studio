@@ -3,12 +3,12 @@
 // Run: node scripts/try-stage-path.ts [projectId]
 import path from "node:path";
 import { readFileSync } from "node:fs";
-import { DEFAULT_MOVE, MOVES, aim, frameCount, inside, poses, type CameraMove } from "../lib/camera.ts";
+import { DEFAULT_MOVE, MOVES, frameCount, inside, poses, type CameraMove } from "../lib/camera.ts";
 
 const id = process.argv[2] ?? "440d836dcb";
 const p = JSON.parse(readFileSync(path.join(process.cwd(), "data", "projects", id, "project.json"), "utf8"));
 const cam = p.set.stage.fill.camera;
-const target = aim(cam, p.stage?.at, p.stage?.height);
+const target = { at: p.stage.at, height: p.stage.height, turn: p.stage.turn ?? 0 };
 const check = (m: CameraMove) => {
   const ps = poses(cam, target, m);
   const out = ps.filter((x) => !inside(cam, x.position)).length;

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
-import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import type { Asset, AssetView, Job } from "@/lib/store";
 import { cancelTurnaround, deleteAsset, makeAllAssetViews, makeAssetViews } from "../actions/turnaround";
@@ -33,14 +33,21 @@ export function AssetsShelf(props: { projectId: string; assets: Asset[]; jobs: R
   };
   if (!props.assets.length) return null;
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <SectionTitle n="3" tone="bg-tone-pink" title="Assets" line="Objects you hid, kept as their own parts. Paint their views when you need them." />
-        <Button variant="outline" size="sm" className="ml-auto" disabled={props.locked || pending || !!all || props.assets.some((a) => busy(a.name))} onClick={() => act(() => makeAllAssetViews(props.projectId))}>
+    <Section
+      id="assets"
+      n="5"
+      tone="bg-tone-pink"
+      title="Assets"
+      line="Objects you hid, kept as their own parts. Paint their views when you need them."
+      summary={`${props.assets.length} hidden object${props.assets.length === 1 ? "" : "s"}: ${props.assets.map((a) => a.name).join(", ")}`}
+      open={!!all || props.assets.some((a) => busy(a.name))}
+      actions={
+        <Button variant="outline" size="sm" disabled={props.locked || pending || !!all || props.assets.some((a) => busy(a.name))} onClick={() => act(() => makeAllAssetViews(props.projectId))}>
           <RefreshCw data-icon="inline-start" />
           Make all views
         </Button>
-      </div>
+      }
+    >
       {all && <p className="text-xs text-muted-foreground">{all.detail} · <button type="button" className="underline" onClick={() => cancelTurnaround(props.projectId, "assets")}>Cancel</button></p>}
       <ul className="flex flex-col gap-3">
         {props.assets.map((a) => {
@@ -103,6 +110,6 @@ export function AssetsShelf(props: { projectId: string; assets: Asset[]; jobs: R
         })}
       </ul>
       {error && <p className="text-sm text-destructive">{error}</p>}
-    </section>
+    </Section>
   );
 }

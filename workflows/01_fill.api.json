@@ -239,7 +239,7 @@
    "incremental_expandrate": 0.0,
    "tapered_corners": true,
    "flip_input": false,
-   "blur_radius": 10.0,
+   "blur_radius": 6.0,
    "lerp_alpha": 1.0,
    "decay_factor": 1.0
   }
@@ -310,7 +310,7 @@
     "5",
     0
    ],
-   "expand": 18,
+   "expand": 32,
    "tapered_corners": true
   }
  },

@@ -84,8 +84,8 @@ export function stepStates(p: Project): Partial<Record<StepSlug, StepState>> {
   const t = p.turnaround;
   const allViews = !!t && viewsFor(t.options).every((v) => t.views[v.id]?.versions.length);
   return {
-    character: p.character.doneAt ? "done" : "todo",
-    turnaround: !allViews ? "todo" : t!.source === characterImage(p) ? "done" : "stale",
+    // The turnaround is part of Character: done once it is finished and every view is from the current version.
+    character: !p.character.doneAt || !allViews ? "todo" : t!.source === characterImage(p) ? "done" : "stale",
     scene: sceneState(p),
   };
 }

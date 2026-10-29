@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   // for its JS chunks and nothing hydrates.
   allowedDevOrigins: ["127.0.0.1", "localhost", "10.0.0.175"],
   cacheComponents: true,
+  // Paintings, sketches and keyframe captures go through server actions; the 1 MB default refused
+  // a 2 MB painting. 10 MB plus room for the multipart overhead.
+  experimental: {
+    serverActions: { bodySizeLimit: "11mb" },
+  },
   partialPrefetching: true,
   turbopack: {
     rules: {

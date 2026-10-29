@@ -34,6 +34,9 @@ async function Export({ params }: { params: Promise<{ id: string }> }) {
           at: st.at,
           height: st.height,
           turn: st.turn,
+          blocks: project.blocks ?? [],
+          assets: project.sceneAssets ?? [],
+          poses: (project.poses ?? []).map((p) => ({ id: p.id, cutouts: Object.fromEntries(Object.entries(p.cutouts).map(([v, f]) => [v, `/api/files/${id}/${f}`])) })),
         }
       : null;
   return (

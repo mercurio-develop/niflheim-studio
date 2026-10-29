@@ -5,21 +5,21 @@ import { Check, CircleAlert, Play, RotateCcw, Square, Wand2 } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/loading-dots";
-import { SectionTitle } from "@/components/section-title";
+import { Section } from "@/components/section";
 import { KeyCapture } from "@/features/scene/components/key-capture";
 import type { StagePose } from "@/features/scene/components/stage-viewer";
 import { saveKeys } from "@/features/shot/actions/keyframes";
 import { renderTake } from "@/features/shot/actions/shot";
 import { selectShot } from "@/features/shot/actions/shots";
-import { aim, keyFrames, poses, type CameraMove } from "@/lib/camera";
+import { cardAt, keyFrames, poses, type CameraMove } from "@/lib/camera";
 import type { StageCamera } from "@/lib/stage-fill";
-import type { Autopilot as Pilot, AutopilotShot, AutopilotStep, Join, ViewId } from "@/lib/store";
+import type { Autopilot as Pilot, AutopilotShot, AutopilotStep, Block, Join, SceneAsset, ViewId } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { jobState, markStep, pickBest, savePlan, startAutopilot, stopAutopilot } from "../actions/autopilot";
 import { exportReel, saveReel } from "../actions/reel";
 
 export type PilotShot = { id: string; name: string; move: CameraMove | null };
-export type SceneCapture = { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number };
+export type SceneCapture = { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; blocks: Block[]; assets: SceneAsset[]; poses: { id: string; cutouts: Partial<Record<ViewId, string>> }[] };
 
 const JOINS: { id: Join; label: string }[] = [
   { id: "cut", label: "Cut" },
@@ -66,8 +66,8 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
   const captureKeys = (move: CameraMove) =>
     new Promise<Blob[]>((resolve, reject) => {
       const s = props.scene!;
-      const ps = poses(s.camera, aim(s.camera, s.at, s.height), move);
-      setCapture({ poses: keyFrames(move).map((f) => ps[f]), done: (b) => (setCapture(null), resolve(b)), fail: (m) => (setCapture(null), reject(new Error(m))) });
+      const ps = poses(s.camera, s, move);
+      setCapture({ poses: keyFrames(move).map((f) => ({ ...ps[f], card: cardAt(move, f, s.cutouts, s.poses) })), done: (b) => (setCapture(null), resolve(b)), fail: (m) => (setCapture(null), reject(new Error(m))) });
     });
 
   async function runStep(i: number, list: typeof steps) {
@@ -96,7 +96,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
       if (st.kind !== "export") await selectShot(id, st.shot);
       if (st.kind === "keys") {
         const move = props.shots.find((s) => s.id === st.shot)?.move;
-        if (!move) throw new Error(`${name(st.shot)} has no camera move: set one in Scene.`);
+        if (!move) throw new Error(`${name(st.shot)} has no camera move: set one in Shots.`);
         const pngs = await captureKeys(move);
         const form = new FormData();
         pngs.forEach((b, k) => form.set(`key${k}`, new File([b], `key${k}.jpg`, { type: "image/jpeg" })));
@@ -165,28 +165,33 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
   const label = (s: (typeof steps)[number]) => (s.kind === "export" ? "Put the reel together" : `${name(s.shot)} · ${s.kind === "keys" ? "keyframes" : s.kind === "take" ? `take ${s.n}` : "pick the best take"}`);
 
   return (
-    <section className="nifl-enter flex flex-col gap-3" style={{ "--i": 0 } as React.CSSProperties}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <SectionTitle n="0" tone="bg-tone-yellow" title="Autopilot" line="Say what happens in each shot and press Make the reel: keyframes, takes, the best take of each and the reel, one after another. Keep this page open while it runs." />
-        <div className="flex gap-1">
-          {driving && (
-            <Button size="sm" variant="ghost" onClick={() => ((stop.current = true), start(() => stopAutopilot(id)))}>
-              <Square data-icon="inline-start" />
-              Stop after this step
+    <Section id="autopilot" n="1" tone="bg-tone-yellow" title="Autopilot" line="Say what happens in each shot and press Make the reel: keyframes, takes, the best take of each and the reel, one after another. Keep this page open while it runs."
+      summary={driving ? "Running…" : "Make the whole reel in one press"}
+      actions={
+        <>
+          <div className="flex gap-1">
+            {driving && (
+              <Button size="sm" variant="ghost" onClick={() => ((stop.current = true), start(() => stopAutopilot(id)))}>
+                <Square data-icon="inline-start" />
+                Stop after this step
+              </Button>
+            )}
+            {canResume && (
+              <Button size="sm" variant="outline" onClick={resume}>
+                <Play data-icon="inline-start" />
+                Resume
+              </Button>
+            )}
+            <Button size="sm" disabled={driving || !props.scene || !plan.some((p) => p.include)} onClick={make}>
+              {driving ? <LoadingDots /> : <Wand2 data-icon="inline-start" />}
+              Make the reel
             </Button>
-          )}
-          {canResume && (
-            <Button size="sm" variant="outline" onClick={resume}>
-              <Play data-icon="inline-start" />
-              Resume
-            </Button>
-          )}
-          <Button size="sm" disabled={driving || !props.scene || !plan.some((p) => p.include)} onClick={make}>
-            {driving ? <LoadingDots /> : <Wand2 data-icon="inline-start" />}
-            Make the reel
-          </Button>
-        </div>
-      </div>
+          </div>
+        </>
+      }
+      className="nifl-enter"
+      style={{ "--i": 0 } as React.CSSProperties}
+    >
       {!props.scene && <p className="text-sm text-muted-foreground">Build the scene and stand the character in it first.</p>}
 
       <div className="flex flex-col gap-2">
@@ -244,7 +249,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
         </ol>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {capture && props.scene && <KeyCapture {...props.scene} poses={capture.poses} onDone={capture.done} onError={capture.fail} />}
-    </section>
+      {capture && props.scene && <KeyCapture {...props.scene} projectId={props.projectId} poses={capture.poses} onDone={capture.done} onError={capture.fail} />}
+    </Section>
   );
 }

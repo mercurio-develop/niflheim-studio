@@ -9,7 +9,7 @@ import { LoadingDots } from "@/components/loading-dots";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import { KeyCapture } from "@/features/scene/components/key-capture";
 import type { StagePose } from "@/features/scene/components/stage-viewer";
-import type { Job, Keyframes, ViewId } from "@/lib/store";
+import type { Block, Job, Keyframes, SceneAsset, ViewId } from "@/lib/store";
 import type { StageCamera } from "@/lib/stage-fill";
 import { cn } from "@/lib/utils";
 import { saveCamera } from "@/features/scene/actions/camera";
@@ -26,10 +26,11 @@ export function KeyframesPanel(props: {
   frames: number[];
   job?: Job;
   move: CameraMove; // saved before capturing, so the server keys the same frames
-  capture: { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; poses: StagePose[] };
+  capture: { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; blocks: Block[]; assets: SceneAsset[]; poses: StagePose[] };
 }) {
   const k = props.keyframes;
   const [note, setNote] = useState(k?.note ?? "");
+  const [detail, setDetail] = useState(k?.detail ?? true); // the face and hand pass on every key
   const [capturing, setCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -42,7 +43,7 @@ export function KeyframesPanel(props: {
     setCapturing(false);
     const form = new FormData();
     pngs.forEach((b, i) => form.set(`key${i}`, new File([b], `key${i}.jpg`, { type: "image/jpeg" })));
-    act(() => saveKeys(props.projectId, form, note));
+    act(() => saveKeys(props.projectId, form, note, detail));
   };
 
   return (
@@ -62,6 +63,11 @@ export function KeyframesPanel(props: {
           {capturing || (pending && !running) ? <LoadingDots /> : <Images data-icon="inline-start" />}
           {k ? "Make keyframes again" : "Make keyframes"}
         </Button>
+        <label className="flex w-full items-center gap-2 text-xs text-muted-foreground">
+          <input type="checkbox" checked={detail} onChange={(e) => setDetail(e.target.checked)} disabled={busy} className="accent-primary" />
+          Fix faces and hands: a second pass repaints each face and hand on its own (about 15 s a key)
+        </label>
+        <p className="w-full text-xs text-muted-foreground">Only what they hold or wear. Someone else, or an object in the place, goes on the stage as a Scene asset or block: each key is painted on its own, so a note like &ldquo;a human&rdquo; paints a different one in every key.</p>
       </div>
       {running && props.job && <JobStatus message={props.job.detail ?? "Painting the keyframes"} startedAt={props.job.startedAt} expected={props.frames.length * 30} />}
       {k && (
@@ -94,7 +100,7 @@ export function KeyframesPanel(props: {
       {k && !props.current && <p className="text-xs text-muted-foreground">The move, the placement or the stage changed since these were made.</p>}
       {props.job?.status === "error" && <p className="text-sm text-destructive">Keyframes failed: {props.job.error}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {capturing && <KeyCapture {...props.capture} onDone={captured} onError={(m) => (setCapturing(false), setError(m))} />}
+      {capturing && <KeyCapture {...props.capture} projectId={props.projectId} onDone={captured} onError={(m) => (setCapturing(false), setError(m))} />}
     </div>
   );
 }

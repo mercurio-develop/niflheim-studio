@@ -5,6 +5,8 @@ import { Composer } from "@/components/composer";
 import { startCharacter } from "../actions/start-character";
 
 const EXAMPLES = [
+  // The demo shot's character ("The Discovery").
+  "a hulking forest troll with mossy grey-green skin, tusked underbite, bark-like shoulders, tattered hide loincloth, twigs in a shaggy mane",
   "a young lantern keeper in a hooded wool coat, leather satchel, tall boots",
   "a desert courier with a patched glider strapped to her back",
   "a clockwork knight with moss growing through the armour",
@@ -33,7 +35,7 @@ export function StartForm() {
       <Composer
         id="prompt"
         large
-        defaults={{ prompt: "", style: "painterly", count: 4 }}
+        defaults={{ prompt: EXAMPLES[0], style: "painterly", count: 4 }} // starts on the demo's troll; clear it for the examples
         reference={preview}
         onReference={(f) => choose(f)}
         onClearReference={() => choose(null)}

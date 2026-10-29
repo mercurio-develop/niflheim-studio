@@ -9,7 +9,7 @@ export async function ComfyStatus() {
   return (
     <span
       className="flex items-center gap-2 rounded-full border px-2 py-1 text-xs text-muted-foreground"
-      title={up ? "ComfyUI is online" : "ComfyUI is offline"}
+      title={up ? "ComfyUI is online" : "ComfyUI is offline: start it with mw serve start comfy-proxy (and ComfyUI)"}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/brand/comfy-logo.svg" alt="ComfyUI" className={cn("size-4 rounded-[4px]", !up && "opacity-50 grayscale")} />

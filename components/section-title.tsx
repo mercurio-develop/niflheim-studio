@@ -11,7 +11,7 @@ export function SectionTitle(props: { n: string; tone: string; title: string; li
       )}
       <div className="min-w-0">
         <h2 className="text-base font-semibold leading-6">{props.title}</h2>
-        {props.line && <p className="truncate text-sm text-muted-foreground">{props.line}</p>}
+        {props.line && <p className="line-clamp-2 text-sm text-muted-foreground">{props.line}</p>}
       </div>
     </div>
   );

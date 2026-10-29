@@ -63,6 +63,30 @@ export type StageFill = { mesh: string; cameras: string; views: string[]; holes:
 // in metres, turn: which way they face in degrees (0 = towards the painting's camera, positive
 // towards screen right). fill: the filled stage mesh `at` was placed on; a rebuilt or refilled set
 // moves the floor, so a different current fill makes the placement out of date.
+// A greybox shape standing on the stage (metres, floor y = 0): at is the middle of its base, size
+// width, height, depth, turn degrees about y. The keyframes paint it as its label ("a wooden cart").
+export type Block = { id: string; kind: "box" | "cylinder" | "ramp"; at: [number, number, number]; size: [number, number, number]; turn: number; label: string };
+// The character in another pose: its front painted from the turnaround's front, the other three
+// views from that, and each cut out for the stage card. A shot picks a pose (and one to switch to).
+export type CharacterPose = { id: string; label: string; prompt: string; views: Partial<Record<AssetView, string>>; cutouts: Partial<Record<AssetView, string>> };
+
+// An object made for the scene, from a prompt (its concept painted first), an uploaded picture or
+// one of the character's assets: its four views, then a coloured 3D model standing on the stage
+// (at: the middle of its base, height in metres, turn degrees about y) once placed.
+export type SceneAsset = {
+  id: string;
+  name: string;
+  kind?: "object" | "character"; // a character (a cast member) stands as a cut-out card, like the main one
+  cutouts?: Partial<Record<AssetView, string>>; // a character's views, cut out
+  from: "prompt" | "upload" | "character";
+  prompt?: string;
+  image?: string; // the picture its views are made from
+  views?: Partial<Record<AssetView, string>>;
+  glb?: string; // coloured
+  at?: [number, number, number];
+  height: number;
+  turn: number;
+};
 export type StageData = { source: string; cutouts: Partial<Record<ViewId, string>>; at?: [number, number, number]; height: number; turn: number; fill?: string };
 
 // The character as a 3D model (Hunyuan3D-2 MV from the front, side and back views). front: the
@@ -83,14 +107,16 @@ export type CameraRender = { depth: string; preview: string; holes: number[]; ke
 // the character card in (raw), each repainted by Qwen-Image-Edit into one finished frame (keys,
 // null until done). One prompt and seed for all, so they share a look; note: what the user asked
 // to see in the frame. key: the camera render key (lib/camera.ts renderKey) they were made from.
-export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)[]; prompt: string; note: string; seed: number; key: string; at: string };
+// detail: each painted key also gets the face and hand pass (03_key_detail).
+export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)[]; prompt: string; note: string; seed: number; key: string; at: string; detail?: boolean };
 
 // The shot: what happens, and the LTX-2.5 takes of it (MP4 with audio, 768x448, the camera move's
 // 8n+1 frames at 24 fps), each guided by the keyframes it was made from (keys: Keyframes.at).
 // score: scripts/score_take.py on arrival: camera travel (px of flow), pop-in frames and worst spike.
 export type TakeScore = { travel: number; popins: number; worst: number };
-export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore };
-export type Shot = { action: string; negative: string; takes: Take[]; picked?: number };
+export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore; prompt?: string };
+// beats: what happens first, then, and by the end (action joins them, for older readers).
+export type Shot = { action: string; beats?: { start: string; then?: string; end?: string }; negative: string; takes: Take[]; picked?: number };
 
 // One shot of the scene: its name, and (while not active) its move, render, keyframes and takes.
 export type ShotRef = { id: string; name: string };
@@ -142,9 +168,12 @@ export type Project = {
     views: Partial<Record<ViewId, ViewStack>>; // each view keeps its own versions, like the character
   };
   assets?: Asset[]; // objects hidden from the turnaround, kept to be made on their own later
+  poses?: CharacterPose[]; // the character in other poses (running, angry), for shots to swap in
   mesh?: Mesh; // the character in 3D, made from the turnaround views
   set?: SetData;
   stage?: StageData;
+  blocks?: Block[]; // greybox shapes on the stage, painted into what their label says
+  sceneAssets?: SceneAsset[]; // objects made for the scene, standing on the stage in 3D
   camera?: CameraMove; // the scene's camera move (lib/camera.ts), aimed at the placed character
   cameraRender?: CameraRender; // the move rendered along its path, for the shot
   keyframes?: Keyframes; // the shot's keyframes along the camera move

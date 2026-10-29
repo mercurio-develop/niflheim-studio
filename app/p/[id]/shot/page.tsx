@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
+import { ShotCamera } from "@/features/shot/components/shot-camera";
+import { ShotKeyframes } from "@/features/shot/components/shot-keyframes";
 import { ShotStep } from "@/features/shot/components/shot-step";
 import { StepRail } from "@/features/wizard/components/step-rail";
 import { frameCount } from "@/lib/camera";
@@ -21,7 +23,11 @@ async function Shot({ params }: { params: Promise<{ id: string }> }) {
       <ShotStep
         key={project.activeShot}
         shots={allShots(project).map((s) => ({ id: s.id, name: s.name, active: s.active, picked: s.shot?.picked !== undefined }))}
-        projectId={id} keyframes={k ?? null} ready={ready} seconds={seconds} shot={project.shot ?? null} job={project.jobs.shot} />
+        projectId={id} keyframes={k ?? null} ready={ready} seconds={seconds} shot={project.shot ?? null} job={project.jobs.shot}
+        keysRunning={project.jobs.keyframes?.status === "running" || project.jobs.stage?.status === "running"}
+        cameraPanel={<ShotCamera projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} cameraRender={project.cameraRender ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} stageJob={project.jobs.stage} />}
+        keyPanel={<ShotKeyframes projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} keyframes={k ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} job={project.jobs.keyframes} />}
+      />
     </main>
   );
 }

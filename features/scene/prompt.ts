@@ -15,6 +15,10 @@ import type { StyleId } from "@/lib/styles";
 // the style itself does not reconstruct well: the set is painted in a near style instead, and
 // the page says so (the chip still styles the character, and LTX the final look).
 export const SET_STYLES: Record<StyleId, { phrase: string; plate?: string }> = {
+  photo: { phrase: "photorealistic location photograph, natural light, sharp detail, true perspective" },
+  cinematic: { phrase: "cinematic film still of a location, anamorphic wide lens, rich colour grading, clear depth" },
+  storybook: { phrase: "children's picture-book background, bright cheerful colours, rounded friendly shapes, clear solid ground" },
+  kids3d: { phrase: "cute 3D animated family-film environment, bright colours, soft rounded shapes, clear solid ground" },
   painterly: { phrase: "painterly matte painting for a film, confident brushwork, clear hard-edged forms" },
   anime: { phrase: "anime background art, clean shapes, cel-shaded planes, painted sky" },
   "ukiyo-e": { phrase: "ukiyo-e woodblock landscape, bold outlines, flat colour planes with clear perspective" },

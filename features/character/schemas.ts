@@ -10,9 +10,9 @@ export const Index = z.number().int().min(0);
 
 export const REFERENCE_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 
-// A sketch or image to follow: a real file of a type ComfyUI's LoadImage reads, under 12 MB.
+// A sketch or image to follow: a real file of a type ComfyUI's LoadImage reads, under 10 MB (the server actions limit, next.config.ts).
 export function referenceError(image: FormDataEntryValue | null): string | null {
   if (!(image instanceof File) || image.size === 0) return "The image did not come through; try again.";
-  if (!REFERENCE_TYPES[image.type] || image.size > 12_000_000) return "Use a PNG, JPG or WebP image under 12 MB.";
+  if (!REFERENCE_TYPES[image.type] || image.size > 10_000_000) return "Use a PNG, JPG or WebP image under 10 MB.";
   return null;
 }
