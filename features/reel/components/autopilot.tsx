@@ -196,12 +196,12 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
 
       <div className="flex flex-col gap-2">
         {props.shots.map((s, i) => (
-          <div key={s.id} className={cn("grid grid-cols-[auto_minmax(0,8rem)_minmax(0,1fr)_auto] items-center gap-2", !plan[i].include && "opacity-60")}>
+          <div key={s.id} className={cn("grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[auto_minmax(0,8rem)_minmax(0,1fr)_auto]", !plan[i].include && "opacity-60")}>
             <input type="checkbox" checked={plan[i].include} disabled={driving || !s.move} onChange={(e) => edit(i, { include: e.target.checked })} aria-label={`Include ${s.name}`} className="accent-primary" />
             <span className="truncate text-sm" title={s.name}>
               {s.name}
             </span>
-            <Input value={plan[i].action} disabled={driving} onChange={(e) => edit(i, { action: e.target.value })} placeholder="what happens: slowly turns to look toward the camera" aria-label={`What happens in ${s.name}`} />
+            <Input className="col-span-full row-start-2 sm:col-span-1 sm:row-start-auto" value={plan[i].action} disabled={driving} onChange={(e) => edit(i, { action: e.target.value })} placeholder="what happens: slowly turns to look toward the camera" aria-label={`What happens in ${s.name}`} />
             <label className="flex items-center gap-1 text-xs text-muted-foreground">
               takes
               <select value={plan[i].takes} disabled={driving} onChange={(e) => edit(i, { takes: Number(e.target.value) })} className="rounded border bg-background px-1 py-0.5 text-xs">

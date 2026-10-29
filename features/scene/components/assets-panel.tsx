@@ -78,7 +78,7 @@ export function AssetsPanel(props: {
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {FROM.map((x) => (
-          <button key={x.id} type="button" aria-pressed={from === x.id} className={chip(from === x.id)} disabled={x.id === "character" && !props.characterAssets.length} onClick={() => setFrom(x.id)}>
+          <button key={x.id} type="button" aria-pressed={from === x.id} className={chip(from === x.id)} disabled={x.id === "character" && !props.characterAssets.length} title={x.id === "character" && !props.characterAssets.length ? "Nothing yet: in Character, hide an object from the turnaround and keep it, and it shows up here" : undefined} onClick={() => setFrom(x.id)}>
             {x.label}
           </button>
         ))}

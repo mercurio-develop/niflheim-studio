@@ -85,11 +85,11 @@ export function More(props: { label?: string; summary?: string; open?: boolean; 
         aria-expanded={open}
         aria-controls={body}
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 self-start rounded-md text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex max-w-full min-w-0 items-center gap-1.5 self-start rounded-md text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <ChevronDown aria-hidden className={cn("size-4 transition-transform", !open && "-rotate-90")} />
-        {props.label ?? "More"}
-        {!open && props.summary && <span className="truncate text-xs">· {props.summary}</span>}
+        <ChevronDown aria-hidden className={cn("size-4 shrink-0 transition-transform", !open && "-rotate-90")} />
+        <span className="shrink-0">{props.label ?? "More"}</span>
+        {!open && props.summary && <span className="min-w-0 truncate text-xs">· {props.summary}</span>}
       </button>
       <div id={body} hidden={!open} className="flex min-w-0 flex-col gap-4">
         {props.children}

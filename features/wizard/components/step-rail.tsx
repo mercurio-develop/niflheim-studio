@@ -12,7 +12,7 @@ export function StepRail(props: { projectId: string; active: StepSlug; states: P
   const inset = 50 / STEPS.length;
   return (
     <nav aria-label="Steps" className="nifl-enter -mx-4 -mt-3 overflow-x-auto px-4 pt-6 pb-2">
-      <ol className="relative flex min-w-[34rem] items-start">
+      <ol className="relative flex items-start">
         <div aria-hidden className="absolute top-[1.125rem] h-0.5 rounded-full bg-border" style={{ left: `${inset}%`, right: `${inset}%` }} />
         <div
           aria-hidden
