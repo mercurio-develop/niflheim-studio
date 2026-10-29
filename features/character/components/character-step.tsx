@@ -16,7 +16,9 @@ export function CharacterStep({ project }: { project: Project }) {
   const moves = historyMoves(project);
   // Part tags load in the background: only the part chips wait for them, the rest keeps working.
   const polling = Object.values(jobs).some((j) => j.status === "running");
-  const anyRunning = Object.entries(jobs).some(([k, j]) => k !== "tags" && !k.endsWith(":tags") && j.status === "running");
+  // Next waits only for this step's own jobs (part tags aside): a Scene or Shots job leaves it free.
+  const own = (k: string) => ["concepts", "mask", "brush", "swap", "restyle", "turnaround", "mesh", "hide-masks", "assets", "replicate"].includes(k) || /^(view|asset|pose):/.test(k);
+  const ownJob = Object.entries(jobs).find(([k, j]) => own(k) && !k.endsWith(":tags") && j.status === "running")?.[1];
   // The history only waits for the jobs that add a character version (each makes its result the
   // current one); a turnaround, a 3D model or a Scene job leaves it free to browse.
   const editing = ["concepts", "mask", "brush", "swap", "restyle"].some((k) => jobs[k]?.status === "running");
@@ -26,6 +28,20 @@ export function CharacterStep({ project }: { project: Project }) {
   const views = t?.views ?? {};
   const fresh = !!image && t?.source === image;
   const complete = fresh && !!t && viewsFor(t.options).every((v) => t.views[v.id]?.versions.length);
+  // Why Next is off, in words: the turnaround belongs to another version (picked in History), a
+  // view is missing, or a job of this step is still running.
+  const from = t ? c.versions.findIndex((v) => v.image === t.source) : -1;
+  const hint = !version
+    ? undefined
+    : ownJob
+      ? `Wait: ${ownJob.detail ?? "a job is running"}`
+      : t && !fresh
+        ? from >= 0
+          ? `The turnaround is from v${from + 1}: pick it in History, or paint the turnaround again`
+          : "The turnaround is from another version: paint it again"
+        : !complete
+          ? "Paint every view of the turnaround first"
+          : undefined;
 
   return (
     <>
@@ -103,8 +119,8 @@ export function CharacterStep({ project }: { project: Project }) {
         <VersionsSidebar projectId={project.id} versions={c.versions} current={c.current} busy={editing} />
       </div>
       <NextBar
-        summary={!version ? "Pick a concept to continue" : complete ? <><span className="font-mono text-xs">v{c.current! + 1}</span> · {version.label} · every side painted</> : "Generate the turnaround to continue"}
-        next={{ label: "Scene", disabled: !complete || anyRunning, onNext: finishCharacter.bind(null, project.id) }}
+        summary={!version ? "Pick a concept to continue" : complete ? <><span className="font-mono text-xs">v{c.current! + 1}</span> · {version.label} · every side painted</> : t && !fresh ? "This version has no turnaround yet" : "Generate the turnaround to continue"}
+        next={{ label: "Scene", disabled: !complete || !!ownJob, hint, onNext: finishCharacter.bind(null, project.id) }}
       />
     </>
   );

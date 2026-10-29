@@ -6,7 +6,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { focusPhrase, frameCount } from "@/lib/camera";
+import { focusPhrase, frameCount, keyFrames, poses, sees } from "@/lib/camera";
+import { currentFill } from "@/lib/progress";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob } from "@/lib/jobs";
 import { getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
@@ -71,12 +72,19 @@ function shotPrompt(p: Project, b: Beats) {
   ];
   return lines.filter(Boolean).join(" ");
 }
-// The cast members standing on the stage, by name and description.
-const cast = (p: Project) =>
-  (p.sceneAssets ?? [])
-    .filter((a) => a.kind === "character" && a.at)
+// The cast members the shot's keys can see, by name and description. One out of frame is left
+// unsaid: named, LTX paints them in between the keys and they fade out at the next one.
+const cast = (p: Project) => {
+  const cam = currentFill(p)?.camera;
+  const m = p.camera;
+  const st = p.stage;
+  const path = cam && m && st?.at ? poses(cam, { at: st.at, height: st.height, turn: st.turn }, m) : null;
+  const keys = path && m ? keyFrames(m).map((f) => path[f]) : [];
+  return (p.sceneAssets ?? [])
+    .filter((a) => a.kind === "character" && a.at && keys.some((k) => sees(k, [a.at![0], a.at![1] + a.height * 0.6, a.at![2]], cam!.fov, 768 / 448)))
     .map((a) => (a.prompt ? `${a.name}, ${a.prompt}` : a.name))
     .join("; ");
+};
 const poseOf = (p: Project, id?: string) => p.poses?.find((x) => x.id === id)?.prompt;
 const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 

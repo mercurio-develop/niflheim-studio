@@ -165,6 +165,25 @@ export function tooClose(ps: Pose[], who: Subject, m: CameraMove) {
   return ps.findIndex((p) => p.at && Math.hypot(p.position[0] - p.at[0], p.position[2] - p.at[2]) < near);
 }
 
+// Does the camera at this pose see the point? fov is the vertical field of view in degrees, aspect
+// width / height; a small margin keeps a figure cut by the frame edge out.
+export function sees(p: Pose, point: Vec, fov: number, aspect: number) {
+  const f = sub(p.target, p.position);
+  const fl = len(f) || 1;
+  const fw = scale(f, 1 / fl);
+  const right: Vec = [-fw[2], 0, fw[0]];
+  const rl = len(right) || 1;
+  const rt = scale(right, 1 / rl);
+  const up: Vec = [rt[1] * fw[2] - rt[2] * fw[1], rt[2] * fw[0] - rt[0] * fw[2], rt[0] * fw[1] - rt[1] * fw[0]];
+  const d = sub(point, p.position);
+  const z = d[0] * fw[0] + d[1] * fw[1] + d[2] * fw[2];
+  if (z <= 0.1) return false;
+  const x = d[0] * rt[0] + d[1] * rt[1] + d[2] * rt[2];
+  const y = d[0] * up[0] + d[1] * up[1] + d[2] * up[2];
+  const ty = Math.tan(((fov / 2) * Math.PI) / 180) * 0.95;
+  return Math.abs(y / z) < ty && Math.abs(x / z) < ty * aspect;
+}
+
 // Is a camera position inside the space the stage holds? Measured like the viewer's orbit:
 // around the painting's look point, against where the painting's camera sits.
 export function inside(cam: StageCamera, p: Vec): boolean {
