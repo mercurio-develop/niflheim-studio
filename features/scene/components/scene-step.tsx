@@ -1,5 +1,6 @@
 "use client";
 
+import { ParticleField } from "@/components/particle-field";
 import { SectionNav } from "@/components/section-nav";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
@@ -31,9 +32,13 @@ export function SceneStep(props: {
   const fresh = !!props.set?.stage && props.set.stage.image === props.set.image;
   const cam = fresh ? props.set!.stage!.fill?.camera : undefined;
   const ready = !!cam?.floor && !!at;
+  const making = Object.values(props.assetJobs).some((j) => j.status === "running");
   return (
     <>
-      <JobPoller running={building || stageBusy || Object.values(props.assetJobs).some((j) => j.status === "running")} />
+      <JobPoller running={building || stageBusy || making} />
+      {/* Like Character's: the field drifts while the set is painted, the stage built or an asset
+          made, then gathers onto the new paintings and the stage ([data-land]) and bursts. */}
+      <ParticleField active={building || cutting || making} />
       <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)]">
         <SectionNav items={[{ id: "describe", n: "1", title: "Describe", tone: "bg-tone-yellow" }, { id: "stage", n: "2", title: "Stage", tone: "bg-tone-cyan" }]} />
         <div className="flex min-w-0 flex-col gap-10">

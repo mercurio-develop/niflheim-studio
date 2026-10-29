@@ -177,7 +177,7 @@ export function StageSection(props: {
       {building && props.setJob && <JobStatus message={props.setJob.detail ?? "Working"} startedAt={props.setJob.startedAt} expected={painting ? 30 : filling ? 260 : 10} onCancel={() => cancelSet(props.projectId)} />}
       {cutting && props.stageJob && <JobStatus message={props.stageJob.detail ?? "Cutting out the character"} startedAt={props.stageJob.startedAt} expected={10} onCancel={() => cancelStage(props.projectId)} />}
 
-      <div className="relative aspect-[7/4] overflow-hidden rounded-lg border">
+      <div data-land className="relative aspect-[7/4] overflow-hidden rounded-lg border">
         {fresh ? (
           <StageViewer
             key={filled?.mesh ?? s!.stage!.mesh}

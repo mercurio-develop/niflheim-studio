@@ -178,6 +178,7 @@ export function DescribeSection(props: { projectId: string; set: SetData | null;
               p ? (
                 <button
                   key={p}
+                  data-land
                   type="button"
                   disabled={busy}
                   onClick={() => run(() => pickSet(props.projectId, p))}
