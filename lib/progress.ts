@@ -1,5 +1,12 @@
-import type { Project, TurnaroundOptions, ViewId } from "./store";
+import type { CharacterData, Project, TurnaroundOptions, ViewId } from "./store";
 import type { StepSlug } from "./steps";
+
+// lib/store.ts charOf, without importing it: store pulls in node:fs and this file reaches the browser.
+export function charIn(p: Project, cid = "c1"): CharacterData {
+  const c = cid === "c1" ? p : p.cast?.find((x) => x.id === cid);
+  if (!c) throw new Error("No such character.");
+  return c;
+}
 
 // The turnaround's views. Front is made from the character with the chosen pose and hidden
 // objects; every other view is made from that front, so they all stay the same character.
@@ -48,13 +55,16 @@ export function viewPrompt(id: ViewId, o?: TurnaroundOptions): string {
 export const viewsFor = (o: TurnaroundOptions) => VIEWS.filter((v) => !v.optional || o.extras.includes(v.id as "top" | "bottom"));
 
 // The image a view shows now (its current version), for the UI and for the mesh.
-export function viewImage(p: Project, id: ViewId): string | null {
-  const s = p.turnaround?.views[id];
+// cid: which character (lib/store.ts charOf); c1 by default.
+export function viewImage(p: Project, id: ViewId, cid = "c1"): string | null {
+  const s = charIn(p, cid).turnaround?.views[id];
   return s ? (s.versions[s.current]?.image ?? null) : null;
 }
 
-export const characterImage = (p: Project) =>
-  p.character.current === null ? null : p.character.versions[p.character.current].image;
+export const characterImage = (p: Project, cid = "c1") => {
+  const c = charIn(p, cid).character;
+  return c.current === null ? null : c.versions[c.current].image;
+};
 
 // done = finished and still matches what came before it; stale = made from an older character.
 export type StepState = "done" | "stale" | "todo";
@@ -65,10 +75,10 @@ export const currentFill = (p: Project) => (p.set?.stage && p.set.stage.image ==
 // Why a placement no longer fits: the turnaround front changed (cut out again) or the set was
 // rebuilt or refilled since it was placed (place again). Placements from before stage.fill are
 // taken as they were.
-export function placementStale(p: Project): "turnaround" | "set" | null {
+export function placementStale(p: Project, cid = "c1"): "turnaround" | "set" | null {
   const s = p.stage;
   if (!s) return null;
-  if (s.source !== viewImage(p, "front")) return "turnaround";
+  if (s.source !== viewImage(p, "front", cid)) return "turnaround";
   if (s.at && s.fill && s.fill !== currentFill(p)?.mesh) return "set";
   return null;
 }
@@ -80,12 +90,13 @@ function sceneState(p: Project): StepState {
   return p.set.stage.image !== p.set.image || placementStale(p) ? "stale" : "done";
 }
 
-export function stepStates(p: Project): Partial<Record<StepSlug, StepState>> {
-  const t = p.turnaround;
+export function stepStates(p: Project, cid = "c1"): Partial<Record<StepSlug, StepState>> {
+  const c = charIn(p, cid);
+  const t = c.turnaround;
   const allViews = !!t && viewsFor(t.options).every((v) => t.views[v.id]?.versions.length);
   return {
     // The turnaround is part of Character: done once it is finished and every view is from the current version.
-    character: !p.character.doneAt || !allViews ? "todo" : t!.source === characterImage(p) ? "done" : "stale",
+    character: !c.character.doneAt || !allViews ? "todo" : t!.source === characterImage(p, cid) ? "done" : "stale",
     scene: sceneState(p),
   };
 }

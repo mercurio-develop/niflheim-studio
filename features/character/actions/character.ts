@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 import { cropBox, maskBox, pngSize, removePrompt, type Box } from "@/lib/brush";
 import { parentIn, stackMoves } from "@/lib/history";
 import { mergeParts, partsFromTags } from "@/lib/parts";
-import { getProject, projectDir, updateProject, type Edit, type Project, type Version, type ViewId } from "@/lib/store";
+import { CID, charDir, charKey, charOf, getProject, projectDir, updateProject, type Edit, type Project, type Version, type ViewId } from "@/lib/store";
 import { mediumOf, styleById } from "@/lib/styles";
 import { Count, Index, Prompt, REFERENCE_TYPES, StyleId, referenceError } from "../schemas";
 
@@ -25,20 +25,24 @@ const done = (id: string) => {
 
 // What an edit works on: the character, or one turnaround view ("view:side"). Each is a stack
 // of versions with a current one; the edit actions below take the target and work on its stack.
+// Which character an action works on: c1 (the top-level fields) unless another is named.
+const Cid = z.string().regex(CID).optional();
 const Target = z.union([z.literal("character"), z.string().regex(/^view:(front|threequarter|side|back|top|bottom)$/)]);
 type Stack = { versions: Version[]; current: number | null };
-function stackOf(p: Project, target: string): Stack {
-  if (target === "character") return p.character;
-  const s = p.turnaround?.views[target.slice(5) as ViewId];
+function stackOf(p: Project, target: string, cid = "c1"): Stack {
+  const c = charOf(p, cid);
+  if (target === "character") return c.character;
+  const s = c.turnaround?.views[target.slice(5) as ViewId];
   if (!s) throw new Error("Paint the turnaround first.");
   return s;
 }
 // Job keys and output folders per target, so a view's edit never blocks the character's.
-const keyOf = (target: string, key: string) => (target === "character" ? key : `${target}:${key}`);
-const dirOf = (target: string) => (target === "character" ? "character" : `turnaround/${target.slice(5)}`);
+// Both also per character (charKey, charDir), so two characters' edits run side by side.
+const keyOf = (target: string, key: string, cid = "c1") => charKey(cid, target === "character" ? key : `${target}:${key}`);
+const dirOf = (target: string, cid = "c1") => charDir(cid, target === "character" ? "character" : `turnaround/${target.slice(5)}`);
 // A new version made from version `at` becomes the current one.
-const pushVersion = (q: Project, target: string, v: Version) => {
-  const s = stackOf(q, target);
+const pushVersion = (q: Project, target: string, v: Version, cid = "c1") => {
+  const s = stackOf(q, target, cid);
   s.versions.push(v);
   s.current = s.versions.length - 1;
   return s.current;
@@ -66,14 +70,15 @@ const conceptPrompt = (prompt: string, style: string) =>
 
 
 
-export async function generateConcepts(id: string, options: { reseed?: boolean; style?: string; prompt?: string; count?: number } = {}) {
-  const p = await load(id);
-  const count = options.count !== undefined ? Count.parse(options.count) : (p.character.count ?? 4);
-  const style = options.style ? StyleId.parse(options.style) : p.character.style;
-  const prompt = options.prompt !== undefined ? Prompt.parse(options.prompt) : p.character.prompt;
-  const seed = options.reseed || options.style || options.prompt !== undefined ? newSeed() : p.character.seed;
-  const reference = p.character.reference;
-  await startJob(id, "concepts", async ({ track, alive }) => {
+export async function generateConcepts(id: string, options: { reseed?: boolean; style?: string; prompt?: string; count?: number } = {}, rawCid?: unknown) {
+  const cid = Cid.parse(rawCid) ?? "c1";
+  const c0 = charOf(await load(id), cid).character;
+  const count = options.count !== undefined ? Count.parse(options.count) : (c0.count ?? 4);
+  const style = options.style ? StyleId.parse(options.style) : c0.style;
+  const prompt = options.prompt !== undefined ? Prompt.parse(options.prompt) : c0.prompt;
+  const seed = options.reseed || options.style || options.prompt !== undefined ? newSeed() : c0.seed;
+  const reference = c0.reference;
+  await startJob(id, charKey(cid, "concepts"), async ({ track, alive }) => {
     let files: string[];
     if (reference) {
       // From a sketch: Qwen-Image-Edit paints over it, one image per run, a new seed each.
@@ -85,7 +90,7 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
           set: [["17", "prompt", sketchPrompt(prompt, style)], ["22", "seed", seed + i]],
           images: [["1", abs(id, reference)]],
           output: "28",
-          outDir: abs(id, `character/concepts/${seed}/${i}`),
+          outDir: abs(id, charDir(cid, `character/concepts/${seed}/${i}`)),
         });
         files.push(f);
         if (!(await alive())) return;
@@ -96,12 +101,12 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
         workflow: "01_concept.api.json",
         set: [["5", "text", conceptPrompt(prompt, style)], ["8", "seed", seed], ["7", "batch_size", count]],
         output: "10",
-        outDir: abs(id, `character/concepts/${seed}`),
+        outDir: abs(id, charDir(cid, `character/concepts/${seed}`)),
       });
     }
     if (!(await alive())) return; // cancelled after ComfyUI had already finished
     await updateProject(id, (q) => {
-      const c = q.character;
+      const c = charOf(q, cid).character;
       // The set on screen moves to the history; nothing the user saw is thrown away.
       if (c.concepts.length) (c.sets ??= []).push({ prompt: c.prompt, style: c.style, seed: c.seed, images: c.concepts });
       c.prompt = prompt;
@@ -110,38 +115,40 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
       c.concepts = rel(id, files);
     });
   }, style);
-  if (count !== p.character.count) await updateProject(id, (q) => void (q.character.count = count));
+  if (count !== c0.count) await updateProject(id, (q) => void (charOf(q, cid).character.count = count));
   done(id);
 }
 
 
 // A drawn sketch or an uploaded image; later concepts follow its pose and silhouette.
-export async function setReference(id: string, form: FormData) {
+export async function setReference(id: string, form: FormData, rawCid?: unknown) {
+  const cid = Cid.parse(rawCid) ?? "c1";
   const image = form.get("image");
   const bad = referenceError(image);
   if (bad || !(image instanceof File)) throw new Error(bad ?? "The image did not come through.");
-  await load(id);
-  const file = abs(id, `character/reference/${stamp()}.${REFERENCE_TYPES[image.type]}`);
+  charOf(await load(id), cid);
+  const file = abs(id, charDir(cid, `character/reference/${stamp()}.${REFERENCE_TYPES[image.type]}`));
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, Buffer.from(await image.arrayBuffer()));
-  await updateProject(id, (q) => void (q.character.reference = rel(id, [file])[0]));
+  await updateProject(id, (q) => void (charOf(q, cid).character.reference = rel(id, [file])[0]));
   done(id);
 }
 
-export async function clearReference(id: string) {
-  await updateProject(id, (q) => void delete q.character.reference);
+export async function clearReference(id: string, rawCid?: unknown) {
+  const cid = Cid.parse(rawCid) ?? "c1";
+  await updateProject(id, (q) => void delete charOf(q, cid).character.reference);
   done(id);
 }
 
 // Florence-2 lists what it sees; the chips for this version come from that.
 // What Florence-2 sees in an image, as part names.
-async function readTags(id: string, image: string, ctx?: JobCtx, target = "character") {
+async function readTags(id: string, image: string, ctx?: JobCtx, target = "character", cid = "c1") {
   const [file] = await runWorkflow({
     onSubmit: ctx?.track,
     workflow: "01_tags.api.json",
     images: [["1", abs(id, image)]],
     output: "4",
-    outDir: abs(id, `${dirOf(target)}/tags/${stamp()}`),
+    outDir: abs(id, `${dirOf(target, cid)}/tags/${stamp()}`),
     ext: "txt",
   });
   return partsFromTags(await readFile(file, "utf8"));
@@ -154,41 +161,45 @@ function mergeTags(found: string[], v: Pick<Version, "parts" | "tags" | "edit">)
   return [...new Set([...merged, ...pinned])];
 }
 
-async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx, target = "character") {
-  const found = await readTags(id, image, ctx, target);
+async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx, target = "character", cid = "c1") {
+  const found = await readTags(id, image, ctx, target, cid);
   await updateProject(id, (q) => {
-    const v = stackOf(q, target).versions[at];
+    const v = stackOf(q, target, cid).versions[at];
     if (v) v.tags = mergeTags(found, v);
   });
 }
 
 // set: index into character.sets for an earlier set; omitted = the set on screen.
-export async function pickConcept(id: string, rawIndex: number, rawSet?: number) {
+export async function pickConcept(id: string, rawIndex: number, rawSet?: number, rawCid?: unknown) {
   const index = Index.parse(rawIndex);
   const set = rawSet === undefined ? undefined : Index.parse(rawSet);
+  const cid = Cid.parse(rawCid) ?? "c1";
   const p = await updateProject(id, (q) => {
-    const images = set === undefined ? q.character.concepts : q.character.sets?.[set]?.images;
+    const c = charOf(q, cid).character;
+    const images = set === undefined ? c.concepts : c.sets?.[set]?.images;
     const image = images?.[index];
     if (!image) throw new Error("No such concept.");
     // Picking the same image again just goes back to that version.
-    const existing = q.character.versions.findIndex((v) => v.image === image);
+    const existing = c.versions.findIndex((v) => v.image === image);
     if (existing >= 0) {
-      q.character.current = existing;
+      c.current = existing;
       return;
     }
-    q.character.versions.push({ image, label: `Concept ${index + 1}${set === undefined ? "" : ` · set ${set + 1}`}`, parts: {} });
-    q.character.current = q.character.versions.length - 1;
+    c.versions.push({ image, label: `Concept ${index + 1}${set === undefined ? "" : ` · set ${set + 1}`}`, parts: {} });
+    c.current = c.versions.length - 1;
   });
-  const at = p.character.current!;
-  if (!p.character.versions[at].tags) await startJob(id, "tags", (ctx) => tagVersion(id, at, p.character.versions[at].image, ctx)).catch(() => {});
+  const c = charOf(p, cid).character;
+  const at = c.current!;
+  if (!c.versions[at].tags) await startJob(id, charKey(cid, "tags"), (ctx) => tagVersion(id, at, c.versions[at].image, ctx, "character", cid)).catch(() => {});
   done(id);
 }
 
-export async function selectVersion(id: string, rawIndex: number, rawTarget = "character") {
+export async function selectVersion(id: string, rawIndex: number, rawTarget = "character", rawCid?: unknown) {
   const index = Index.parse(rawIndex);
   const target = Target.parse(rawTarget);
+  const cid = Cid.parse(rawCid) ?? "c1";
   await updateProject(id, (p) => {
-    const s = stackOf(p, target);
+    const s = stackOf(p, target, cid);
     if (!s.versions[index]) throw new Error("No such version.");
     s.current = index;
   });
@@ -197,25 +208,26 @@ export async function selectVersion(id: string, rawIndex: number, rawTarget = "c
 
 const Part = z.string().trim().toLowerCase().min(2).max(40).regex(/^[a-z][a-z \-]*$/, "Use plain words, e.g. coat.");
 
-export async function maskPart(id: string, rawPart: string, rawTarget = "character") {
+export async function maskPart(id: string, rawPart: string, rawTarget = "character", rawCid?: unknown) {
   const part = Part.parse(rawPart);
   const target = Target.parse(rawTarget);
-  const stack = stackOf(await load(id), target);
+  const cid = Cid.parse(rawCid) ?? "c1";
+  const stack = stackOf(await load(id), target, cid);
   const at = stack.current!;
   const version = currentVersion(stack);
   if (Object.hasOwn(version.parts, part)) return;
-  await startJob(id, keyOf(target, "mask"), async ({ track, alive }) => {
+  await startJob(id, keyOf(target, "mask", cid), async ({ track, alive }) => {
     const [mask] = await runWorkflow({
       onSubmit: track,
       workflow: "01_parts.api.json",
       set: [["2", "prompt", part]],
       images: [["1", abs(id, version.image)]],
       output: "4",
-      outDir: abs(id, `${dirOf(target)}/masks/${stamp()}-${part.replace(/ /g, "-")}`),
+      outDir: abs(id, `${dirOf(target, cid)}/masks/${stamp()}-${part.replace(/ /g, "-")}`),
     });
     if (!(await alive())) return; // cancelled after ComfyUI had already finished
     await updateProject(id, (q) => {
-      stackOf(q, target).versions[at].parts[part] = rel(id, [mask])[0];
+      stackOf(q, target, cid).versions[at].parts[part] = rel(id, [mask])[0];
     });
   });
   done(id);
@@ -235,7 +247,7 @@ const partName = (thing: string) => {
 
 // One edit run, from version `at` of a stack. Each runner makes the new version and records the
 // edit with its inputs, so Try again can run it once more from the same version with a new seed.
-type Run = { id: string; target: string; at: number; version: Version; ctx: JobCtx };
+type Run = { id: string; cid: string; target: string; at: number; version: Version; ctx: JobCtx };
 
 // A finished edit becomes the new current version only once it is complete (its new part found,
 // its tags read), so the page shows it once, when the loader ends, not half-way through the job.
@@ -243,14 +255,14 @@ async function finish(r: Run, image: string, v: Omit<Version, "image" | "parts" 
   const parts: Record<string, string> = {};
   // An added thing becomes a part at once: SAM 3 finds it on the new image.
   if (extra) {
-    const [m] = await runWorkflow({ onSubmit: r.ctx.track, workflow: "01_parts.api.json", set: [["2", "prompt", extra.name]], images: [["1", abs(r.id, image)]], output: "4", outDir: abs(r.id, `${dirOf(r.target)}/masks/${stamp()}-${extra.name.replace(/ /g, "-")}`) });
+    const [m] = await runWorkflow({ onSubmit: r.ctx.track, workflow: "01_parts.api.json", set: [["2", "prompt", extra.name]], images: [["1", abs(r.id, image)]], output: "4", outDir: abs(r.id, `${dirOf(r.target, r.cid)}/masks/${stamp()}-${extra.name.replace(/ /g, "-")}`) });
     if (await maskBox(m)) parts[extra.name] = rel(r.id, [m])[0];
   }
-  const found = await readTags(r.id, image, r.ctx, r.target);
+  const found = await readTags(r.id, image, r.ctx, r.target, r.cid);
   if (!(await r.ctx.alive())) return;
   await updateProject(r.id, (q) => {
     const version = { image, parts, parent: r.at, ...v };
-    pushVersion(q, r.target, { ...version, tags: mergeTags(found, version) });
+    pushVersion(q, r.target, { ...version, tags: mergeTags(found, version) }, r.cid);
   });
 }
 
@@ -267,8 +279,8 @@ const addPrompt = (thing: string, about: string) =>
 // added to a flat, blocky pixel-art elf came back as a smooth, detailed cartoon face). The style
 // chip is not named: the picture is what counts, and the chip can disagree with the prompt
 // ("pixal art lady elf" made with Painterly).
-async function about(id: string) {
-  const c = (await load(id)).character;
+async function about(id: string, cid = "c1") {
+  const c = charOf(await load(id), cid).character;
   return `This is a close-up of a character: ${c.prompt}, ${styleById(c.style).phrase}. Match this picture's own art style exactly: the same shapes, level of detail, line work, shading and palette, nothing more detailed or realistic than the rest of it.`;
 }
 // The face stays (eyes, nose, mouth), unless the edit is about the face itself.
@@ -277,8 +289,8 @@ const keepFace = (...words: string[]) => (FACE.test(words.join(" ")) ? "" : "the
 
 async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
   const source = abs(r.id, r.version.image);
-  const picture = await about(r.id);
-  const outDir = abs(r.id, `${dirOf(r.target)}/brush/${stamp()}`);
+  const picture = await about(r.id, r.cid);
+  const outDir = abs(r.id, `${dirOf(r.target, r.cid)}/brush/${stamp()}`);
   let image: string;
   if (mask) {
     const box = cropBox(strokes, await pngSize(source), { grow: 2.0, min: 448 });
@@ -318,7 +330,7 @@ async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
 // The selection plus 64 px with a 6 px edge is pasted back, so a bigger new part is not faded out.
 async function runChange(r: Run, what: string, change: string, mask: string) {
   const old = what === "selection" ? "what was there" : `the ${what}`;
-  const prompt = `${await about(r.id)} The flat grey shape is where ${old} was: replace all of it. Paint ${change} there, whole, solid and attached naturally, filling the shape; the rest of the grey becomes what is around it. No grey left. The pose stays; ${keepFace(what, change)}${what === "selection" ? "everything else" : "every other part"} and the background stay exactly the same.`;
+  const prompt = `${await about(r.id, r.cid)} The flat grey shape is where ${old} was: replace all of it. Paint ${change} there, whole, solid and attached naturally, filling the shape; the rest of the grey becomes what is around it. No grey left. The pose stays; ${keepFace(what, change)}${what === "selection" ? "everything else" : "every other part"} and the background stay exactly the same.`;
   const source = abs(r.id, r.version.image);
   const strokes = await maskBox(abs(r.id, mask));
   if (!strokes) throw new Error("The selection is empty; paint or pick a part first.");
@@ -330,7 +342,7 @@ async function runChange(r: Run, what: string, change: string, mask: string) {
     set: [["17", "prompt", prompt], ["22", "seed", newSeed()], ...crop("4"), ...crop("5"), ["27", "x", box.x], ["27", "y", box.y]],
     images: [["1", source], ["2", abs(r.id, mask)]],
     output: "28",
-    outDir: abs(r.id, `${dirOf(r.target)}/swaps/${stamp()}`),
+    outDir: abs(r.id, `${dirOf(r.target, r.cid)}/swaps/${stamp()}`),
   });
   if (!(await r.ctx.alive())) return;
   await finish(r, rel(r.id, [image])[0], { label: `${what} → ${change}`, tags: r.version.tags, edit: { kind: "change", what: what === "selection" ? "" : what, change, mask } });
@@ -348,16 +360,16 @@ async function runRemove(r: Run, what: string, strokes: Box, mask: string) {
     set: [["17", "prompt", removePrompt(what)], ["22", "seed", newSeed()], ...crop("4"), ...crop("5"), ["27", "x", box.x], ["27", "y", box.y]],
     images: [["1", source], ["2", abs(r.id, mask)]],
     output: "28",
-    outDir: abs(r.id, `${dirOf(r.target)}/removes/${stamp()}`),
+    outDir: abs(r.id, `${dirOf(r.target, r.cid)}/removes/${stamp()}`),
   });
   if (!(await r.ctx.alive())) return;
   await finish(r, rel(r.id, [image])[0], { label: `− ${what || "selection"}`, tags: r.version.tags?.filter((t) => t !== what), edit: { kind: "remove", what, mask, box: strokes } });
 }
 
 // The browser's selection (a part's mask plus/minus brush strokes) saved beside the stack.
-async function saveSelection(id: string, target: string, mask: FormDataEntryValue | null) {
+async function saveSelection(id: string, target: string, mask: FormDataEntryValue | null, cid = "c1") {
   if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
-  const file = abs(id, `${dirOf(target)}/selections/${stamp()}/mask.png`);
+  const file = abs(id, `${dirOf(target, cid)}/selections/${stamp()}/mask.png`);
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, Buffer.from(await mask.arrayBuffer()));
   return rel(id, [file])[0];
@@ -365,57 +377,61 @@ async function saveSelection(id: string, target: string, mask: FormDataEntryValu
 
 const jobFor = (kind: Edit["kind"]) => (kind === "change" ? "swap" : "brush");
 
-async function start(id: string, target: string, kind: Edit["kind"], detail: string, work: (r: Run) => Promise<void>) {
-  const stack = stackOf(await load(id), target);
+async function start(id: string, cid: string, target: string, kind: Edit["kind"], detail: string, work: (r: Run) => Promise<void>) {
+  const stack = stackOf(await load(id), target, cid);
   const at = stack.current!;
   const version = currentVersion(stack);
-  await startJob(id, keyOf(target, jobFor(kind)), (ctx) => work({ id, target, at, version, ctx }), detail);
+  await startJob(id, keyOf(target, jobFor(kind), cid), (ctx) => work({ id, cid, target, at, version, ctx }), detail);
   done(id);
 }
 
 // Add with the brush (remove goes through removeSelection, which has the exact mask).
 // Add something inside the painted selection: the browser sends the mask and its box.
-export async function addSelection(id: string, form: FormData, rawTarget = "character") {
+export async function addSelection(id: string, form: FormData, rawTarget = "character", rawCid?: unknown) {
   const target = Target.parse(rawTarget);
+  const cid = Cid.parse(rawCid) ?? "c1";
   const thing = z.string().trim().min(2, "Say what to add.").max(200).parse(form.get("thing"));
   let box0: unknown = null;
   try { box0 = JSON.parse(String(form.get("box") ?? "null")); } catch {}
   const strokes = Strokes.parse(box0);
-  const mask = await saveSelection(id, target, form.get("mask"));
-  await start(id, target, "add", `Painting ${thing}`, (r) => runAdd(r, thing, strokes, mask));
+  const mask = await saveSelection(id, target, form.get("mask"), cid);
+  await start(id, cid, target, "add", `Painting ${thing}`, (r) => runAdd(r, thing, strokes, mask));
 }
 
 // Change the selection: the browser sends the final mask; Qwen repaints a close-up (01_change).
-export async function repaintSelection(id: string, form: FormData, rawTarget = "character") {
+export async function repaintSelection(id: string, form: FormData, rawTarget = "character", rawCid?: unknown) {
   const target = Target.parse(rawTarget);
+  const cid = Cid.parse(rawCid) ?? "c1";
   const change = z.string().trim().min(3, "Say what it should become.").max(300).parse(form.get("change"));
   const what = z.string().trim().max(40).parse(form.get("what") ?? "") || "selection";
-  const mask = await saveSelection(id, target, form.get("mask"));
-  await start(id, target, "change", `Repainting the ${what}`, (r) => runChange(r, what, change, mask));
+  const mask = await saveSelection(id, target, form.get("mask"), cid);
+  await start(id, cid, target, "change", `Repainting the ${what}`, (r) => runChange(r, what, change, mask));
 }
 
-export async function removeSelection(id: string, form: FormData, rawTarget = "character") {
+export async function removeSelection(id: string, form: FormData, rawTarget = "character", rawCid?: unknown) {
   const target = Target.parse(rawTarget);
+  const cid = Cid.parse(rawCid) ?? "c1";
   const what = z.string().trim().max(40).parse(form.get("what") ?? "");
   let box0: unknown = null;
   try { box0 = JSON.parse(String(form.get("box") ?? "null")); } catch {}
   const strokes = Strokes.parse(box0);
-  const mask = await saveSelection(id, target, form.get("mask"));
-  await start(id, target, "remove", `Removing ${what ? `the ${what}` : "the selection"}`, (r) => runRemove(r, what, strokes, mask));
+  const mask = await saveSelection(id, target, form.get("mask"), cid);
+  await start(id, cid, target, "remove", `Removing ${what ? `the ${what}` : "the selection"}`, (r) => runRemove(r, what, strokes, mask));
 }
 
 // Try again: the current version's edit, run once more from the version it was made from, with a
 // new seed. The result is a new version beside it; the one you did not like stays in the history.
-export async function retryEdit(id: string, rawTarget = "character") {
+export async function retryEdit(id: string, rawTarget = "character", rawCid?: unknown) {
   const target = Target.parse(rawTarget);
-  const stack = stackOf(await load(id), target);
+  const cid = Cid.parse(rawCid) ?? "c1";
+  const stack = stackOf(await load(id), target, cid);
   const v = stack.versions[stack.current ?? -1];
   const e = v?.edit;
   if (!v || !e || v.parent === undefined) throw new Error("Nothing to try again here.");
   const at = v.parent;
   const version = stack.versions[at];
   const run = (work: (r: Run) => Promise<void>) =>
-    startJob(id, keyOf(target, jobFor(e.kind)), (ctx) => work({ id, target, at, version, ctx }), `Trying ${v.label} again`);
+    startJob(id, keyOf(target, jobFor(e.kind), cid), (ctx) => work({ id, cid, target, at, version, ctx }), `Trying ${v.label} again`);
   if (e.kind === "add" && e.box) await run((r) => runAdd(r, e.change ?? "", e.box!, e.mask));
   else if (e.kind === "change" && e.mask) await run((r) => runChange(r, e.what || "selection", e.change ?? "", e.mask!));
   else if (e.kind === "remove" && e.mask && e.box) await run((r) => runRemove(r, e.what, e.box!, e.mask!));
@@ -424,19 +440,20 @@ export async function retryEdit(id: string, rawTarget = "character") {
 }
 
 // A painted selection becomes a named part of this version, like the ones Florence-2 found.
-export async function savePart(id: string, form: FormData, rawTarget = "character") {
+export async function savePart(id: string, form: FormData, rawTarget = "character", rawCid?: unknown) {
   const name = Part.parse(form.get("name"));
   const target = Target.parse(rawTarget);
+  const cid = Cid.parse(rawCid) ?? "c1";
   const mask = form.get("mask");
   if (!(mask instanceof File) || mask.type !== "image/png" || mask.size > 8_000_000) throw new Error("The selection did not come through; try again.");
-  const stack = stackOf(await load(id), target);
+  const stack = stackOf(await load(id), target, cid);
   const at = stack.current!;
   currentVersion(stack);
-  const file = abs(id, `${dirOf(target)}/masks/${stamp()}-${name.replace(/ /g, "-")}/00.png`);
+  const file = abs(id, `${dirOf(target, cid)}/masks/${stamp()}-${name.replace(/ /g, "-")}/00.png`);
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, Buffer.from(await mask.arrayBuffer()));
   await updateProject(id, (q) => {
-    const v = stackOf(q, target).versions[at];
+    const v = stackOf(q, target, cid).versions[at];
     v.parts[name] = rel(id, [file])[0];
     v.tags = [...(v.tags ?? []).filter((t) => t !== name), name];
   });
@@ -444,10 +461,12 @@ export async function savePart(id: string, form: FormData, rawTarget = "characte
 }
 
 // Restyle the chosen character, not new concepts: same design and pose, another look.
-export async function restyleCurrent(id: string, rawStyle: string) {
+export async function restyleCurrent(id: string, rawStyle: string, rawCid?: unknown) {
   const style = styleById(StyleId.parse(rawStyle));
+  const cid = Cid.parse(rawCid) ?? "c1";
   await repaintWhole(
     id,
+    cid,
     style,
     `Repaint this exact character as ${style.phrase}. Keep the same design, outfit, proportions, pose and the plain background; colours and rendering follow the new style.`,
     `Style: ${style.label}`,
@@ -458,10 +477,12 @@ export async function restyleCurrent(id: string, rawStyle: string) {
 // Rebuild: after edits, each changed or added part can look a little different from the rest (each
 // edit is its own close-up). One pass over the whole picture in the character's own style makes it
 // read as one painting again. A new version: Undo brings the edited one back.
-export async function rebuildStyle(id: string) {
-  const style = styleById((await load(id)).character.style ?? "painterly");
+export async function rebuildStyle(id: string, rawCid?: unknown) {
+  const cid = Cid.parse(rawCid) ?? "c1";
+  const style = styleById(charOf(await load(id), cid).character.style ?? "painterly");
   await repaintWhole(
     id,
+    cid,
     style,
     `Repaint this exact character as one consistent picture in ${style.phrase}: every part, including any that look newer or different, drawn with the same shapes, line work, shading, level of detail and lighting as the whole. Keep the same design, outfit, colours, proportions, pose and the plain background; change nothing else.`,
     `Rebuilt · ${style.label}`,
@@ -471,13 +492,13 @@ export async function rebuildStyle(id: string) {
 
 // The whole picture through 01_edit as a new version made from the current one; it becomes the
 // character's style.
-async function repaintWhole(id: string, style: ReturnType<typeof styleById>, prompt: string, label: string, detail: string) {
-  const p = await load(id);
-  const at = p.character.current!;
-  const version = currentVersion(p.character);
+async function repaintWhole(id: string, cid: string, style: ReturnType<typeof styleById>, prompt: string, label: string, detail: string) {
+  const c = charOf(await load(id), cid).character;
+  const at = c.current!;
+  const version = currentVersion(c);
   await startJob(
     id,
-    "restyle",
+    charKey(cid, "restyle"),
     async (ctx) => {
       const [image] = await runWorkflow({
         onSubmit: ctx.track,
@@ -488,13 +509,14 @@ async function repaintWhole(id: string, style: ReturnType<typeof styleById>, pro
         ],
         images: [["1", abs(id, version.image)]],
         output: "28",
-        outDir: abs(id, `character/restyles/${stamp()}-${style.id}`),
+        outDir: abs(id, charDir(cid, `character/restyles/${stamp()}-${style.id}`)),
       });
       if (!(await ctx.alive())) return;
       await updateProject(id, (q) => {
-        q.character.versions.push({ image: rel(id, [image])[0], label, parts: {}, tags: version.tags, parent: at });
-        q.character.current = q.character.versions.length - 1;
-        q.character.style = style.id; // later edits and the style chips follow the new look
+        const c = charOf(q, cid).character;
+        c.versions.push({ image: rel(id, [image])[0], label, parts: {}, tags: version.tags, parent: at });
+        c.current = c.versions.length - 1;
+        c.style = style.id; // later edits and the style chips follow the new look
       });
     },
     detail,
@@ -503,20 +525,22 @@ async function repaintWhole(id: string, style: ReturnType<typeof styleById>, pro
 }
 
 // Undo goes to the version this one was made from; Redo to the newest version made from this one.
-export async function undo(id: string, rawTarget = "character") {
+export async function undo(id: string, rawTarget = "character", rawCid?: unknown) {
   const target = Target.parse(rawTarget);
+  const cid = Cid.parse(rawCid) ?? "c1";
   await updateProject(id, (p) => {
-    const s = stackOf(p, target);
+    const s = stackOf(p, target, cid);
     const to = s.current === null ? null : parentIn(s.versions, s.current);
     if (to !== null) s.current = to;
   });
   done(id);
 }
 
-export async function redo(id: string, rawTarget = "character") {
+export async function redo(id: string, rawTarget = "character", rawCid?: unknown) {
   const target = Target.parse(rawTarget);
+  const cid = Cid.parse(rawCid) ?? "c1";
   await updateProject(id, (p) => {
-    const s = stackOf(p, target);
+    const s = stackOf(p, target, cid);
     const to = stackMoves(s).redo;
     if (to !== null) s.current = to;
   });
@@ -525,16 +549,66 @@ export async function redo(id: string, rawTarget = "character") {
 
 const JobKey = z.enum(["concepts", "mask", "swap", "tags", "brush", "restyle"]);
 
-export async function cancel(id: string, key: string, rawTarget = "character") {
-  await cancelJob(id, keyOf(Target.parse(rawTarget), JobKey.parse(key)));
+export async function cancel(id: string, key: string, rawTarget = "character", rawCid?: unknown) {
+  await cancelJob(id, keyOf(Target.parse(rawTarget), JobKey.parse(key), Cid.parse(rawCid) ?? "c1"));
   done(id);
 }
 
 // Next: this version is the character. Later steps read character.versions[current].
-export async function finishCharacter(id: string) {
+export async function finishCharacter(id: string, rawCid?: unknown) {
+  const cid = Cid.parse(rawCid) ?? "c1";
   await updateProject(id, (p) => {
-    if (p.character.current === null) throw new Error("Pick a concept first.");
-    p.character.doneAt = new Date().toISOString();
+    const c = charOf(p, cid).character;
+    if (c.current === null) throw new Error("Pick a concept first.");
+    c.doneAt = new Date().toISOString();
   });
   redirect(`/p/${id}/scene`);
+}
+
+// The cast: more characters in the same project, each with its own concepts, turnaround, poses
+// and model (lib/store.ts CastMember). c1 is the top-level character and cannot be deleted.
+const Name = z.string().trim().min(1, "Give the character a name.").max(40);
+const CastPrompt = z.string().trim().min(1, "Describe the character.").max(600);
+
+// A new character starts like a new project's: its prompt, c1's style, no concepts yet. Ids are
+// never reused (max + 1), so a deleted character's jobs and files are not mistaken for the new one's.
+export async function addCharacter(id: string, rawName: unknown, rawPrompt: unknown) {
+  const name = Name.parse(rawName);
+  const prompt = CastPrompt.parse(rawPrompt);
+  let cid = "";
+  await updateProject(id, (q) => {
+    const n = Math.max(1, ...(q.cast ?? []).map((m) => Number(m.id.slice(1)))) + 1;
+    if (n > 999) throw new Error("No room for more characters.");
+    cid = `c${n}`;
+    const character = { prompt, style: q.character.style, seed: newSeed(), concepts: [], versions: [], current: null };
+    (q.cast ??= []).push({ id: cid, name, character });
+  });
+  done(id);
+  return cid;
+}
+
+export async function renameCharacter(id: string, rawCid: unknown, rawName: unknown) {
+  const cid = z.string().regex(CID).parse(rawCid);
+  const name = Name.parse(rawName);
+  await updateProject(id, (q) => {
+    if (cid === "c1") q.characterName = name;
+    else {
+      const m = q.cast?.find((x) => x.id === cid);
+      if (!m) throw new Error("No such character.");
+      m.name = name;
+    }
+  });
+  done(id);
+}
+
+// Off the cast (its files stay on disk).
+export async function deleteCharacter(id: string, rawCid: unknown) {
+  const cid = z.string().regex(CID).parse(rawCid);
+  if (cid === "c1") throw new Error("The first character cannot be deleted.");
+  await updateProject(id, (q) => {
+    if (!q.cast?.some((x) => x.id === cid)) throw new Error("No such character.");
+    if (Object.entries(q.jobs).some(([k, j]) => k.startsWith(`${cid}:`) && j.status === "running")) throw new Error("This character is still being painted; stop that first.");
+    q.cast = q.cast.filter((x) => x.id !== cid);
+  });
+  done(id);
 }

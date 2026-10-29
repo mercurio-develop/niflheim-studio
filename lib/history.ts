@@ -1,3 +1,4 @@
+import { charIn } from "./progress";
 import type { Project, Version } from "./store";
 
 type Stack = { versions: Version[]; current: number | null };
@@ -11,7 +12,7 @@ export function parentIn(versions: Version[], i: number): number | null {
   if (!v || v.label.startsWith("Concept")) return null;
   return i > 0 ? i - 1 : null;
 }
-export const parentOf = (p: Project, i: number) => parentIn(p.character.versions, i);
+export const parentOf = (p: Project, i: number, cid = "c1") => parentIn(charIn(p, cid).character.versions, i);
 
 // Where Undo and Redo would go from a stack's current version.
 export function stackMoves(s: Stack): { undo: number | null; redo: number | null; parent: number | null } {
@@ -21,4 +22,4 @@ export function stackMoves(s: Stack): { undo: number | null; redo: number | null
   const parent = parentIn(s.versions, at);
   return { undo: parent, redo: children.length ? children[children.length - 1] : null, parent };
 }
-export const historyMoves = (p: Project) => stackMoves(p.character);
+export const historyMoves = (p: Project, cid = "c1") => stackMoves(charIn(p, cid).character);
