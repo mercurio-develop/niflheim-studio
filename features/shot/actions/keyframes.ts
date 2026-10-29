@@ -4,7 +4,7 @@ import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { blocksKey, focusPhrase, keyFrames, renderKey } from "@/lib/camera";
+import { focusPhrase, keyFrames, propsKey, renderKey } from "@/lib/camera";
 import { runWorkflow } from "@/lib/comfy";
 import { startJob } from "@/lib/jobs";
 import { currentFill } from "@/lib/progress";
@@ -26,8 +26,7 @@ async function load(id: string): Promise<Project> {
 function sceneKey(p: Project) {
   const fill = currentFill(p);
   if (!fill?.camera?.floor || !p.stage?.at || !p.camera) return null;
-  const bk = blocksKey(p.blocks);
-  return renderKey(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn) + (bk ? `|blocks:${bk}` : "");
+  return renderKey(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn) + propsKey(p.blocks, p.sceneAssets);
 }
 
 // Every key is the capture repainted on its own with one strict prompt and one seed: keep

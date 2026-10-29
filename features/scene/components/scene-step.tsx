@@ -3,7 +3,7 @@
 import { SectionNav } from "@/components/section-nav";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
-import type { Block, Job, SetData, StageData } from "@/lib/store";
+import type { Block, Job, SceneAsset, SetData, StageData } from "@/lib/store";
 import { DescribeSection } from "./describe-section";
 import { StageSection } from "./stage-section";
 
@@ -16,6 +16,9 @@ export function SceneStep(props: {
   style: string; // the character's style, the set's default
   placement: StageData | null;
   blocks: Block[];
+  assets: SceneAsset[];
+  assetJobs: Record<string, Job>;
+  characterAssets: string[];
   front: string | null;
   moved: boolean;
   setJob?: Job;
@@ -30,7 +33,7 @@ export function SceneStep(props: {
   const ready = !!cam?.floor && !!at;
   return (
     <>
-      <JobPoller running={building || stageBusy} />
+      <JobPoller running={building || stageBusy || Object.values(props.assetJobs).some((j) => j.status === "running")} />
       <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)]">
         <SectionNav items={[{ id: "describe", n: "1", title: "Describe", tone: "bg-tone-yellow" }, { id: "stage", n: "2", title: "Stage", tone: "bg-tone-cyan" }]} />
         <div className="flex min-w-0 flex-col gap-10">
@@ -44,6 +47,9 @@ export function SceneStep(props: {
           set={props.set}
           placement={props.placement}
           blocks={props.blocks}
+          assets={props.assets}
+          assetJobs={props.assetJobs}
+          characterAssets={props.characterAssets}
           front={props.front}
           moved={props.moved}
           setJob={props.setJob}

@@ -35,6 +35,7 @@ async function Export({ params }: { params: Promise<{ id: string }> }) {
           height: st.height,
           turn: st.turn,
           blocks: project.blocks ?? [],
+          assets: project.sceneAssets ?? [],
         }
       : null;
   return (

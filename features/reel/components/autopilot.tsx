@@ -13,13 +13,13 @@ import { renderTake } from "@/features/shot/actions/shot";
 import { selectShot } from "@/features/shot/actions/shots";
 import { keyFrames, poses, type CameraMove } from "@/lib/camera";
 import type { StageCamera } from "@/lib/stage-fill";
-import type { Autopilot as Pilot, AutopilotShot, AutopilotStep, Block, Join, ViewId } from "@/lib/store";
+import type { Autopilot as Pilot, AutopilotShot, AutopilotStep, Block, Join, SceneAsset, ViewId } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { jobState, markStep, pickBest, savePlan, startAutopilot, stopAutopilot } from "../actions/autopilot";
 import { exportReel, saveReel } from "../actions/reel";
 
 export type PilotShot = { id: string; name: string; move: CameraMove | null };
-export type SceneCapture = { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; blocks: Block[] };
+export type SceneCapture = { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; blocks: Block[]; assets: SceneAsset[] };
 
 const JOINS: { id: Join; label: string }[] = [
   { id: "cut", label: "Cut" },
@@ -249,7 +249,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
         </ol>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {capture && props.scene && <KeyCapture {...props.scene} poses={capture.poses} onDone={capture.done} onError={capture.fail} />}
+      {capture && props.scene && <KeyCapture {...props.scene} projectId={props.projectId} poses={capture.poses} onDone={capture.done} onError={capture.fail} />}
     </Section>
   );
 }

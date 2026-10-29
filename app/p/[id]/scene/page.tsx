@@ -19,6 +19,9 @@ async function Scene({ params }: { params: Promise<{ id: string }> }) {
         style={project.character.style}
         placement={project.stage ?? null}
         blocks={project.blocks ?? []}
+        assets={project.sceneAssets ?? []}
+        assetJobs={Object.fromEntries(Object.entries(project.jobs).filter(([k]) => k.startsWith("scene-asset:")))}
+        characterAssets={(project.assets ?? []).map((a) => a.name)}
         front={viewImage(project, "front")}
         moved={placementStale(project) === "set"}
         setJob={project.jobs.set}

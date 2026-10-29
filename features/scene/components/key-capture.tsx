@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { Block, ViewId } from "@/lib/store";
+import type { Block, SceneAsset, ViewId } from "@/lib/store";
 import { Blocks } from "./blocks";
+import { SceneAssets } from "./scene-assets";
 import type { StageCamera } from "@/lib/stage-fill";
 import { CharacterCard } from "./character-card";
 import { StageViewer, type StagePoint, type StagePose } from "./stage-viewer";
@@ -17,6 +18,8 @@ export function KeyCapture(props: {
   height: number;
   turn: number;
   blocks: Block[];
+  assets: SceneAsset[];
+  projectId: string;
   poses: StagePose[];
   onDone: (pngs: Blob[]) => void;
   onError: (message: string) => void;
@@ -39,6 +42,7 @@ export function KeyCapture(props: {
     <div aria-hidden className="pointer-events-none fixed top-0 -left-[9999px]" style={{ width: 768, height: 448 }}>
       <StageViewer mesh={props.mesh} camera={props.camera} filled pose={props.poses[i]} onDrawn={drawn} className="size-full">
         <Blocks blocks={props.blocks} />
+        <SceneAssets projectId={props.projectId} assets={props.assets} wait />
         <CharacterCard cutouts={props.cutouts} at={props.poses[i].at ?? props.at} height={props.height} turn={props.turn} />
       </StageViewer>
     </div>

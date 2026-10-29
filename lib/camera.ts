@@ -198,9 +198,14 @@ export const renderKey = (m: CameraMove, at: Vec, height: number, mesh: string, 
   return [m.move, m.amount, m.seconds, m.ease ? 1 : 0, ...at.map((x) => x.toFixed(3)), height.toFixed(2), mesh, ...framing, ...more].join("|");
 };
 
-// The greybox blocks a set of keyframes was painted with: a key made before a block moved is old.
-export const blocksKey = (blocks: { kind: string; at: Vec; size: Vec; turn: number; label: string }[] = []) =>
-  blocks.map((b) => [b.kind, ...b.at.map((x) => x.toFixed(2)), ...b.size.map((x) => x.toFixed(2)), b.turn, b.label].join(",")).join(";");
+// What stood on the stage when a set of keyframes was painted (greybox blocks, placed assets), as
+// a suffix to the render key: keys made before a block or an asset moved are old. Empty with none.
+export function propsKey(blocks: { kind: string; at: Vec; size: Vec; turn: number; label: string }[] = [], assets: { id: string; glb?: string; at?: Vec; height: number; turn: number }[] = []) {
+  const v = (p: Vec) => p.map((x) => x.toFixed(2));
+  const b = blocks.map((x) => [x.kind, ...v(x.at), ...v(x.size), x.turn, x.label].join(",")).join(";");
+  const a = assets.filter((x) => x.glb && x.at).map((x) => [x.id, x.glb, ...v(x.at!), x.height.toFixed(2), x.turn].join(",")).join(";");
+  return (b ? `|blocks:${b}` : "") + (a ? `|assets:${a}` : "");
+}
 
 // The frames the shot is guided at: every 32nd frame of the move and its last (97 frames: 0, 32,
 // 64, 96), as LTX-2.5 kept a move continuous with guides that close (04_shot proof 2).

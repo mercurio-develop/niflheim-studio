@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
 import { More, Section } from "@/components/section";
 import { JobStatus } from "@/features/wizard/components/job-status";
-import type { Block, Job, SetData, StageData } from "@/lib/store";
+import type { Block, Job, SceneAsset, SetData, StageData } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { cancelSet, cancelStage, cutOutCharacter, placeCharacter, rebuildStage, refillStage, saveBlocks } from "../actions/scene";
+import { placeAsset } from "../actions/assets";
+import { AssetsPanel } from "./assets-panel";
 import { Blocks } from "./blocks";
+import { SceneAssets } from "./scene-assets";
 import { CharacterCard } from "./character-card";
 import { chip } from "./chip";
 import { StageViewer, type StageLook, type StagePoint } from "./stage-viewer";
@@ -25,6 +28,9 @@ export function StageSection(props: {
   set: SetData | null;
   placement: StageData | null;
   blocks: Block[]; // greybox shapes on the stage
+  assets: SceneAsset[]; // objects made for the scene in 3D
+  assetJobs: Record<string, Job>; // their jobs, by key
+  characterAssets: string[]; // names of the assets taken off the character
   front: string | null; // the current turnaround front, to tell when the cutouts are old
   moved: boolean; // the set was rebuilt or refilled since the character was placed
   setJob?: Job;
@@ -50,6 +56,23 @@ export function StageSection(props: {
   const [placing, setPlacing] = useState<Block["kind"] | null>(null); // the next floor click puts this down
   const block = blocks.find((b) => b.id === picked);
   const change = (id: string, patch: Partial<Block>) => setBlocks(blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+  // Assets: placed and sized here, saved a moment after the last change; made on the server.
+  type Spot = Pick<SceneAsset, "at" | "height" | "turn">;
+  const [spots, setSpots] = useState<Record<string, Spot>>({});
+  const [pickedAsset, setPickedAsset] = useState<string | null>(null);
+  const [placingAsset, setPlacingAsset] = useState<string | null>(null);
+  const assets = props.assets.map((a) => ({ ...a, ...spots[a.id] }));
+  const spot = (id: string, patch: Partial<Spot>) => {
+    const a = assets.find((x) => x.id === id)!;
+    setSpots({ ...spots, [id]: { at: a.at, height: a.height, turn: a.turn, ...patch } });
+  };
+  const putAsset = (p: StagePoint) => {
+    spot(placingAsset!, { at: p });
+    setPickedAsset(placingAsset);
+    setPlacingAsset(null);
+  };
+  const assetsBusy = Object.entries(props.assetJobs).some(([k, j]) => k.startsWith("scene-asset:") && j.status === "running");
+
   const put = (p: StagePoint) => {
     const b: Block = { id: Date.now().toString(36), kind: placing!, at: p, size: SIZES[placing!], turn: 0, label: "" };
     setBlocks([...blocks, b]);
@@ -64,6 +87,17 @@ export function StageSection(props: {
   };
   const filling = building && !!props.setJob?.detail?.startsWith("Filling");
   const painting = building && !!props.setJob?.detail?.startsWith("Painting");
+
+  const spotsJson = JSON.stringify(spots);
+  const firstSpots = useRef(true);
+  useEffect(() => {
+    if (firstSpots.current) return void (firstSpots.current = false);
+    const t = setTimeout(() => {
+      for (const [id, v] of Object.entries(spots)) if (v.at) run(() => placeAsset(props.projectId, id, v));
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotsJson]);
 
   // A levelled stage with no cutouts yet: cut the character out by itself, once.
   const asked = useRef(false);
@@ -151,10 +185,11 @@ export function StageSection(props: {
             camera={filled?.camera}
             filled={!!filled}
             look={look}
-            onFloor={placing && floor ? put : ready ? setAt : undefined}
+            onFloor={placing && floor ? put : placingAsset && floor ? putAsset : ready ? setAt : undefined}
             className="absolute inset-0"
           >
             {floor && <Blocks blocks={blocks} picked={picked} onPick={setPicked} onMove={(id, p) => change(id, { at: p })} />}
+            {floor && <SceneAssets projectId={props.projectId} assets={assets} picked={pickedAsset} onPick={setPickedAsset} onMove={(id, p) => spot(id, { at: p })} />}
             {ready && at && <CharacterCard cutouts={Object.fromEntries(Object.entries(props.placement!.cutouts).map(([v, f]) => [v, file(f!)]))} at={at} height={height} turn={turn} />}
           </StageViewer>
         ) : s?.image ? (
@@ -170,6 +205,14 @@ export function StageSection(props: {
           </div>
         )}
         {building && s?.image && !fresh && <div aria-hidden className="nifl-loading pointer-events-none absolute inset-0 bg-transparent" />}
+        {placingAsset && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-center text-sm backdrop-blur">
+              <Plus className="size-4 shrink-0 text-primary" />
+              Click the floor to stand the {assets.find((a) => a.id === placingAsset)?.name} there
+            </span>
+          </div>
+        )}
         {placing && (
           <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3">
             <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-center text-sm backdrop-blur">
@@ -178,7 +221,7 @@ export function StageSection(props: {
             </span>
           </div>
         )}
-        {ready && !placing && (!at || props.moved) && (
+        {ready && !placing && !placingAsset && (!at || props.moved) && (
           <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3">
             <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-center text-sm backdrop-blur">
               <PersonStanding className="size-4 shrink-0 text-primary" />
@@ -222,6 +265,26 @@ export function StageSection(props: {
             </>
           )}
         </div>
+      )}
+
+      {floor && (
+        <More
+          label="Assets"
+          summary={assets.length ? `${assets.length}: ${assets.map((a) => a.name).join(", ")}` : "objects made in 3D from a description, a picture or the character's assets"}
+          open={!!placingAsset || !!pickedAsset || assetsBusy || assets.some((x) => x.glb && !x.at)}
+        >
+          <AssetsPanel
+            projectId={props.projectId}
+            assets={assets}
+            jobs={props.assetJobs}
+            characterAssets={props.characterAssets}
+            picked={pickedAsset}
+            onPick={setPickedAsset}
+            placing={placingAsset}
+            onPlace={(id) => (setPlacing(null), setPlacingAsset(id))}
+            onChange={spot}
+          />
+        </More>
       )}
 
       {floor && (

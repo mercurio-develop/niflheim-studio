@@ -5,10 +5,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { cropBox, maskBox, pngSize, removePrompt, type Box } from "@/lib/brush";
 import { ASSETS } from "../flags";
+import { paintViews } from "@/lib/asset-3d";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { characterImage, frontPrompt, viewImage, viewPrompt, VIEWS, viewsFor } from "@/lib/progress";
-import { getProject, projectDir, updateProject, type AssetView, type Edit, type TurnaroundOptions, type ViewId } from "@/lib/store";
+import { getProject, projectDir, updateProject, type Edit, type TurnaroundOptions, type ViewId } from "@/lib/store";
 
 const View = z.enum(["front", "threequarter", "side", "back", "top", "bottom"]);
 const Name = z.string().trim().toLowerCase().min(2).max(40).regex(/^[a-z][a-z \-]*$/);
@@ -221,39 +222,17 @@ export async function generateView(id: string, rawView: string) {
 }
 
 const assetKey = (name: string) => `asset:${slug(name)}`;
-const ASSET_VIEWS: { id: AssetView; from: string }[] = [
-  { id: "front", from: "from the front" },
-  { id: "threequarter", from: "from a three-quarter angle" },
-  { id: "side", from: "from the side" },
-  { id: "back", from: "from the back" },
-];
-
 // The object's own views, like the character's: the front from its picture on grey (the parts
 // that were visible; Qwen completes the rest), then every other angle from that front.
 async function paintAsset(id: string, name: string, ctx: JobCtx) {
   const asset = (await getProject(id))?.assets?.find((a) => a.name === name);
   if (!asset) return;
-  let front: string | null = null;
-  for (const v of ASSET_VIEWS) {
-    await ctx.progress(`Painting the ${name} ${v.from}`);
-    const prompt = front
-      ? `Show this same ${name} ${v.from}, as a clean product view, centred, nothing else in the image, plain light grey background.`
-      : `Show only the ${name}${asset.cutout ? ", complete and whole, including the parts hidden in this picture," : " from this picture"} on its own, as a clean product view from the front, centred, nothing else in the image, plain light grey background.`;
-    const [image] = await runWorkflow({
-      workflow: "01_edit.api.json",
-      onSubmit: ctx.track,
-      set: [["17", "prompt", prompt], ["22", "seed", seed()]],
-      images: [["1", front ?? abs(id, asset.image)]],
-      output: "28",
-      outDir: abs(id, `turnaround/assets/${slug(name)}-${v.id}-${stamp()}`),
-    });
-    if (!(await ctx.alive())) return;
-    await updateProject(id, (q) => {
+  await paintViews(id, name, asset.image, !!asset.cutout, `turnaround/assets/${slug(name)}`, ctx, (v, image) =>
+    updateProject(id, (q) => {
       const a = q.assets?.find((x) => x.name === name);
-      if (a) a.views = { ...a.views, [v.id]: rel(id, image) };
-    });
-    front ??= image;
-  }
+      if (a) a.views = { ...a.views, [v]: image };
+    }),
+  );
 }
 
 // Later, on demand: one asset's views, or every asset's in one go.

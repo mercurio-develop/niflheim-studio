@@ -3,17 +3,18 @@
 import { useMemo, useRef, useState } from "react";
 import { Blocks } from "@/features/scene/components/blocks";
 import { CameraPath } from "@/features/scene/components/camera-path";
+import { SceneAssets } from "@/features/scene/components/scene-assets";
 import { CameraSection } from "@/features/scene/components/camera-section";
 import { CharacterCard } from "@/features/scene/components/character-card";
 import { StageViewer } from "@/features/scene/components/stage-viewer";
 import { ViewSwitch } from "@/features/scene/components/view-switch";
 import { DEFAULT_MOVE, inside, poses, renderKey, type CameraMove, type Vec } from "@/lib/camera";
-import type { Block, CameraRender, Job, SetData, StageData } from "@/lib/store";
+import type { Block, CameraRender, Job, SceneAsset, SetData, StageData } from "@/lib/store";
 
 // The active shot's camera (decision 0011): the Scene's stage with the character standing where
 // the Scene put them, and this shot's framing, move and walk. Overview shows the path with a gizmo
 // on each end and on the walk; Play flies it. Each shot keeps its own; saved as it is tuned.
-export function ShotCamera(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; cameraRender: CameraRender | null; blocks: Block[]; stageJob?: Job }) {
+export function ShotCamera(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; cameraRender: CameraRender | null; blocks: Block[]; assets: SceneAsset[]; stageJob?: Job }) {
   const s = props.set;
   const fill = s?.stage && s.stage.image === s.image ? s.stage.fill : undefined;
   const cam = fill?.camera;
@@ -42,6 +43,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
     <div className="relative aspect-[7/4] overflow-hidden rounded-lg border">
       <StageViewer mesh={file(fill!.mesh)} camera={cam} filled overview={overview} className="absolute inset-0">
         <Blocks blocks={props.blocks} />
+        <SceneAssets projectId={props.projectId} assets={props.assets} />
         <CharacterCard cutouts={Object.fromEntries(Object.entries(pl!.cutouts).map(([v, f]) => [v, file(f!)]))} at={pl!.at!} height={pl!.height} turn={pl!.turn} live={live} />
         <CameraPath
           poses={path.poses}

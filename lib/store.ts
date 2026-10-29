@@ -66,6 +66,21 @@ export type StageFill = { mesh: string; cameras: string; views: string[]; holes:
 // A greybox shape standing on the stage (metres, floor y = 0): at is the middle of its base, size
 // width, height, depth, turn degrees about y. The keyframes paint it as its label ("a wooden cart").
 export type Block = { id: string; kind: "box" | "cylinder" | "ramp"; at: [number, number, number]; size: [number, number, number]; turn: number; label: string };
+// An object made for the scene, from a prompt (its concept painted first), an uploaded picture or
+// one of the character's assets: its four views, then a coloured 3D model standing on the stage
+// (at: the middle of its base, height in metres, turn degrees about y) once placed.
+export type SceneAsset = {
+  id: string;
+  name: string;
+  from: "prompt" | "upload" | "character";
+  prompt?: string;
+  image?: string; // the picture its views are made from
+  views?: Partial<Record<AssetView, string>>;
+  glb?: string; // coloured
+  at?: [number, number, number];
+  height: number;
+  turn: number;
+};
 export type StageData = { source: string; cutouts: Partial<Record<ViewId, string>>; at?: [number, number, number]; height: number; turn: number; fill?: string };
 
 // The character as a 3D model (Hunyuan3D-2 MV from the front, side and back views). front: the
@@ -149,6 +164,7 @@ export type Project = {
   set?: SetData;
   stage?: StageData;
   blocks?: Block[]; // greybox shapes on the stage, painted into what their label says
+  sceneAssets?: SceneAsset[]; // objects made for the scene, standing on the stage in 3D
   camera?: CameraMove; // the scene's camera move (lib/camera.ts), aimed at the placed character
   cameraRender?: CameraRender; // the move rendered along its path, for the shot
   keyframes?: Keyframes; // the shot's keyframes along the camera move
