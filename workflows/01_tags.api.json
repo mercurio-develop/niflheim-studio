@@ -11,11 +11,12 @@
  "2": {
   "class_type": "DownloadAndLoadFlorence2Model",
   "inputs": {
-   "model": "MiaoshouAI/Florence-2-large-PromptGen-v2.0",
-   "precision": "fp16"
+   "model": "MiaoshouAI/Florence-2-base-PromptGen-v1.5",
+   "precision": "fp16",
+   "attention": "sdpa"
   },
   "_meta": {
-   "title": "Model: Florence-2 PromptGen v2"
+   "title": "Model: Florence-2 base PromptGen v1.5"
   }
  },
  "3": {

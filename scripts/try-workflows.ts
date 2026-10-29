@@ -64,10 +64,13 @@ const [[set], , , , [side]] = await Promise.all([
   run("03_key_detail", { set: [["14", "text", `the face of ${TROLL}, clean and well drawn`], ["6", "denoise", 0.22], ["7", "denoise", 0.35], ["6", "seed", 7], ["7", "seed", 7]], images: [["1", concept]], output: "8" }),
 ]);
 
-// Wave 2: needs the painted set and a side view.
+// Wave 2: needs the painted set and a side view. The fill gets real holes, as set_fill.py's renders
+// have them: the masked pixels blacked out, not content under a mask.
 const setImg = set ?? concept;
+const holed = path.join(OUT, "in/set-holed.png");
+if (set) await sh("magick", [set, setMask, "-alpha", "off", "-negate", "-compose", "multiply", "-composite", holed]);
 const [[filled]] = await Promise.all([
-  run("02_set_fill", { set: [["17", "prompt", "Fill the empty area with more misty pine forest, same painterly style."], ["22", "seed", 7]], images: [["1", setImg], ["2", setMask]], output: "28" }),
+  run("02_set_fill", { set: [["17", "prompt", "Fill the empty area with more misty pine forest, same painterly style."], ["22", "seed", 7]], images: [["1", set ? holed : setImg], ["2", setMask]], output: "28" }),
   run("02_moge", { images: [["1", setImg]], output: "5", ext: "glb" }),
   run("02_turnaround_mesh", { set: [["3", "seed", 7]], images: [["56", concept], ["85", side ?? concept], ["82", concept]], output: "67", ext: "glb" }),
 ]);

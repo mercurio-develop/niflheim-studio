@@ -76,7 +76,7 @@
         2
       ],
       "num_chunks": 8000,
-      "octree_resolution": 256
+      "octree_resolution": 384
     },
     "_meta": {
       "title": "Decode to voxels"
