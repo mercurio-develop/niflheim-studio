@@ -1,7 +1,7 @@
 "use server";
 
 import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { focusPhrase, keyFrames, propsKey, renderKey } from "@/lib/camera";
@@ -77,9 +77,24 @@ export async function saveKeys(id: string, form: FormData, rawNote: unknown, raw
     raw.push(rel(id, file));
   }
   const s = seed();
-  await updateProject(id, (q) => void (q.keyframes = { frames, raw, keys: raw.map(() => null), prompt: keyPrompt(q, note), note, seed: s, key, at: new Date().toISOString(), detail }));
+  await updateProject(id, (q) => void (q.keyframes = { frames, raw, keys: raw.map(() => null), captions: raw.map(() => null), prompt: keyPrompt(q, note), note, seed: s, key, at: new Date().toISOString(), detail }));
   await refine(id, raw.map((_, i) => i));
   done(id);
+}
+
+// Florence-2-large on the painted key (03_key_caption, about 12 s on Cloud): what is in the frame,
+// for the take prompt. It opens with "The image is a digital illustration of" and closes on the
+// mood or the background; only the first two sentences about the subject are kept.
+async function caption(image: string, outDir: string, track?: (jobId: string) => unknown) {
+  const [file] = await runWorkflow({ workflow: "03_key_caption.api.json", onSubmit: track, images: [["1", image]], output: "4", outDir, ext: "txt" });
+  const text = (await readFile(file, "utf8"))
+    .trim()
+    .replace(/^(the|this) (image|picture|frame|scene) (is|shows|depicts)( an? [\w\s,-]*?(illustration|painting|image|render|artwork|drawing) of)? /i, "");
+  return text
+    .split(/(?<=\.)\s+/)
+    .filter((x) => !/\b(overall|mood|atmosphere|background)\b/i.test(x))
+    .slice(0, 2)
+    .join(" ");
 }
 
 // Later keys see the painted first key as Qwen's picture 2, so every key keeps the same person,
@@ -134,6 +149,15 @@ async function refine(id: string, which: number[], reroll = false) {
         if (q.keyframes?.raw[i] === k.raw[i]) q.keyframes.keys[i] = rel(id, image);
       });
       if (i === 0) first = image;
+      // A caption that fails leaves the key without one; the take is still made from the context.
+      await ctx.progress(`Describing key ${n + 1} of ${which.length}`);
+      const text = await caption(image, `${outDir}-caption`, ctx.track).catch(() => null);
+      if (!(await ctx.alive())) return;
+      await updateProject(id, (q) => {
+        if (q.keyframes?.raw[i] !== k.raw[i]) return;
+        q.keyframes.captions ??= q.keyframes.raw.map(() => null);
+        q.keyframes.captions[i] = text;
+      });
     }
   }, "Painting the keyframes");
 }
@@ -143,5 +167,18 @@ export async function rerollKey(id: string, rawIndex: unknown) {
   const p = await load(id);
   if (!p.keyframes?.raw[i]) throw new Error("No such key.");
   await refine(id, [i], true);
+  done(id);
+}
+
+// The user's own words for what is in a key; an empty one drops it from the take prompt.
+export async function saveCaption(id: string, rawIndex: unknown, rawText: unknown) {
+  const i = z.number().int().min(0).max(8).parse(rawIndex);
+  const text = z.string().trim().max(600).parse(rawText);
+  await updateProject(id, (q) => {
+    const k = q.keyframes;
+    if (!k?.raw[i]) throw new Error("No such key.");
+    k.captions ??= k.raw.map(() => null);
+    k.captions[i] = text || null;
+  });
   done(id);
 }
