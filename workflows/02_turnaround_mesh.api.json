@@ -24,6 +24,9 @@
         0
       ],
       "denoise": 1
+    },
+    "_meta": {
+      "title": "Sample shape"
     }
   },
   "51": {
@@ -38,12 +41,18 @@
         0
       ],
       "crop": "none"
+    },
+    "_meta": {
+      "title": "Encode: front"
     }
   },
   "54": {
     "class_type": "ImageOnlyCheckpointLoader",
     "inputs": {
       "ckpt_name": "hunyuan3d-dit-v2-mv-turbo_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "Model: Hunyuan3D-2 MV turbo"
     }
   },
   "56": {
@@ -67,7 +76,10 @@
         2
       ],
       "num_chunks": 8000,
-      "octree_resolution": 256
+      "octree_resolution": 384
+    },
+    "_meta": {
+      "title": "Decode to voxels"
     }
   },
   "65": {
@@ -89,6 +101,9 @@
         "88",
         0
       ]
+    },
+    "_meta": {
+      "title": "Multi-view conditioning"
     }
   },
   "66": {
@@ -96,6 +111,9 @@
     "inputs": {
       "resolution": 3072,
       "batch_size": 1
+    },
+    "_meta": {
+      "title": "Empty shape latent"
     }
   },
   "67": {
@@ -106,6 +124,9 @@
         0
       ],
       "filename_prefix": "nifl/turnaround-mesh"
+    },
+    "_meta": {
+      "title": "Save: mesh (GLB)"
     }
   },
   "70": {
@@ -116,6 +137,9 @@
         0
       ],
       "shift": 1
+    },
+    "_meta": {
+      "title": "Model: shift 1"
     }
   },
   "78": {
@@ -126,6 +150,9 @@
         0
       ],
       "guidance": 3.5
+    },
+    "_meta": {
+      "title": "Guidance 3.5"
     }
   },
   "81": {
@@ -140,6 +167,9 @@
         0
       ],
       "crop": "none"
+    },
+    "_meta": {
+      "title": "Encode: back"
     }
   },
   "82": {
@@ -160,6 +190,9 @@
       ],
       "algorithm": "surface net",
       "threshold": 0.6
+    },
+    "_meta": {
+      "title": "Voxels to mesh"
     }
   },
   "85": {
@@ -183,6 +216,9 @@
         0
       ],
       "crop": "none"
+    },
+    "_meta": {
+      "title": "Encode: left"
     }
   },
   "88": {
@@ -197,6 +233,9 @@
         0
       ],
       "crop": "none"
+    },
+    "_meta": {
+      "title": "Encode: right"
     }
   },
   "89": {

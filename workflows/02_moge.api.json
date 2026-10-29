@@ -3,12 +3,18 @@
   "class_type": "LoadImage",
   "inputs": {
    "image": ""
+  },
+  "_meta": {
+   "title": "Load: set painting"
   }
  },
  "2": {
   "class_type": "LoadMoGeModel",
   "inputs": {
    "model_name": "moge_2_vitl_normal_fp16.safetensors"
+  },
+  "_meta": {
+   "title": "Model: MoGe 2"
   }
  },
  "3": {
@@ -28,6 +34,9 @@
    "force_projection": true,
    "apply_mask": true,
    "refine_steps": 3
+  },
+  "_meta": {
+   "title": "Estimate geometry"
   }
  },
  "4": {
@@ -41,6 +50,9 @@
    "decimation": 1,
    "discontinuity_threshold": 0.02,
    "texture": true
+  },
+  "_meta": {
+   "title": "Point map to mesh"
   }
  },
  "5": {
@@ -51,6 +63,9 @@
     0
    ],
    "filename_prefix": "nifl/stage"
+  },
+  "_meta": {
+   "title": "Save: stage mesh (GLB)"
   }
  },
  "6": {
@@ -61,6 +76,9 @@
     0
    ],
    "output": "depth"
+  },
+  "_meta": {
+   "title": "Render depth"
   }
  },
  "7": {
@@ -71,6 +89,9 @@
     0
    ],
    "filename_prefix": "nifl/stage-depth"
+  },
+  "_meta": {
+   "title": "Save: depth"
   }
  }
 }

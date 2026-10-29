@@ -3,12 +3,18 @@
   "class_type": "LoadImage",
   "inputs": {
    "image": ""
+  },
+  "_meta": {
+   "title": "Load: picture"
   }
  },
  "2": {
   "class_type": "LoadImage",
   "inputs": {
    "image": ""
+  },
+  "_meta": {
+   "title": "Load: mask"
   }
  },
  "3": {
@@ -19,6 +25,9 @@
     0
    ],
    "channel": "red"
+  },
+  "_meta": {
+   "title": "Mask from red channel"
   }
  },
  "4": {
@@ -30,6 +39,9 @@
    ],
    "expand": 4,
    "tapered_corners": true
+  },
+  "_meta": {
+   "title": "Grow mask"
   }
  },
  "5": {
@@ -39,6 +51,9 @@
     "4",
     0
    ]
+  },
+  "_meta": {
+   "title": "Invert mask"
   }
  },
  "6": {
@@ -52,6 +67,9 @@
     "5",
     0
    ]
+  },
+  "_meta": {
+   "title": "Cut out (alpha)"
   }
  },
  "10": {
@@ -62,6 +80,9 @@
     0
    ],
    "filename_prefix": "nifl/asset-cutout"
+  },
+  "_meta": {
+   "title": "Save: cutout"
   }
  },
  "7": {
@@ -71,6 +92,9 @@
     "1",
     0
    ]
+  },
+  "_meta": {
+   "title": "Size of picture"
   }
  },
  "8": {
@@ -86,6 +110,9 @@
    ],
    "batch_size": 1,
    "color": 14277081
+  },
+  "_meta": {
+   "title": "Grey backdrop"
   }
  },
  "9": {
@@ -106,6 +133,9 @@
     "4",
     0
    ]
+  },
+  "_meta": {
+   "title": "Asset on grey"
   }
  },
  "11": {
@@ -116,6 +146,9 @@
     0
    ],
    "filename_prefix": "nifl/asset-grey"
+  },
+  "_meta": {
+   "title": "Save: on grey"
   }
  }
 }
