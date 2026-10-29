@@ -1,16 +1,15 @@
 "use server";
 
 import path from "node:path";
-import { homedir } from "node:os";
 import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
 import { DEFAULT_MOVE, momentsOf, type CameraMove, type Mark } from "@/lib/camera";
 import { allShots, getProject, projectDir, updateProject, type Project } from "@/lib/store";
+import { PYTHON } from "@/lib/python";
 
 const run = promisify(execFile);
-const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
 const LAST_FRAME = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "last_frame.py");
 const done = (id: string) => revalidatePath(`/p/${id}/shot`);
 

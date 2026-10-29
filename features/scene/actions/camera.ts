@@ -1,7 +1,6 @@
 "use server";
 
 import path from "node:path";
-import { homedir } from "node:os";
 import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -11,9 +10,9 @@ import { FOCUS, FRAMINGS, MOVES, c2w, poses, renderKey, type CameraMove } from "
 import { startJob } from "@/lib/jobs";
 import { currentFill } from "@/lib/progress";
 import { getProject, projectDir, updateProject } from "@/lib/store";
+import { PYTHON } from "@/lib/python";
 
 const run = promisify(execFile);
-const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
 const SCRIPT = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "stage_path.py");
 const done = (id: string) => {
   revalidatePath(`/p/${id}/scene`);

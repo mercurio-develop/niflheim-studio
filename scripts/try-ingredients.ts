@@ -11,7 +11,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { runWorkflow } from "../lib/comfy.ts";
 import { frameCount } from "../lib/camera.ts";
 import { middleImageNode, shapeShot } from "../features/shot/graph.ts";
-import { addIngredients, SHEET_FRAMES, sheetOnly, sheetPrompt, SHEET_NODE, withSheet, type SheetRows } from "../features/shot/ingredients.ts";
+import { addIngredients, SHEET_FRAMES, sheetOnly, sheetPrompt, SHEET_NODE, whoOf, withSheet, type SheetRows } from "../features/shot/ingredients.ts";
 
 const id = process.argv[2] ?? "c4a7105e01";
 const action = process.argv[3] ?? "walks slowly down the alley toward the camera, looking around, the coat stirring in the wind";
@@ -34,10 +34,7 @@ const spec = { out: sheet, views, props: [], set: p.set?.image ? path.join(dir, 
 const made = assets ? (JSON.parse(readFileSync(path.join(out, "sheet-assets.json"), "utf8")) as { rows: SheetRows; items: string[] }) : null;
 const rows = made?.rows ?? (JSON.parse(execFileSync(python, ["-I", "scripts/make_sheet.py", JSON.stringify(spec)], { encoding: "utf8" })) as SheetRows);
 
-// "a young lantern keeper in a hooded wool coat, ..." is named "the young lantern keeper", the rest describes them.
-const [first, ...rest] = String(p.character.prompt).split(",");
-const [name, wearing] = first.split(/ in (?=a |an |the )/);
-const who = { name: name.trim().replace(/^(a|an) /, "the "), description: [wearing && `in ${wearing}`, ...rest].filter(Boolean).join(",").trim() };
+const who = whoOf(String(p.character.prompt));
 const video = `One continuous take with no cuts. The camera ${p.camera.move === "push" ? "pushes in slowly" : "moves"} toward ${p.character.prompt}, who ${action}, with a calm, curious expression. ${p.set.prompt}. Consistent art style.`;
 const negative = "worst quality, inconsistent motion, blurry, jittery, distorted, cut, scene change";
 const images = (): [string, string][] => [["1", keys[0]], ["2", keys.at(-1)], ...keys.slice(1, -1).map((f: string, i: number) => [middleImageNode(i), f] as [string, string])];

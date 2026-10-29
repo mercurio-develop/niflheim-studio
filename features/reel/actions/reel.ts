@@ -1,7 +1,6 @@
 "use server";
 
 import path from "node:path";
-import { homedir } from "node:os";
 import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -10,9 +9,9 @@ import { z } from "zod";
 import { startJob } from "@/lib/jobs";
 import { getProject, projectDir, updateProject } from "@/lib/store";
 import { reelClips } from "../clips";
+import { PYTHON } from "@/lib/python";
 
 const run = promisify(execFile);
-const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
 const SCRIPT = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "reel.py");
 const done = (id: string) => revalidatePath(`/p/${id}/export`);
 

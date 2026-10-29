@@ -30,7 +30,7 @@ const EXAMPLES: { start: string; then: string; end: string }[] = [
 // about the move, the character's sheet for a shot about them.
 const KINDS: { id: ShotKind; label: string; line: string }[] = [
   { id: "camera", label: "Camera move", line: "The takes follow the move: with the clay clip drawn (Keyframes), every frame of it, from the first keyframe; without it, the keyframes. For push-ins, arcs and walks through the set." },
-  { id: "character", label: "Character", line: "The takes hold the character's face, clothes and things to their sheet, 5 s from the first keyframe: for close-ups and acting." },
+  { id: "character", label: "Character", line: "The takes hold the character's face, clothes and things to their sheet, 5 s, from the sheet alone unless you start from the first keyframe: for close-ups and acting." },
 ];
 const EXPRESSIONS = ["calm", "smiling", "curious", "worried", "frightened", "angry", "sad", "determined"];
 const BEATS = [
@@ -58,7 +58,8 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
   const run = (fn: () => Promise<unknown>) => start(() => fn().then(() => setError(null), (e: Error) => setError(e.message)));
   const seconds = character ? 5 : props.seconds;
   const expected = Math.round(25 + seconds * 18);
-  const canShoot = !busy && props.ready && beats.start.trim().length >= 3 && (!character || !!props.sheet);
+  // A character take from the sheet alone needs no keyframes; every other take needs today's.
+  const canShoot = !busy && beats.start.trim().length >= 3 && (character ? !!props.sheet && (!fromKey || props.ready) : props.ready);
 
   return (
     <>

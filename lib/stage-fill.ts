@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { runWorkflow } from "./comfy.ts";
+import { PYTHON } from "./python";
 
 // Fill the holes of a MoGe stage (behind columns, past the frame, under the sky): render the
 // stage from a few cameras around the painting's own (scripts/set_fill.py), let Qwen paint the
@@ -13,7 +13,6 @@ import { runWorkflow } from "./comfy.ts";
 
 const run = promisify(execFile);
 const SCRIPT = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "set_fill.py");
-const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
 const MIN_HOLES = 0.02; // a view with less missing than this is not worth painting
 
 async function py<T>(...args: string[]): Promise<T> {

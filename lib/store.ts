@@ -76,7 +76,8 @@ export type Block = { id: string; kind: "box" | "cylinder" | "ramp"; at: [number
 // alone or with the prompt edited; image is the painted picture, cutout the body or item cut out.
 export type SheetCell = { id: string; kind: "view" | "face" | "item"; label: string; prompt: string; image?: string; cutout?: string };
 // rows: what scripts/make_sheet.py drew, top to bottom, so a take's prompt can say each cell by its place.
-export type CharacterSheet = { cells: SheetCell[]; drawn?: string; rows?: { kind: "faces+items" | "bodies" | "set"; cells: string[] }[]; at?: string };
+export type SheetRow = { kind: "faces+items" | "bodies" | "set"; cells: string[] };
+export type CharacterSheet = { cells: SheetCell[]; drawn?: string; rows?: SheetRow[]; at?: string };
 export type CharacterPose = { id: string; label: string; prompt: string; views: Partial<Record<AssetView, string>>; cutouts: Partial<Record<AssetView, string>> };
 
 // An object made for the scene, from a prompt (its concept painted first), an uploaded picture or

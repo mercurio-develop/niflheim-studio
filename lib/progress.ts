@@ -1,5 +1,6 @@
 import type { CharacterData, Project, TurnaroundOptions, ViewId } from "./store";
 import type { StepSlug } from "./steps";
+import { propsKey, renderKey } from "./camera";
 
 // lib/store.ts charOf, without importing it: store pulls in node:fs and this file reaches the browser.
 export function charIn(p: Project, cid = "c1"): CharacterData {
@@ -105,6 +106,15 @@ export type StepState = "done" | "stale" | "todo";
 
 // The filled stage the user stands the character on: the fill of the chosen painting's stage.
 export const currentFill = (p: Project) => (p.set?.stage && p.set.stage.image === p.set.image ? p.set.stage.fill : undefined);
+
+// The stage a shot is drawn from (the move, where the character stands, the filled set, the blocks
+// and objects): keyframes and the clay clip keep the key they were made from, and are out of date
+// when it changes. null until the character stands on a filled stage with a move.
+export function sceneKey(p: Project) {
+  const fill = currentFill(p);
+  if (!fill?.camera?.floor || !p.stage?.at || !p.camera) return null;
+  return renderKey(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn) + propsKey(p.blocks, p.sceneAssets);
+}
 
 // Why a placement no longer fits: the turnaround front changed (cut out again) or the set was
 // rebuilt or refilled since it was placed (place again). Placements from before stage.fill are

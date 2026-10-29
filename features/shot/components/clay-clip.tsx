@@ -7,6 +7,7 @@ import { LoadingDots } from "@/components/loading-dots";
 import { KeyCapture } from "@/features/scene/components/key-capture";
 import type { LayoutClip } from "@/lib/store";
 import { saveClay } from "../actions/layout";
+import { CLAY_FRAME_MAX } from "../state";
 
 type Capture = Omit<React.ComponentProps<typeof KeyCapture>, "projectId" | "onDone" | "onError" | "clay" | "onFrame">;
 
@@ -22,6 +23,7 @@ export function ClayClip(props: { projectId: string; capture: Capture; layout: L
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const captured = (jpegs: Blob[]) => {
     setCapturing(false);
+    if (jpegs.some((b) => b.size >= CLAY_FRAME_MAX)) return setError("A clay frame came out too big to send; draw it again.");
     const form = new FormData();
     jpegs.forEach((b, i) => form.append(`f${i}`, new File([b], `${i}.jpg`, { type: "image/jpeg" })));
     start(() => saveClay(props.projectId, form).then(() => setError(null), (e: Error) => setError(e.message)));

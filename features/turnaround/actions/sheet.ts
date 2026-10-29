@@ -1,7 +1,6 @@
 "use server";
 
 import path from "node:path";
-import { homedir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
@@ -10,6 +9,7 @@ import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { relaxedPrompt, turnPrompt, viewImage } from "@/lib/progress";
 import { CID, charDir, charKey, charOf, getProject, projectDir, updateProject, type SheetCell, type TurnaroundOptions } from "@/lib/store";
+import { PYTHON } from "@/lib/python";
 
 // The character's Ingredients reference sheet (the LTX-2.5 IC-LoRA that keeps who and what is in a
 // take): pictures painted from the turnaround's front with Qwen-Image-Edit, like Lightricks' own
@@ -22,7 +22,6 @@ const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const rel = (id: string, f: string) => path.relative(projectDir(id), f);
 const seed = () => Math.floor(Math.random() * 2 ** 31);
 const run = promisify(execFile);
-const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
 const DRAW = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "make_sheet.py");
 const done = (id: string) => {
   revalidatePath(`/p/${id}/character`);
@@ -105,6 +104,9 @@ export async function makeSheet(id: string, rawItems: unknown, rawCid?: unknown)
   if (!p) throw new Error("Project not found.");
   const front = viewImage(p, "front", cid);
   if (!front) throw new Error("Make the turnaround first: the sheet is painted from its front.");
+  // Checked before the cells are replaced: a running sheet job holds the lock, and new cells saved
+  // under it would wait for a job that never starts.
+  if (p.jobs[jobKey(cid)]?.status === "running") throw new Error("The sheet is still being painted; wait for it or stop it first.");
   const cells = plan(charOf(p, cid).turnaround?.options, items);
   await updateProject(id, (q) => void (charOf(q, cid).sheet = { cells }));
   await startJob(

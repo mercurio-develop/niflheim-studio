@@ -4,10 +4,10 @@ import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { focusPhrase, keyFrames, propsKey, renderKey } from "@/lib/camera";
+import { focusPhrase, keyFrames } from "@/lib/camera";
 import { runWorkflow } from "@/lib/comfy";
 import { startJob } from "@/lib/jobs";
-import { currentFill } from "@/lib/progress";
+import { sceneKey } from "@/lib/progress";
 import { getProject, projectDir, updateProject, type Project } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { faceFixable, faceReference, matchFace } from "../face";
@@ -27,11 +27,6 @@ async function load(id: string): Promise<Project> {
 }
 
 // Today's move, placement and stage, as the camera render keys them; null when not ready.
-function sceneKey(p: Project) {
-  const fill = currentFill(p);
-  if (!fill?.camera?.floor || !p.stage?.at || !p.camera) return null;
-  return renderKey(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn) + propsKey(p.blocks, p.sceneAssets);
-}
 
 // Every key is the capture repainted on its own with one strict prompt and one seed: keep
 // everything, add nothing, fill the stage's black holes. No character description: naming "a
@@ -75,6 +70,9 @@ export async function saveKeys(id: string, form: FormData, rawNote: unknown, raw
   const files = frames.map((_, i) => Key.parse(form.get(`key${i}`)));
   const note = Note.parse(rawNote ?? "");
   const detail = z.boolean().parse(rawDetail);
+  // Checked before anything is written: a key being painted (or its face fixed) holds the lock,
+  // and new raws saved under it would wait for a job that never starts.
+  if (p.jobs.keyframes?.status === "running") throw new Error("A key is still being painted; wait for it or cancel it first.");
   const dir = abs(id, `shot/keys/${Date.now().toString(36)}`);
   await mkdir(dir, { recursive: true });
   const raw: string[] = [];
