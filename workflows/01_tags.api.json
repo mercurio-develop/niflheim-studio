@@ -3,6 +3,9 @@
   "class_type": "LoadImage",
   "inputs": {
    "image": ""
+  },
+  "_meta": {
+   "title": "Load: picture"
   }
  },
  "2": {
@@ -10,6 +13,9 @@
   "inputs": {
    "model": "MiaoshouAI/Florence-2-large-PromptGen-v2.0",
    "precision": "fp16"
+  },
+  "_meta": {
+   "title": "Model: Florence-2 PromptGen v2"
   }
  },
  "3": {
@@ -32,6 +38,9 @@
    "do_sample": false,
    "output_mask_select": "",
    "seed": 1
+  },
+  "_meta": {
+   "title": "Tag the picture"
   }
  },
  "4": {
@@ -43,6 +52,9 @@
    ],
    "filename_prefix": "nifl/tags",
    "format": "txt"
+  },
+  "_meta": {
+   "title": "Save: tags"
   }
  }
 }

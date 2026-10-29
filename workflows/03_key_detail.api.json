@@ -70,6 +70,9 @@
    "bbox_fill": false,
    "drop_size": 8,
    "contour_fill": false
+  },
+  "_meta": {
+   "title": "Faces to segments"
   }
  },
  "5": {
@@ -84,6 +87,9 @@
    "bbox_fill": false,
    "drop_size": 8,
    "contour_fill": false
+  },
+  "_meta": {
+   "title": "Hands to segments"
   }
  },
  "11": {
@@ -92,6 +98,9 @@
    "clip_name": "qwen_3_4b_fp8_mixed.safetensors",
    "type": "lumina2",
    "device": "default"
+  },
+  "_meta": {
+   "title": "Text encoder: Qwen3 4B"
   }
  },
  "10": {
@@ -99,12 +108,18 @@
   "inputs": {
    "unet_name": "z_image_turbo_int8_convrot.safetensors",
    "weight_dtype": "default"
+  },
+  "_meta": {
+   "title": "Model: Z-Image Turbo"
   }
  },
  "12": {
   "class_type": "VAELoader",
   "inputs": {
    "vae_name": "ae.safetensors"
+  },
+  "_meta": {
+   "title": "VAE: Flux"
   }
  },
  "13": {
@@ -115,6 +130,9 @@
     0
    ],
    "shift": 3
+  },
+  "_meta": {
+   "title": "Model: shift 3"
   }
  },
  "14": {
@@ -150,6 +168,9 @@
     "14",
     0
    ]
+  },
+  "_meta": {
+   "title": "Negative (zeroed)"
   }
  },
  "6": {
@@ -260,6 +281,9 @@
     0
    ],
    "filename_prefix": "nifl/key-detail"
+  },
+  "_meta": {
+   "title": "Save: refined key"
   }
  }
 }

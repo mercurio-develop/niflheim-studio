@@ -4,6 +4,9 @@
   "inputs": {
    "unet_name": "z_image_turbo_int8_convrot.safetensors",
    "weight_dtype": "default"
+  },
+  "_meta": {
+   "title": "Model: Z-Image Turbo"
   }
  },
  "2": {
@@ -12,12 +15,18 @@
    "clip_name": "qwen_3_4b_fp8_mixed.safetensors",
    "type": "lumina2",
    "device": "default"
+  },
+  "_meta": {
+   "title": "Text encoder: Qwen3 4B"
   }
  },
  "3": {
   "class_type": "VAELoader",
   "inputs": {
    "vae_name": "ae.safetensors"
+  },
+  "_meta": {
+   "title": "VAE: Flux"
   }
  },
  "4": {
@@ -28,6 +37,9 @@
     0
    ],
    "shift": 3
+  },
+  "_meta": {
+   "title": "Model: shift 3"
   }
  },
  "5": {
@@ -38,6 +50,9 @@
     "2",
     0
    ]
+  },
+  "_meta": {
+   "title": "Prompt"
   }
  },
  "6": {
@@ -47,6 +62,9 @@
     "5",
     0
    ]
+  },
+  "_meta": {
+   "title": "Negative (zeroed)"
   }
  },
  "7": {
@@ -55,6 +73,9 @@
    "width": 1344,
    "height": 768,
    "batch_size": 1
+  },
+  "_meta": {
+   "title": "Size (1344x768)"
   }
  },
  "8": {
@@ -82,6 +103,9 @@
    "sampler_name": "res_multistep",
    "scheduler": "simple",
    "denoise": 1
+  },
+  "_meta": {
+   "title": "Sample (8 steps)"
   }
  },
  "9": {
@@ -95,6 +119,9 @@
     "3",
     0
    ]
+  },
+  "_meta": {
+   "title": "Decode"
   }
  },
  "10": {
@@ -105,6 +132,9 @@
     0
    ],
    "filename_prefix": "nifl/set"
+  },
+  "_meta": {
+   "title": "Save: set painting"
   }
  }
 }

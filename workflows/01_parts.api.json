@@ -1,6 +1,61 @@
 {
-  "1": { "class_type": "LoadImage", "inputs": { "image": "" } },
-  "2": { "class_type": "SAM3Segment", "inputs": { "image": ["1", 0], "model_name": "sam3.1_multiplex_fp16", "prompt": "jacket", "output_mode": "Merged", "confidence_threshold": 0.5, "max_segments": 0, "segment_pick": 0, "mask_blur": 0, "mask_offset": 0, "device": "Auto", "invert_output": false, "unload_model": false, "background": "Alpha", "background_color": "#222222" } },
-  "3": { "class_type": "MaskToImage", "inputs": { "mask": ["2", 1] } },
-  "4": { "class_type": "SaveImage", "inputs": { "images": ["3", 0], "filename_prefix": "nifl/part" } }
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    },
+    "_meta": {
+      "title": "Load: picture"
+    }
+  },
+  "2": {
+    "class_type": "SAM3Segment",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "model_name": "sam3.1_multiplex_fp16",
+      "prompt": "jacket",
+      "output_mode": "Merged",
+      "confidence_threshold": 0.5,
+      "max_segments": 0,
+      "segment_pick": 0,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "device": "Auto",
+      "invert_output": false,
+      "unload_model": false,
+      "background": "Alpha",
+      "background_color": "#222222"
+    },
+    "_meta": {
+      "title": "Find part (SAM3)"
+    }
+  },
+  "3": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "2",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Mask to image"
+    }
+  },
+  "4": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "3",
+        0
+      ],
+      "filename_prefix": "nifl/part"
+    },
+    "_meta": {
+      "title": "Save: part mask"
+    }
+  }
 }

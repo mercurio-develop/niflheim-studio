@@ -28,6 +28,9 @@
       "width": 768,
       "height": 448,
       "crop": "center"
+    },
+    "_meta": {
+      "title": "Scale first key"
     }
   },
   "4": {
@@ -41,6 +44,9 @@
       "width": 768,
       "height": 448,
       "crop": "center"
+    },
+    "_meta": {
+      "title": "Scale last key"
     }
   },
   "5": {
@@ -51,6 +57,9 @@
         0
       ],
       "img_compression": 18
+    },
+    "_meta": {
+      "title": "Prep first key"
     }
   },
   "6": {
@@ -61,6 +70,9 @@
         0
       ],
       "img_compression": 18
+    },
+    "_meta": {
+      "title": "Prep last key"
     }
   },
   "10": {
@@ -68,18 +80,27 @@
     "inputs": {
       "unet_name": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
       "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Model: LTX-2.5 22B distilled"
     }
   },
   "11": {
     "class_type": "VAELoader",
     "inputs": {
       "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
+    },
+    "_meta": {
+      "title": "VAE: LTX video"
     }
   },
   "12": {
     "class_type": "VAELoader",
     "inputs": {
       "vae_name": "ltx-2.5-audio-vae-bf16.safetensors"
+    },
+    "_meta": {
+      "title": "VAE: LTX audio"
     }
   },
   "13": {
@@ -88,6 +109,9 @@
       "clip_name": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
       "type": "ltxv",
       "device": "default"
+    },
+    "_meta": {
+      "title": "Text encoder: Gemma 4 12B"
     }
   },
   "20": {
@@ -128,6 +152,9 @@
         0
       ],
       "frame_rate": 24
+    },
+    "_meta": {
+      "title": "Frame rate 24"
     }
   },
   "30": {
@@ -228,6 +255,9 @@
         "33",
         0
       ]
+    },
+    "_meta": {
+      "title": "Join video + audio latents"
     }
   },
   "40": {
@@ -256,6 +286,9 @@
       ],
       "video_cfg": 1,
       "audio_cfg": 1
+    },
+    "_meta": {
+      "title": "Guider (CFG 1)"
     }
   },
   "42": {
@@ -263,12 +296,18 @@
     "inputs": {
       "eta": 0,
       "s_noise": 1
+    },
+    "_meta": {
+      "title": "Sampler: Euler ancestral"
     }
   },
   "43": {
     "class_type": "ManualSigmas",
     "inputs": {
       "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+    },
+    "_meta": {
+      "title": "Sigmas (distilled, 8 steps)"
     }
   },
   "44": {
@@ -294,6 +333,9 @@
         "34",
         0
       ]
+    },
+    "_meta": {
+      "title": "Sample"
     }
   },
   "50": {
@@ -303,6 +345,9 @@
         "44",
         1
       ]
+    },
+    "_meta": {
+      "title": "Split video / audio"
     }
   },
   "51": {
@@ -320,6 +365,9 @@
         "50",
         0
       ]
+    },
+    "_meta": {
+      "title": "Drop the guide frames"
     }
   },
   "52": {
@@ -337,6 +385,9 @@
       "overlap": 64,
       "temporal_size": 64,
       "temporal_overlap": 16
+    },
+    "_meta": {
+      "title": "Decode video (tiled)"
     }
   },
   "53": {
@@ -350,6 +401,9 @@
         "12",
         0
       ]
+    },
+    "_meta": {
+      "title": "Decode audio"
     }
   },
   "54": {
@@ -364,6 +418,9 @@
         0
       ],
       "fps": 24
+    },
+    "_meta": {
+      "title": "Video + audio"
     }
   },
   "55": {
@@ -376,6 +433,9 @@
       "filename_prefix": "niflheim/shot",
       "format": "auto",
       "codec": "auto"
+    },
+    "_meta": {
+      "title": "Save: shot"
     }
   }
 }

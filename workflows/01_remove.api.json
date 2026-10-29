@@ -3,6 +3,9 @@
   "class_type": "LoadImage",
   "inputs": {
    "image": ""
+  },
+  "_meta": {
+   "title": "Load: picture"
   }
  },
  "4": {
@@ -16,6 +19,9 @@
    "height": 512,
    "x": 0,
    "y": 0
+  },
+  "_meta": {
+   "title": "Crop: edit area"
   }
  },
  "6": {
@@ -28,6 +34,9 @@
    "upscale_method": "lanczos",
    "megapixels": 1.0,
    "resolution_steps": 16
+  },
+  "_meta": {
+   "title": "Scale crop to 1 MP"
   }
  },
  "10": {
@@ -35,6 +44,9 @@
   "inputs": {
    "unet_name": "qwen_image_edit_2511_int8_convrot.safetensors",
    "weight_dtype": "default"
+  },
+  "_meta": {
+   "title": "Model: Qwen-Image-Edit 2511"
   }
  },
  "11": {
@@ -43,12 +55,18 @@
    "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
    "type": "qwen_image",
    "device": "default"
+  },
+  "_meta": {
+   "title": "Text encoder: Qwen2.5-VL"
   }
  },
  "12": {
   "class_type": "VAELoader",
   "inputs": {
    "vae_name": "qwen_image_vae.safetensors"
+  },
+  "_meta": {
+   "title": "VAE: Qwen-Image"
   }
  },
  "14": {
@@ -59,6 +77,9 @@
     0
    ],
    "shift": 3.1
+  },
+  "_meta": {
+   "title": "Model: shift 3.1"
   }
  },
  "15": {
@@ -69,6 +90,9 @@
     0
    ],
    "strength": 1
+  },
+  "_meta": {
+   "title": "Model: CFG norm"
   }
  },
  "13": {
@@ -80,6 +104,9 @@
    ],
    "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
    "strength_model": 1
+  },
+  "_meta": {
+   "title": "LoRA: Lightning 4 steps"
   }
  },
  "16": {
@@ -89,6 +116,9 @@
     "6",
     0
    ]
+  },
+  "_meta": {
+   "title": "Scale for Qwen"
   }
  },
  "17": {
@@ -107,6 +137,9 @@
     0
    ],
    "prompt": ""
+  },
+  "_meta": {
+   "title": "Edit prompt"
   }
  },
  "18": {
@@ -125,6 +158,9 @@
     0
    ],
    "prompt": ""
+  },
+  "_meta": {
+   "title": "Negative (empty)"
   }
  },
  "19": {
@@ -135,6 +171,9 @@
     0
    ],
    "reference_latents_method": "index_timestep_zero"
+  },
+  "_meta": {
+   "title": "Reference latent: prompt"
   }
  },
  "20": {
@@ -145,6 +184,9 @@
     0
    ],
    "reference_latents_method": "index_timestep_zero"
+  },
+  "_meta": {
+   "title": "Reference latent: negative"
   }
  },
  "21": {
@@ -158,6 +200,9 @@
     "12",
     0
    ]
+  },
+  "_meta": {
+   "title": "Encode picture"
   }
  },
  "22": {
@@ -185,6 +230,9 @@
    "sampler_name": "euler",
    "scheduler": "simple",
    "denoise": 1
+  },
+  "_meta": {
+   "title": "Sample (4 steps)"
   }
  },
  "23": {
@@ -198,6 +246,9 @@
     "12",
     0
    ]
+  },
+  "_meta": {
+   "title": "Decode"
   }
  },
  "24": {
@@ -207,6 +258,9 @@
     "4",
     0
    ]
+  },
+  "_meta": {
+   "title": "Size of crop"
   }
  },
  "25": {
@@ -226,6 +280,9 @@
     1
    ],
    "crop": "disabled"
+  },
+  "_meta": {
+   "title": "Scale edit back to crop size"
   }
  },
  "26": {
@@ -242,6 +299,9 @@
    "blur_radius": 8.0,
    "lerp_alpha": 1.0,
    "decay_factor": 1.0
+  },
+  "_meta": {
+   "title": "Soft paste mask"
   }
  },
  "27": {
@@ -262,6 +322,9 @@
     "26",
     0
    ]
+  },
+  "_meta": {
+   "title": "Paste edit into picture"
   }
  },
  "28": {
@@ -272,12 +335,18 @@
     0
    ],
    "filename_prefix": "nifl/remove"
+  },
+  "_meta": {
+   "title": "Save: removed"
   }
  },
  "2": {
   "class_type": "LoadImage",
   "inputs": {
    "image": ""
+  },
+  "_meta": {
+   "title": "Load: mask"
   }
  },
  "3": {
@@ -288,6 +357,9 @@
     0
    ],
    "channel": "red"
+  },
+  "_meta": {
+   "title": "Mask from red channel"
   }
  },
  "5": {
@@ -301,6 +373,9 @@
    "y": 0,
    "width": 512,
    "height": 512
+  },
+  "_meta": {
+   "title": "Crop: mask"
   }
  },
  "7": {
@@ -312,6 +387,9 @@
    ],
    "expand": 18,
    "tapered_corners": true
+  },
+  "_meta": {
+   "title": "Grow mask (area to repaint)"
   }
  },
  "30": {
@@ -327,6 +405,9 @@
    ],
    "batch_size": 1,
    "color": 8421504
+  },
+  "_meta": {
+   "title": "Grey fill"
   }
  },
  "31": {
@@ -347,6 +428,9 @@
     "7",
     0
    ]
+  },
+  "_meta": {
+   "title": "Grey out what gets repainted"
   }
  }
 }
