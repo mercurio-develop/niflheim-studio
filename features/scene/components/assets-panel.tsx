@@ -10,6 +10,7 @@ import type { Job, SceneAsset } from "@/lib/store";
 import { cancelAsset, deleteAsset, makeAsset, remakeAsset } from "../actions/assets";
 import { chip } from "./chip";
 import { assetReady } from "./scene-assets";
+import { CastPicker, type CastOption } from "./cast-picker";
 
 type From = SceneAsset["from"];
 const FROM: { id: From; label: string }[] = [
@@ -27,6 +28,7 @@ export function AssetsPanel(props: {
   assets: SceneAsset[];
   jobs: Record<string, Job>;
   characterAssets: string[]; // names of the character's assets
+  cast: CastOption[]; // the other characters made in the Character step
   picked: string | null;
   onPick: (id: string | null) => void;
   placing: string | null;
@@ -65,6 +67,7 @@ export function AssetsPanel(props: {
 
   return (
     <div className="flex flex-col gap-3">
+      <CastPicker projectId={props.projectId} cast={props.cast} jobs={props.jobs} />
       <p className="text-xs text-muted-foreground">Someone else for the scene (a friend, a unicorn) or an object in 3D, standing on the stage. They show in every shot, and the keyframes paint them in the scene&apos;s style. Say what they do in the shot&apos;s beats.</p>
       <div className="flex flex-wrap items-center gap-1.5">
         {(["character", "object"] as const).map((k) => (

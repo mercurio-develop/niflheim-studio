@@ -48,6 +48,9 @@ function keyPrompt(p: Project, note: string) {
   return [
     "Keep everything in this picture exactly where it is and add nothing new: no new objects, nothing in the hands that is not already there.",
     `Make it one finished frame, ${style}: light the character so they belong in the scene with a soft shadow on the ground, repaint smeared, jagged or broken patches cleanly, and fill any black holes at the edges with the scene around them. Same camera framing.`,
+    // Relighting turned a black cat brown with glowing eyes (06_cast stage-cast proof): the light may
+    // change, the characters may not.
+    "Every character keeps their own colours, markings, fur, skin and clothes exactly as they are; only the light on them changes.",
     blocksPhrase(p),
     focusPhrase(p.camera),
     note,
@@ -137,10 +140,13 @@ async function refine(id: string, which: number[], reroll = false) {
         // which keeps the expression and the person; hands 0.35, which fixes fingers).
         await ctx.progress(`Fixing faces and hands in key ${n + 1} of ${which.length}`);
         const style = styleById(p.set?.style || p.character.style).phrase;
+        // With other characters on the stage every face gets the same prompt, so it names nobody:
+        // naming the main character would repaint the others' faces as theirs.
+        const who = (p.sceneAssets ?? []).some((a) => a.kind === "character" && a.at) ? "the same face as in the picture, keeping who it is" : `the face of ${p.character.prompt}`;
         [image] = await runWorkflow({
           workflow: "03_key_detail.api.json",
           onSubmit: ctx.track,
-          set: [["14", "text", `the face of ${p.character.prompt}, clean and well drawn, clear eyes, nose and mouth, ${style}`], ["16", "text", `a well-drawn hand with five fingers, natural pose, ${style}`], ["6", "denoise", 0.22], ["7", "denoise", 0.35], ["6", "seed", k.seed], ["7", "seed", k.seed]],
+          set: [["14", "text", `${who}, clean and well drawn, clear eyes, nose and mouth, ${style}`], ["16", "text", `a well-drawn hand with five fingers, natural pose, ${style}`], ["6", "denoise", 0.22], ["7", "denoise", 0.35], ["6", "seed", k.seed], ["7", "seed", k.seed]],
           images: [["1", image]],
           output: "8",
           outDir: `${outDir}-detail`,
