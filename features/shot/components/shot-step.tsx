@@ -29,7 +29,7 @@ const EXAMPLES: { start: string; then: string; end: string }[] = [
 // What guides a shot's takes, one or the other (decision 0014): the camera's keyframes for a shot
 // about the move, the character's sheet for a shot about them.
 const KINDS: { id: ShotKind; label: string; line: string }[] = [
-  { id: "camera", label: "Camera move", line: "The takes follow the keyframes along the move: for push-ins, arcs and walks through the set." },
+  { id: "camera", label: "Camera move", line: "The takes follow the move: with the clay clip drawn (Keyframes), every frame of it, from the first keyframe; without it, the keyframes. For push-ins, arcs and walks through the set." },
   { id: "character", label: "Character", line: "The takes hold the character's face, clothes and things to their sheet, 5 s from the first keyframe: for close-ups and acting." },
 ];
 const EXPRESSIONS = ["calm", "smiling", "curious", "worried", "frightened", "angry", "sad", "determined"];
@@ -203,6 +203,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                   <span className="flex items-center gap-2">
                     <span className="min-w-0 flex-1">
                       <span className="font-mono text-foreground">Take {i + 1}</span>
+                      {t.layout ? " · follows the clay clip" : t.kind === "character" ? " · held to the sheet" : ""}
                       {t.score && (
                         <span title={`Camera travel ${t.score.travel.toFixed(0)} px of flow; frames where something pops in: ${t.score.popins} (scripts/score_take.py)`}>
                           {" "}· {t.score.popins === 0 ? "steady, nothing pops in" : `${t.score.popins} pop-in${t.score.popins === 1 ? "" : "s"}`}

@@ -46,7 +46,8 @@ function cropOf(img: HTMLImageElement): Crop {
 
 // live: where they stand this frame, when they walk (CameraPath writes it); `at` otherwise.
 // With onPick a click selects them; picked rings their feet (the stage puts the gizmo on).
-export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>; at: StagePoint; height: number; turn: number; live?: React.RefObject<StagePoint | null>; picked?: boolean; onPick?: () => void }) {
+// clay: drawn flat grey through the cutout's shape, for the Layout-to-Render clay clip.
+export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>; at: StagePoint; height: number; turn: number; live?: React.RefObject<StagePoint | null>; picked?: boolean; onPick?: () => void; clay?: boolean }) {
   const views = PICK.filter((p) => props.cutouts[p.view]);
   const textures = useTexture(views.map((p) => props.cutouts[p.view]!));
   const [crops, setCrops] = useState<Crop[] | null>(null);
@@ -57,7 +58,12 @@ export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>;
   }, [textures]);
   const worn = useRef<THREE.Texture[] | null>(null); // the cutouts the card last put on
   const mesh = useRef<THREE.Mesh>(null);
-  const material = useMemo(() => new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.4, side: THREE.DoubleSide }), []);
+  // Clay: the cutout's colours replaced by one flat grey, keeping only its shape (the alpha).
+  const material = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.4, side: THREE.DoubleSide });
+    if (props.clay) m.onBeforeCompile = (s) => void (s.fragmentShader = s.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n diffuseColor.rgb = vec3(0.56, 0.54, 0.51);"));
+    return m;
+  }, [props.clay]);
   useEffect(() => void (shown.current = -1), [props.height]); // resize on the next frame
 
   useFrame(({ camera }) => {

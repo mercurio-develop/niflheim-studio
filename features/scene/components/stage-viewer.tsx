@@ -69,7 +69,7 @@ function PoseCamera(props: { pose: StagePose; fov: number; far: number; onDrawn?
   return <PerspectiveCamera makeDefault fov={props.fov} near={0.05} far={props.far} position={props.pose.position} />;
 }
 
-function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look: StageLook; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode }) {
+function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look: StageLook; grid?: boolean; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode }) {
   // useGLTF caches one scene per URL, and a three object lives in one scene at a time: a second
   // viewer of the same stage (Shots' camera and its off-screen keyframe capture) would take it
   // away from the first, which then draws an empty frame. Each viewer gets its own copy (the
@@ -173,7 +173,7 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
         <>
           <hemisphereLight args={["#ffffff", "#3a3631", 1.4]} />
           <directionalLight position={[3, 8, 4]} intensity={1.6} />
-          {view.floorY !== null && <gridHelper args={[Math.ceil(view.far), Math.ceil(view.far), "#2b2a27", "#2b2a27"]} position={[0, view.floorY + 0.005, 0]} />}
+          {view.floorY !== null && props.grid !== false && <gridHelper args={[Math.ceil(view.far), Math.ceil(view.far), "#2b2a27", "#2b2a27"]} position={[0, view.floorY + 0.005, 0]} />}
         </>
       )}
       <primitive object={scene} onClick={click} onDoubleClick={double} />
@@ -211,7 +211,7 @@ function StageLoading() {
 // The shot's frame (768x448) over camera mode: what the take will see.
 export const SHOT_ASPECT = 768 / 448;
 
-export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
+export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; grid?: boolean; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
   return (
     <div className={cn("relative", props.className)} style={{ background: FOG }}>
       <StageLoading />
@@ -223,7 +223,7 @@ export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?
       <Canvas dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
         <color attach="background" args={[FOG]} />
         <Suspense fallback={null}>
-          <Mesh url={props.mesh} camera={props.camera} filled={props.filled} look={props.look ?? "painting"} overview={props.overview} free={props.free} pose={props.pose} onDrawn={props.onDrawn} onFloor={props.onFloor} onFloorDouble={props.onFloorDouble}>
+          <Mesh url={props.mesh} camera={props.camera} filled={props.filled} look={props.look ?? "painting"} grid={props.grid} overview={props.overview} free={props.free} pose={props.pose} onDrawn={props.onDrawn} onFloor={props.onFloor} onFloorDouble={props.onFloorDouble}>
             {props.children}
           </Mesh>
         </Suspense>

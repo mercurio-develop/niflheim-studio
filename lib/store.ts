@@ -124,7 +124,7 @@ export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)
 // 8n+1 frames at 24 fps), each guided by the keyframes it was made from (keys: Keyframes.at).
 // score: scripts/score_take.py on arrival: camera travel (px of flow), pop-in frames and worst spike.
 export type TakeScore = { travel: number; popins: number; worst: number };
-export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore; prompt?: string; kind?: ShotKind };
+export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore; prompt?: string; kind?: ShotKind; layout?: boolean };
 // beats: what happens first, then, and by the end (action joins them, for older readers).
 // kind: what guides its takes (decision 0014): "camera", the keyframes along the move (and later the
 // stage's clay clip, Layout-to-Render); "character", the character's sheet (Ingredients IC-LoRA), from
@@ -135,8 +135,12 @@ export type Shot = { action: string; beats?: { start: string; then?: string; end
 
 // One shot of the scene: its name, and (while not active) its move, render, keyframes and takes.
 export type ShotRef = { id: string; name: string };
-export type ShotData = Pick<Project, "camera" | "cameraRender" | "keyframes" | "shot" | "seededFrom">;
-export const SHOT_FIELDS = ["camera", "cameraRender", "keyframes", "shot", "seededFrom"] as const;
+export type ShotData = Pick<Project, "camera" | "cameraRender" | "keyframes" | "shot" | "seededFrom" | "layout">;
+export const SHOT_FIELDS = ["camera", "cameraRender", "keyframes", "shot", "seededFrom", "layout"] as const;
+// The shot's camera move as a clay clip (every frame of the move drawn from the stage in grey, the
+// character a grey shape): the Layout-to-Render IC-LoRA's control video. key: the move and stage it
+// was drawn from (lib/camera.ts renderKey + propsKey), so a changed move shows it out of date.
+export type LayoutClip = { clip: string; key: string; frames: number; at: string };
 // A shot that continues another: the take it continues, and that take's last frame (a PNG), which
 // becomes this shot's key 1 as it is, with no repaint.
 export type SeededFrom = { shot: string; take: number; frame: string };
@@ -229,6 +233,7 @@ export type Project = {
   keyframes?: Keyframes; // the shot's keyframes along the camera move
   shot?: Shot; // LTX-2.5 takes of the scene
   seededFrom?: SeededFrom; // the active shot starts on another shot's last frame
+  layout?: LayoutClip; // the active shot's move as a clay clip, for Layout-to-Render takes
   // A scene has several shots. camera, cameraRender, keyframes and shot above are the active
   // shot's; the others wait in stash under their id and are swapped in when selected.
   shots?: ShotRef[];
