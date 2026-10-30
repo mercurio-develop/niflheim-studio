@@ -10,10 +10,10 @@ import { CameraSection } from "@/features/scene/components/camera-section";
 import { StageViewer } from "@/features/scene/components/stage-viewer";
 import { finishedPoses, fileUrl, urlsOf } from "@/lib/stage-context";
 import { ViewSwitch } from "@/features/scene/components/view-switch";
-import { DEFAULT_MOVE, cardAt, frameCount, inside, momentsOf, placeAt, poses, renderKey, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
+import { DEFAULT_MOVE, cardAt, clampWalk, frameCount, inside, momentsOf, placeAt, poses, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
 import { saveMoments } from "../actions/moments";
 import { MomentsBar } from "./moments-bar";
-import type { Block, CameraRender, CharacterPose, Job, SceneAsset, SetData, StageData } from "@/lib/store";
+import type { Block, CharacterPose, SceneAsset, SetData, StageData } from "@/lib/store";
 
 // Where camera mode's camera is and looks, every frame, for Take shot.
 function CameraProbe(props: { report: (v: { from: Vec; look: Vec }) => void }) {
@@ -31,7 +31,7 @@ const near = (a: Vec, b: Vec) => Math.hypot(a[0] - b[0], a[2] - b[2]);
 // The active shot's camera (decision 0011): the Scene's stage with the character standing where
 // the Scene put them, and this shot's framing, move and walk. Overview shows the path with a gizmo
 // on each end and on the walk; Play flies it. Each shot keeps its own; saved as it is tuned.
-export function ShotCamera(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; cameraRender: CameraRender | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[]; stageJob?: Job }) {
+export function ShotCamera(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[] }) {
   const s = props.set;
   const fill = s?.stage && s.stage.image === s.image ? s.stage.fill : undefined;
   const cam = fill?.camera;
@@ -42,8 +42,10 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   const [free, setFree] = useState(false);
   const pl = useMemo(() => (props.placement && liveMain ? { ...props.placement, at: liveMain.at, turn: liveMain.turn } : props.placement), [props.placement, liveMain]);
   const ready = !!cam?.floor && !!pl?.at;
-  const [move, setMove] = useState<CameraMove>(props.camera ?? DEFAULT_MOVE);
+  const [move, setMove] = useState<CameraMove>(props.camera ? { ...props.camera, seconds: Math.min(5, props.camera.seconds) } : DEFAULT_MOVE);
   const [overview, setOverview] = useState(false);
+  // The expert controls (More): open by itself when the shot already uses moments.
+  const [more, setMore] = useState(!!props.camera?.moments?.length);
   const [playing, setPlaying] = useState(false);
   const live = useRef<Vec | null>(null); // where the character stands this frame, when they walk
   const setLive = useCallback((at: Vec | null) => void (live.current = at), []);
@@ -116,7 +118,11 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   });
   const shownMain = pl?.at ? placeAt(move, "main", { at: pl.at, turn: pl.turn }, frame) : null;
   const shownAssets = liveAssets.map((a) => (a.at ? { ...a, ...(({ at, turn }) => ({ at, turn }))(placeAt(move, a.id, { at: a.at, turn: a.turn }, frame)) } : a));
-  const posed = sel !== null && moment?.camera && !overview && !free ? { position: moment.camera.from, target: moment.camera.look, n: sel } : undefined;
+  // Shot view: a selected moment's camera, else the shot's own first frame (its framing and start),
+  // not the painting's camera (which showed whatever framing was chosen: 05_submit Chrome test).
+  const first = path?.poses[0];
+  const posed =
+    overview || free || playing ? undefined : sel !== null && moment?.camera ? { position: moment.camera.from, target: moment.camera.look, n: sel } : first ? { position: first.position, target: first.target, n: -1 } : undefined;
 
   const viewer = ready && path && (
     <div className="relative aspect-[7/4] overflow-hidden rounded-lg border">
@@ -141,19 +147,19 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
           onDone={() => setPlaying(false)}
           onStart={(from: Vec) => pick({ ...move, framing: "free", from })}
           onEnd={(to: Vec) => pick({ ...move, to })}
-          onWalk={(to: Vec) => move.walk && pick({ ...move, walk: { ...move.walk, to } })}
+          onWalk={(to: Vec) => move.walk && pick({ ...move, walk: { ...move.walk, to: clampWalk(move.walk.from, to) } })}
           onLive={setLive}
         />
       </StageViewer>
-      <ViewSwitch overview={overview} onOverview={view} />
-      <button
+      <ViewSwitch overview={overview} onOverview={view} home="Through the lens" />
+      {(more || free) && <button
         type="button"
         aria-pressed={free}
         onClick={() => (setPlaying(false), setOverview(false), setFree(!free))}
         className="absolute top-2 right-2 z-20 rounded-full border bg-background/80 px-2.5 py-1 text-xs backdrop-blur aria-pressed:border-primary aria-pressed:text-primary"
       >
-        Camera mode
-      </button>
+        Fly the camera
+      </button>}
       {edits.error && <p className="absolute bottom-2 left-2 z-20 rounded bg-background/80 px-2 py-1 text-xs text-destructive">{edits.error}</p>}
     </div>
   );
@@ -165,7 +171,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
       move={move}
       onMove={pick}
       start={path?.poses[0].position ?? null}
-      subject={ready ? { at: pl!.at!, turn: pl!.turn } : null}
+      subject={ready ? { at: pl!.at!, height: pl!.height, turn: pl!.turn } : null}
       subjects={[{ id: "main", label: "The character" }, ...edits.assets.filter((a) => a.at && assetReady(a)).map((a) => ({ id: a.id, label: a.name })), { id: "none", label: "Nothing (free)" }]}
       poses={ready4.map((p) => ({ id: p.id, label: p.label }))}
       outside={path ? path.inside.filter((x) => !x).length : 0}
@@ -176,7 +182,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
         viewer && (
           <>
             {viewer}
-            <MomentsBar
+            {(more || ms.length > 0) && <MomentsBar
               moments={ms}
               frames={n}
               picked={sel}
@@ -190,14 +196,13 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
               canShoot={free && sel !== null}
               onShoot={() => probe.current && sel !== null && setMoments(ms.map((x, i) => (i === sel ? { ...x, camera: { ...probe.current! } } : x)))}
               warnings={warnings}
-            />
+            />}
           </>
         )
       }
       ready={ready}
-      render={props.cameraRender}
-      renderKey={ready ? renderKey(move, pl!.at!, pl!.height, fill!.mesh, pl!.turn) : null}
-      job={props.stageJob}
+      more={more}
+      onMore={(on) => (setMore(on), on || (setFree(false), setSel(null)))}
     />
   );
 }

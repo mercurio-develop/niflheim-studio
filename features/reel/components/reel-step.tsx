@@ -41,7 +41,7 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
   };
   const setJoin = (i: number, j: Join) => {
     const next = [...joins];
-    while (next.length <= i) next.push("cut");
+    while (next.length <= i) next.push("fade");
     next[i] = j;
     setJoins(next);
     save(rows, next);
@@ -69,7 +69,7 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
         >
           <ol className="flex flex-col gap-2">
             {rows.map((r, i) => {
-              const join = r.video && k >= 0 ? (joins[k] ?? "cut") : null;
+              const join = r.video && k >= 0 ? (joins[k] ?? "fade") : null;
               const joinIndex = k;
               if (r.video) k++;
               return (

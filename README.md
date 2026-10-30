@@ -9,15 +9,23 @@ Entry for Comfy's [Open Source Higgsfield](https://comfy.org/open-source-higgsfi
 
 ## Why it is different
 
-Most video tools take a prompt and hope. Here the shot is designed before it is generated:
+Most video tools take a prompt and hope. Here the shot is designed before it is generated, and
+every take is held to one guide for its whole length:
 
-- the character is fixed first (concept, part edits, every side, a 3D model), so every shot
-  starts from the same person;
+- the character is fixed first: concept, part edits, then one **Generate** paints every side in
+  a relaxed pose plus face close-ups and the things they carry, laid out as a **reference sheet**
+  (people, or animals on four legs);
 - the place is a 3D stage made from one painting, so the camera move is a move through space,
   not a guess;
-- keyframes are captured from that stage along the camera path and painted into finished
-  frames, and LTX-2.5 fills the motion between them. Takes are scored for camera travel and
-  pop-ins, so the best one is picked for you.
+- each shot is one of two kinds, never both (Lightricks advises against mixing IC-LoRAs):
+  - **Camera move**: the move is drawn from the 3D stage as a grey **clay clip**, every frame, and
+    LTX-2.5 renders over it with the **Layout-to-Render** IC-LoRA from one painted first frame, so
+    the camera and the blocking are followed frame by frame;
+  - **Character**: the take is held to the character's sheet with the **Ingredients** IC-LoRA, so
+    the face, clothes and things stay theirs (5 s, the sheet's trained length).
+- faces in painted keyframes are matched to the sheet's close-up (SAM 3 finds the head,
+  Qwen-Image-Edit repaints it), and takes are scored for camera travel and pop-ins, so the best
+  one is picked for you.
 
 ## The wizard
 
@@ -26,13 +34,15 @@ compared, swapped or undone, and re-running a step marks the later ones stale.
 
 1. **Character**: describe someone (or sketch or upload one) and get concepts. Pick one, point
    at a part by name or paint it, and **Change**, **Add**, **Remove** or **Restyle** it. Then
-   the same character from the front, three-quarter, side and back, poses, and a 3D model.
-   A project can hold several characters.
+   **Generate** the turnaround: front, three-quarter, side and back in a relaxed pose (Body:
+   person, animal on four legs, or creature), and with them the sheet. Poses and a 3D model are
+   optional. A project can hold several characters.
 2. **Scene**: paint a place or drop in a painting; it becomes a 3D stage (MoGe depth, filled
    behind the edges). Stand the characters in it and add objects.
-3. **Shots**: per shot, a framing, a camera move and where the characters walk, blocked as key
-   moments in the 3D viewer. Keyframes are captured along the move and painted (faces and hands
-   get a second pass), you say what happens, and LTX-2.5 shoots takes. Keep the best one.
+3. **Shots**: per shot, a framing, a camera move and where the characters walk, blocked in the
+   3D viewer (Shot view shows the shot's first frame). Pick the shot's kind: **Camera move**
+   (draw the clay clip, paint the first keyframe) or **Character** (the sheet, an expression).
+   Say what happens; LTX-2.5 shoots takes; keep the best one.
 4. **Reel**: order the picked takes, choose a cut, fade or dip between them, export one MP4.
    **Autopilot** does shots, keyframes, takes, the best take and the reel in one press.
 

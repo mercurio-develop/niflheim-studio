@@ -29,9 +29,15 @@ async function Shot({ params }: { params: Promise<{ id: string }> }) {
         projectId={id} keyframes={k ?? null} ready={ready} seconds={seconds} shot={project.shot ?? null} job={project.jobs.shot}
         suggested={suggestedKind(project)}
         sheet={project.sheet?.drawn ?? null}
-        keysRunning={["keyframes", "stage", "layout"].some((j) => project.jobs[j]?.status === "running")}
-        cameraPanel={<ShotCamera projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} cameraRender={project.cameraRender ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} stageJob={project.jobs.stage} />}
-        keyPanel={<ShotKeyframes projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} keyframes={k ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} job={project.jobs.keyframes} continuity={continuity} layout={project.layout ?? null} />}
+        faceRef={project.sheet?.cells.find((c) => c.id === "face-front")?.image ?? null}
+        choices={{
+          expressions: (project.sheet?.cells ?? []).filter((c) => c.kind === "expression" && c.image).map((c) => ({ id: c.id, label: c.label })),
+          poses: (project.poses ?? []).filter((x) => x.views.front).map((x) => ({ id: x.id, label: x.label })),
+          props: (project.sceneAssets ?? []).filter((a) => a.at && (a.kind === "character" ? a.cutouts?.front : a.views?.front)).map((a) => ({ id: a.id, label: a.name })),
+        }}
+        keysRunning={["keyframes", "stage", "layout", "shotsheet"].some((j) => project.jobs[j]?.status === "running")}
+        cameraPanel={<ShotCamera projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} />}
+        keyPanel={<ShotKeyframes projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} keyframes={k ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} job={project.jobs.keyframes} continuity={continuity} layout={project.layout ?? null} layoutJob={project.jobs.layout} />}
       />
     </main>
   );

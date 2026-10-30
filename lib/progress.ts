@@ -25,6 +25,18 @@ const KEEP = "Same character, same face, same outfit, same colours, same proport
 
 // Four legs: an animal is painted standing on all four, its body level, never upright on two legs
 // and never in a T-pose; every view says so, or Qwen stands it up like a person.
+// The body a description suggests: one naming a four-legged animal starts as an animal (a fox
+// described as a fox was painted on two legs while Body stayed Person, 05_submit Chrome test).
+// Only the head noun counts (the last word before "with", "in", "who" or a comma), so "a small
+// red fox with a lantern" is an animal and "a rat catcher" is not.
+const FOUR_LEGGED = /^(fox|cat|kitten|dog|puppy|wolf|bear|horse|pony|deer|stag|rabbit|bunny|hare|lion|tiger|leopard|cow|pig|boar|goat|sheep|lamb|mouse|rat|squirrel|raccoon|badger|otter|elephant)e?s?$/i;
+export const suggestedBody = (description: string): "person" | "animal" => {
+  const head = description.split(/,| with | in | who | that /i)[0].trim().split(/\s+/).at(-1) ?? "";
+  return FOUR_LEGGED.test(head) ? "animal" : "person";
+};
+// How tall a character stands on the stage until placed by hand: an animal is about knee high.
+export const defaultHeight = (o?: Pick<TurnaroundOptions, "body">) => (o?.body === "animal" ? 0.6 : 1.7);
+
 export const fourLegs = (o?: Pick<TurnaroundOptions, "body">) => o?.body === "animal";
 // The view a turnaround paints first, from the character; every other view is turned from it. An
 // animal starts from the side: asked head-on, Qwen kept a cat upright or sat it down, while a side
@@ -53,7 +65,9 @@ export function frontPrompt(o: TurnaroundOptions): string {
   const pose =
     o.pose === "tpose"
       ? "Make this character do a T-pose for a 3D model sheet: arms fully extended sideways in a straight horizontal line, forming a T shape with the body, legs together and straight."
-      : "";
+      : o.pose === "relaxed"
+        ? "Make this character stand in a relaxed, natural pose: arms down at their sides, hands relaxed, weight on one leg, not a T-pose."
+        : "";
   const view = o.pose === "tpose" ? "Front view, full body, facing the viewer." : VIEWS[0].prompt + " Keep the arm positions. Add nothing that is not in this picture.";
   return [pose, hide, view, KEEP].filter(Boolean).join(" ");
 }
@@ -68,7 +82,9 @@ export function viewPrompt(id: ViewId, o?: TurnaroundOptions): string {
       ? id === "side"
         ? "Keep the T-pose: both arms stay stretched straight out at shoulder height, the near arm pointing toward the viewer, foreshortened."
         : "Keep the T-pose: both arms stay stretched straight out sideways at shoulder height."
-      : "Keep the same stance and arm positions; only the angle changes.";
+      : o?.pose === "relaxed"
+        ? "Keep the same relaxed pose: the arms down at their sides, the legs as they are; only the angle changes."
+        : "Keep the same stance and arm positions; only the angle changes.";
   return `${v.prompt} ${tpose} Keep the same items as in this image. ${KEEP}`;
 }
 

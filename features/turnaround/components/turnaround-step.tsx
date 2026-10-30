@@ -12,10 +12,10 @@ import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import { Editor } from "@/features/character/components/editor";
 import { stackMoves } from "@/lib/history";
-import { VIEWS, viewsFor } from "@/lib/progress";
+import { suggestedBody, VIEWS, viewsFor } from "@/lib/progress";
 import type { Asset, CharacterPose, CharacterSheet, Job, Mesh, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
 import { PosesPanel } from "./poses-panel";
-import { SheetSection } from "./sheet-section";
+import { itemChoices, MAX_ITEMS, SheetSection } from "./sheet-section";
 import { cn } from "@/lib/utils";
 import { cancelTurnaround, findMasks, generateTurnaround, generateView } from "../actions/turnaround";
 import { AssetsShelf } from "./assets-shelf";
@@ -27,6 +27,8 @@ import { ReplicateBar } from "./replicate-bar";
 // Things a character holds or carries come first among the parts you can hide.
 const HELD = /(sword|dagger|axe|spear|staff|wand|bow|shield|gun|lantern|book|umbrella|bag|satchel|backpack|pouch|cape|cloak|helmet|hat|hood|banner|flag)$/;
 const PER_VIEW = 25; // seconds for one Qwen edit, warm
+// How the pose reads in a summary.
+const poseLabel = (o: TurnaroundOptions) => (o.body === "animal" ? "on four legs" : o.pose === "tpose" ? "T-pose" : o.pose === "relaxed" ? "relaxed" : "as designed");
 const BODIES = [["person", "Person · two legs"], ["animal", "Animal · four legs"], ["creature", "Creature"]] as const;
 const EDIT_JOBS = ["mask", "swap", "tags", "brush"] as const; // the editor's jobs, per view: "view:side:brush"
 
@@ -36,6 +38,7 @@ export function TurnaroundSections(props: {
   projectId: string;
   character: string; // current character image
   characterLabel: string;
+  description?: string; // what the character was described as, for the suggested Body
   tags: string[]; // parts of the current character version
   parts: Record<string, string>; // their masks, where found
   options: TurnaroundOptions | null; // what the last Generate used
@@ -48,7 +51,10 @@ export function TurnaroundSections(props: {
   jobs: Record<string, Job>;
   cid?: string; // which character (default c1)
 }) {
-  const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: "designed", hide: [], keep: [], extras: [] });
+  const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: suggestedBody(props.description ?? "") === "animal" ? "designed" : "relaxed", hide: [], keep: [], extras: [], items: itemChoices(props.tags).slice(0, 2), body: suggestedBody(props.description ?? "") });
+  const items = options.items ?? [];
+  const [thing, setThing] = useState("");
+  const offered = itemChoices(props.tags);
   const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);
   const [editing, setEditing] = useState<ViewId | null>(null);
   const [seeing, setSeeing] = useState<ViewId | null>(null); // the view shown full screen
@@ -109,12 +115,12 @@ export function TurnaroundSections(props: {
         tone="bg-tone-lilac"
         title="Turnaround"
         line={`Every side of ${props.characterLabel}, painted fresh from it, so later shots and the 3D model see one character.`}
-        summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted${props.options ? ` · ${props.options.body === "animal" ? "on four legs" : props.options.pose === "tpose" ? "T-pose" : "as designed"}` : ""}${props.options?.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}`}
+        summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted${props.options ? ` · ${poseLabel(props.options)}` : ""}${props.sheet?.drawn ? " · sheet made" : ""}${props.options?.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}`}
         open={none || running || !props.fresh}
         className="nifl-enter"
         style={{ "--i": 3 } as React.CSSProperties}
       >
-        <More label="Set up" summary={`${options.body === "animal" ? "Animal · four legs" : options.body === "creature" ? "Creature" : "Person"} · ${options.pose === "tpose" ? "T-pose" : "as designed"}${options.hide.length ? ` · without ${options.hide.join(", ")}` : ""}${options.extras.length ? ` · + ${options.extras.join(", ")}` : ""}`} open={none}>
+        <More label="Set up" summary={`${options.body === "animal" ? "Animal · four legs" : options.body === "creature" ? "Creature" : "Person"} · ${poseLabel(options)}${items.length ? ` · with ${items.join(", ")}` : ""}${options.hide.length ? ` · without ${options.hide.join(", ")}` : ""}${options.extras.length ? ` · + ${options.extras.join(", ")}` : ""}`} open={none}>
           <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
             <span className="text-xs text-muted-foreground">Body</span>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Body">
@@ -127,11 +133,39 @@ export function TurnaroundSections(props: {
 
             <span className="text-xs text-muted-foreground">Pose</span>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Pose">
-              {(options.body === "animal" ? (["designed"] as const) : (["designed", "tpose"] as const)).map((p) => (
+              {(options.body === "animal" ? (["designed"] as const) : (["relaxed", "designed"] as const)).map((p) => (
                 <button key={p} type="button" role="radio" aria-checked={options.pose === p} onClick={() => setOptions((o) => ({ ...o, pose: p }))} className={chip(options.pose === p)}>
-                  {p === "designed" ? "As designed" : "T-pose"}
+                  {p === "relaxed" ? "Relaxed" : "As designed"}
                 </button>
               ))}
+            </div>
+
+            <span className="self-start pt-0.5 text-xs text-muted-foreground">Props for the sheet</span>
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[...new Set([...offered, ...items])].map((t) => (
+                  <button key={t} type="button" aria-pressed={items.includes(t)} disabled={!items.includes(t) && items.length >= MAX_ITEMS} onClick={() => setOptions((o) => ({ ...o, items: items.includes(t) ? items.filter((x) => x !== t) : [...items, t] }))} className={chip(items.includes(t))}>
+                    {t}
+                  </button>
+                ))}
+                <input
+                  aria-label="Add a thing in your own words"
+                  value={thing}
+                  maxLength={40}
+                  placeholder="+ a thing: a truck tire"
+                  disabled={items.length >= MAX_ITEMS}
+                  onChange={(e) => setThing(e.target.value)}
+                  onKeyDown={(e) => {
+                    const t = thing.trim().toLowerCase();
+                    if (e.key !== "Enter" || !/^[a-z][a-z \-]{1,39}$/.test(t)) return;
+                    e.preventDefault();
+                    setOptions((o) => ({ ...o, items: [...new Set([...(o.items ?? []), t])].slice(0, MAX_ITEMS) }));
+                    setThing("");
+                  }}
+                  className="h-7 w-44 rounded-full border bg-transparent px-2.5 text-xs disabled:opacity-50"
+                />
+              </div>
+              <span className="text-xs text-muted-foreground">Up to {MAX_ITEMS} things they wear or carry, painted alone for the sheet: pick from the tags or type one (Enter).</span>
             </div>
 
             <span className="self-start pt-0.5 text-xs text-muted-foreground">Hide</span>
@@ -315,15 +349,7 @@ export function TurnaroundSections(props: {
             <PosesPanel cid={props.cid} projectId={props.projectId} poses={props.poses} jobs={props.jobs} locked={running} />
           </More>
         )}
-        {image("front") && (
-          <More
-            label="Sheet"
-            summary={props.sheet?.drawn ? `${props.sheet.cells.filter((c) => c.image).length} pictures · keeps the face and clothes in takes` : "face, body and what they carry in one picture, so takes keep them"}
-            open={props.jobs.sheet?.status === "running"}
-          >
-            <SheetSection cid={props.cid} projectId={props.projectId} sheet={props.sheet} tags={props.tags} jobs={props.jobs} locked={running} />
-          </More>
-        )}
+        {image("front") && <SheetSection cid={props.cid} projectId={props.projectId} sheet={props.sheet} items={items} jobs={props.jobs} locked={running} />}
       </Section>
 
         <MeshSection

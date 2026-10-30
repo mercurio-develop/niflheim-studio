@@ -125,10 +125,25 @@ def preview(mesh, c, ss, out):
     Image.fromarray((np.concatenate(tiles, 1) * 255).astype(np.uint8)).save(out)
 
 
+def trim_slab(mesh, band=0.02, share=0.25):
+    """The model without the floor slab Hunyuan3D bakes under it from the views' studio floor and
+    shadow: when the faces lying within the bottom 2% of the height hold more than a quarter of the
+    surface, they are a plate, not the object (the troll's truck tire: 55%; a box's own bottom is
+    about 17%), and they go."""
+    y = mesh.vertices[:, 1]
+    lo, h = y.min(), y.max() - y.min()
+    flat = (mesh.vertices[mesh.faces][:, :, 1] < lo + band * h).all(axis=1)
+    if h <= 0 or mesh.area_faces[flat].sum() <= share * mesh.area:
+        return mesh
+    mesh.update_faces(~flat)
+    mesh.remove_unreferenced_vertices()
+    return mesh
+
+
 def main():
     src, out, front, side, back = sys.argv[1:6]
     quarter = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] != "-" else None
-    mesh = trimesh.load(src, force="mesh")
+    mesh = trim_slab(trimesh.load(src, force="mesh"))
     v, n = mesh.vertices, mesh.vertex_normals
     side_im = load(side)
     views = {"front": figure(load(front)), "back": figure(load(back)),

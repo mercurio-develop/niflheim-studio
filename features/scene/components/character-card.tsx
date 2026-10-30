@@ -61,7 +61,8 @@ export function CharacterCard(props: { cutouts: Partial<Record<ViewId, string>>;
   // Clay: the cutout's colours replaced by one flat grey, keeping only its shape (the alpha): the
   // stage's guide grey (#b9b4ab, stage-viewer.tsx), so the clip reads as one clay set.
   const material = useMemo(() => {
-    const m = new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.4, side: THREE.DoubleSide });
+    // toneMapped off: the cutout's own colours, not the viewer's tone curve (it washed the cards out).
+    const m = new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.4, side: THREE.DoubleSide, toneMapped: false });
     if (props.clay) m.onBeforeCompile = (s) => void (s.fragmentShader = s.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n diffuseColor.rgb = vec3(0.725, 0.706, 0.671);"));
     return m;
   }, [props.clay]);

@@ -16,10 +16,25 @@ import { sceneKey } from "@/lib/progress";
 import { keysProblem, suggestedKind } from "../state";
 import { addIngredients, firstKeyOnly, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, whoOf, withSheet } from "../ingredients";
 import { PYTHON } from "@/lib/python";
+import { goodTake, takeRank } from "@/lib/score";
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const run = promisify(execFile);
 const SCORE = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "score_take.py");
+
+// Five frames of a take side by side (0, 30, 60, 90 and 120, or as far as it goes), to see at a
+// glance whether the character stays themselves through it. A take without one is kept as it is.
+async function stripOf(file: string, frames: number): Promise<string | undefined> {
+  const out = path.join(path.dirname(file), "strip.jpg");
+  const at = [0, 30, 60, 90, 120].filter((f) => f < frames);
+  const select = at.map((f) => `eq(n\\,${f})`).join("+");
+  try {
+    await run("ffmpeg", ["-v", "error", "-y", "-i", file, "-vf", `select='${select}',scale=192:-1,tile=${at.length}x1`, "-frames:v", "1", out]);
+    return out;
+  } catch {
+    return undefined;
+  }
+}
 
 // How a take moves and whether things pop in (scripts/score_take.py, a few seconds); a take that
 // cannot be scored is kept without one.
@@ -92,10 +107,18 @@ const cast = (p: Project) => {
     .map((a) => ((x) => (x ? `${a.name}, ${x}` : a.name))(p.cast?.find((m) => m.id === a.cid)?.character.prompt ?? a.prompt))
     .join("; ");
 };
+// A caption that names no one (Florence-2 sometimes sees only the place: "a forest scene, fallen
+// leaves") would tell the take there is nobody there, so only those that name a figure are kept.
+const FIGURE = /\b(man|woman|boy|girl|person|people|child|kid|figure|character|creature|monster|animal|beast|he|she)\b/i;
+function namesSomeone(p: Project, caption: string) {
+  // The character's own noun: the last word before what they have or wear ("troll", "fox", "keeper").
+  const noun = whoOf(p.character.prompt ?? "").name.split(/ (?:with|on|in|of|wearing|holding|carrying) /)[0].split(/\s+/).at(-1);
+  return FIGURE.test(caption) || (!!noun && new RegExp(`\\b${noun}`, "i").test(caption));
+}
 // What the keys show, in order (Florence-2 captions, or the user's edits of them): the frame the take
 // starts on, passes through and ends on. Keys without a caption are skipped.
 function keysPhrase(p: Project) {
-  const c = (p.keyframes?.captions ?? []).map((x) => x?.trim().replace(/[.\s]+$/, "")).filter(Boolean) as string[];
+  const c = (p.keyframes?.captions ?? []).map((x) => x?.trim().replace(/[.\s]+$/, "")).filter((x) => x && namesSomeone(p, x)) as string[];
   if (!c.length) return "";
   const lower = (x: string) => x.charAt(0).toLowerCase() + x.slice(1);
   if (c.length === 1) return `At the start, ${lower(c[0])}.`;
@@ -116,23 +139,22 @@ const Input = z
   })
   .refine((x) => x.beats.start.length >= 3, "Say what happens first, in a few words.");
 
-// A take is good when nothing pops in and the worst frame-to-frame change stays small; of several,
-// the one with the fewest pop-ins, then the calmest.
-const good = (s?: TakeScore) => !!s && s.popins === 0 && s.worst < 6;
-const rank = (s?: TakeScore) => (s ? s.popins * 100 + s.worst : 1e9);
 
 // Takes of the shot: LTX-2.5 distilled guided by every keyframe (ends 0.7, middle 0.5), with
 // audio, about 1.5 to 2 minutes each on the 4080 for 97 to 121 frames. With tries > 1 it shoots
 // until one is good (new seed each time), at most `tries`, and picks the best of them.
 // A character take (kind "character"): the sheet's cells said by place, then the shot.
+// The shot's own sheet when it drew one (an expression, a pose, props), else the character's.
 function sheetFor(p: Project, video: string, expression?: string) {
   const sheet = p.sheet;
-  if (!sheet?.drawn || !sheet.rows) throw new Error("Make the character's sheet first (Character > Turnaround > Sheet).");
+  if (!sheet?.drawn || !sheet.rows) throw new Error("Make the character's sheet first (Character, Turnaround).");
+  const own = p.shot?.sheet;
   const who = whoOf(p.character.prompt ?? "");
   // Numbered as the sheet drew them: the painted ones only (make_sheet.py's item1, item2...).
   const items = sheet.cells.filter((c) => c.kind === "item" && c.image).map((c) => c.label);
+  const props = (own?.props ?? []).map((aid) => p.sceneAssets?.find((a) => a.id === aid)).filter(Boolean).map((a) => ({ name: a!.name, description: a!.prompt, kind: a!.kind }));
   const said = expression ? `${video} Their expression: ${expression}.` : video;
-  return { file: sheet.drawn, prompt: withSheet(sheetPrompt(sheet.rows, who, [], p.set?.prompt, items), said) };
+  return { file: own?.drawn ?? sheet.drawn, prompt: withSheet(sheetPrompt(own?.rows ?? sheet.rows, who, props, p.set?.prompt, items), said) };
 }
 
 export async function renderTake(id: string, raw: unknown) {
@@ -197,18 +219,18 @@ export async function renderTake(id: string, raw: unknown) {
       if (!video) throw new Error("LTX made no video.");
       if (!(await ctx.alive())) return;
       await ctx.progress(tries > 1 ? `Checking take ${n}` : "Checking the take");
-      const score = await scoreTake(video);
+      const [score, strip] = await Promise.all([scoreTake(video), stripOf(video, frames)]);
       let index = 0;
       await updateProject(id, (q) => {
-        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k?.at ?? "", seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind, layout: !!clip };
+        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k?.at ?? "", seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind, layout: !!clip, strip: strip && path.relative(projectDir(id), strip) };
         q.shot = { action, negative, ...q.shot, takes: [...(q.shot?.takes ?? []), take] };
         index = q.shot.takes.length - 1;
       });
       made.push({ index, score });
-      if (good(score)) break;
+      if (goodTake(score, frames)) break;
     }
     if (tries > 1) {
-      const best = made.reduce((a, b) => (rank(b.score) < rank(a.score) ? b : a));
+      const best = made.reduce((a, b) => (takeRank(b.score, frames) < takeRank(a.score, frames) ? b : a));
       await updateProject(id, (q) => void (q.shot && (q.shot.picked = best.index)));
     }
   }, tries > 1 ? `Shooting up to ${tries} takes` : "Shooting the take");

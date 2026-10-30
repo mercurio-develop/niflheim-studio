@@ -44,6 +44,9 @@ export function CastPicker(props: { projectId: string; cast: CastOption[]; jobs:
           );
         })}
       </div>
+      {props.cast.some((c) => !c.ready && !c.onStage) && (
+        <span className="text-xs text-muted-foreground">Greyed out: {props.cast.filter((c) => !c.ready && !c.onStage).map((c) => c.name).join(", ")} still need their turnaround in the Character step.</span>
+      )}
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );

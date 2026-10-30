@@ -92,7 +92,6 @@ export function StageSection(props: {
     setError(null);
     start(() => fn().then(() => {}, (e: Error) => setError(e.message)));
   };
-  const filling = building && !!props.setJob?.detail?.startsWith("Filling");
   const painting = building && !!props.setJob?.detail?.startsWith("Painting");
 
   const spotsJson = JSON.stringify(spots);
@@ -181,7 +180,7 @@ export function StageSection(props: {
       className="nifl-enter"
       style={{ "--i": 2 } as React.CSSProperties}
     >
-      {building && props.setJob && <JobStatus message={props.setJob.detail ?? "Working"} startedAt={props.setJob.startedAt} expected={painting ? 30 : filling ? 260 : 10} onCancel={() => cancelSet(props.projectId)} />}
+      {building && props.setJob && <JobStatus message={props.setJob.detail ?? "Working"} startedAt={props.setJob.startedAt} expected={painting ? 30 : 260} onCancel={() => cancelSet(props.projectId)} />}
       {cutting && props.stageJob && <JobStatus message={props.stageJob.detail ?? "Cutting out the character"} startedAt={props.stageJob.startedAt} expected={10} onCancel={() => cancelStage(props.projectId)} />}
 
       <div data-land className="relative aspect-[7/4] overflow-hidden rounded-lg border">
@@ -360,25 +359,6 @@ export function StageSection(props: {
               </div>
             </div>
           )}
-        </More>
-      )}
-
-      {fresh && (
-        <More label="How the stage was built" summary="depth and the painted views">
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            <span>Depth</span>
-            <FadeImage src={file(s!.stage!.depth)} alt="Depth map of the set" className="h-14 rounded border" />
-            {!!filled?.views.length && (
-              <>
-                <span className="ml-2">Painted views</span>
-                <div className="flex min-w-0 gap-1.5 overflow-x-auto">
-                  {filled.views.map((v) => (
-                    <FadeImage key={v} src={file(v)} alt="A view painted to fill the stage" className="h-14 shrink-0 rounded border" />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
         </More>
       )}
 
