@@ -101,7 +101,9 @@ export async function makeAsset(id: string, form: FormData) {
   if (!p) throw new Error("Project not found.");
   if ((p.sceneAssets?.length ?? 0) >= 12) throw new Error("A scene holds up to 12 assets.");
   const aid = stamp();
-  const asset: SceneAsset = { id: aid, name: src.name, kind: src.kind, from: src.from, height: src.kind === "character" ? 1.7 : 1, turn: 0 };
+  // An object starts in proportion to the main character (a 1 m lantern towered over a 0.55 m fox).
+  const near = Math.min(1, Math.max(0.3, (p.stage?.height ?? 1.7) * 0.6));
+  const asset: SceneAsset = { id: aid, name: src.name, kind: src.kind, from: src.from, height: src.kind === "character" ? 1.7 : near, turn: 0 };
   if (src.from === "prompt") asset.prompt = src.prompt;
   if (src.from === "upload") {
     const file = form.get("image");

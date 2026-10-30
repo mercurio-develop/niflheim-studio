@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, useGLTF, useProgress } from "@react-three/drei";
 import { LoadingDots } from "@/components/loading-dots";
@@ -77,6 +77,7 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
   const gltf = useGLTF(props.url);
   const scene = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
   useLook(scene, props.look);
+  const zoom = useModifierHeld();
   const view = useMemo(() => {
     const box = new THREE.Box3().setFromObject(scene);
     const c = props.camera;
@@ -152,7 +153,7 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
         <PerspectiveCamera key="free-camera" makeDefault fov={view.fov} near={0.05} far={view.far * 2} position={view.position} quaternion={view.quaternion} />
         <primitive object={scene} onDoubleClick={double} />
         {props.children}
-        <OrbitControls key="free-orbit" makeDefault target={view.target} minDistance={0.3} maxDistance={view.middle * 4} rotateSpeed={0.4} screenSpacePanning enableDamping />
+        <OrbitControls key="free-orbit" makeDefault enableZoom={zoom} target={view.target} minDistance={0.3} maxDistance={view.middle * 4} rotateSpeed={0.4} screenSpacePanning enableDamping />
       </>
     );
   if (props.overview)
@@ -162,7 +163,7 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
         <hemisphereLight args={["#ffffff", "#3a3631", 1.2]} />
         <primitive object={scene} onDoubleClick={double} />
         {props.children}
-        <OrbitControls key="over-orbit" makeDefault target={over.target} maxPolarAngle={Math.PI * 0.48} minDistance={1} maxDistance={view.middle * 4} rotateSpeed={0.5} enableDamping />
+        <OrbitControls key="over-orbit" makeDefault enableZoom={zoom} target={over.target} maxPolarAngle={Math.PI * 0.48} minDistance={1} maxDistance={view.middle * 4} rotateSpeed={0.5} enableDamping />
       </>
     );
   return (
@@ -190,6 +191,7 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
         maxDistance={view.middle * (props.filled ? 1.15 : 1.1)}
         rotateSpeed={0.4}
         enablePan={false}
+        enableZoom={zoom}
         enableDamping
       />
     </>
@@ -211,10 +213,31 @@ function StageLoading() {
 // The shot's frame (768x448) over camera mode: what the take will see.
 export const SHOT_ASPECT = 768 / 448;
 
+// The wheel zooms the stage only while Ctrl (or ⌘) is held: otherwise it scrolls the page, as it
+// does everywhere else (OrbitControls skips preventDefault when zoom is off; zoom on the wheel took
+// the page's scroll over the viewer, 05_submit Chrome test).
+function useModifierHeld() {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => setHeld(e.ctrlKey || e.metaKey);
+    const off = () => setHeld(false);
+    window.addEventListener("keydown", on);
+    window.addEventListener("keyup", on);
+    window.addEventListener("blur", off);
+    return () => {
+      window.removeEventListener("keydown", on);
+      window.removeEventListener("keyup", on);
+      window.removeEventListener("blur", off);
+    };
+  }, []);
+  return held;
+}
+
 export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; grid?: boolean; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
   return (
     <div className={cn("relative", props.className)} style={{ background: FOG }}>
       <StageLoading />
+      {!props.pose && <span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded border bg-background/70 px-1.5 py-0.5 text-xs text-muted-foreground">Ctrl + scroll to zoom</span>}
       {props.free && (
         <div aria-hidden className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <div className="h-full max-w-full rounded-sm border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" style={{ aspectRatio: SHOT_ASPECT }} />

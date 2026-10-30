@@ -60,7 +60,7 @@ export function KeyframesPanel(props: {
         <label htmlFor="key-note" className="sr-only">
           In the frame
         </label>
-        <Input id="key-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="In the frame (optional): holds a torn tire to his mouth" className="min-w-0 flex-1" disabled={busy} />
+        <Input id="key-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="In the frame (optional): what they hold or wear, e.g. a paper lantern" className="min-w-0 flex-1" disabled={busy} />
         <Button size="sm" variant={k && props.current ? "ghost" : "default"} disabled={busy} onClick={() => act(async () => (await saveCamera(props.projectId, props.move), setCapturing(true)))}>
           {capturing || (pending && !running) ? <LoadingDots /> : <Images data-icon="inline-start" />}
           {k ? "Make keyframes again" : "Make keyframes"}
