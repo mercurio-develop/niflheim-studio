@@ -97,6 +97,9 @@ export type SceneAsset = {
   cid?: string; // from "cast": a character made in the Character step (CastMember), standing here
   prompt?: string;
   image?: string; // the picture its views are made from
+  hold?: boolean; // the picture is kept for editing: no 3D until "Make 3D"
+  before?: string[]; // earlier pictures of the object (each edit pushes one), for Undo
+  parts?: Record<string, string>; // named parts of the current picture: part -> mask
   views?: Partial<Record<AssetView, string>>;
   glb?: string; // coloured
   at?: [number, number, number];
