@@ -141,6 +141,7 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
               cid={cid}
               character={image}
               characterLabel={version.label}
+              description={c.prompt}
               tags={version.tags ?? []}
               parts={version.parts}
               options={t?.options ?? null}

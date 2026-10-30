@@ -8,7 +8,7 @@ import { runWorkflow } from "@/lib/comfy";
 import { fillStage } from "@/lib/stage-fill";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { shiftMain } from "@/lib/camera";
-import { currentFill } from "@/lib/progress";
+import { currentFill, defaultHeight } from "@/lib/progress";
 import { getProject, projectDir, updateProject, type Project, type ViewId } from "@/lib/store";
 import { REFERENCE_TYPES, StyleId, referenceError } from "@/features/character/schemas";
 import { SET_STYLES, composeSetPrompt, fillPlace } from "../prompt";
@@ -173,7 +173,7 @@ export async function cutOutCharacter(id: string) {
       cutouts[v] = rel(id, file);
     }
     await updateProject(id, (q) => {
-      q.stage = { height: 1.7, turn: 0, ...q.stage, source: views.front!, cutouts };
+      q.stage = { height: defaultHeight(q.turnaround?.options), turn: 0, ...q.stage, source: views.front!, cutouts };
     });
   }, "Cutting out the character");
   done(id);

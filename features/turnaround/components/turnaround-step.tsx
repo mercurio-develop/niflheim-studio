@@ -12,7 +12,7 @@ import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import { Editor } from "@/features/character/components/editor";
 import { stackMoves } from "@/lib/history";
-import { VIEWS, viewsFor } from "@/lib/progress";
+import { suggestedBody, VIEWS, viewsFor } from "@/lib/progress";
 import type { Asset, CharacterPose, CharacterSheet, Job, Mesh, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
 import { PosesPanel } from "./poses-panel";
 import { itemChoices, MAX_ITEMS, SheetSection } from "./sheet-section";
@@ -38,6 +38,7 @@ export function TurnaroundSections(props: {
   projectId: string;
   character: string; // current character image
   characterLabel: string;
+  description?: string; // what the character was described as, for the suggested Body
   tags: string[]; // parts of the current character version
   parts: Record<string, string>; // their masks, where found
   options: TurnaroundOptions | null; // what the last Generate used
@@ -50,7 +51,7 @@ export function TurnaroundSections(props: {
   jobs: Record<string, Job>;
   cid?: string; // which character (default c1)
 }) {
-  const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: "relaxed", hide: [], keep: [], extras: [], items: itemChoices(props.tags).slice(0, 2) });
+  const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: suggestedBody(props.description ?? "") === "animal" ? "designed" : "relaxed", hide: [], keep: [], extras: [], items: itemChoices(props.tags).slice(0, 2), body: suggestedBody(props.description ?? "") });
   const items = options.items ?? [];
   const offered = itemChoices(props.tags);
   const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);

@@ -25,6 +25,18 @@ const KEEP = "Same character, same face, same outfit, same colours, same proport
 
 // Four legs: an animal is painted standing on all four, its body level, never upright on two legs
 // and never in a T-pose; every view says so, or Qwen stands it up like a person.
+// The body a description suggests: one naming a four-legged animal starts as an animal (a fox
+// described as a fox was painted on two legs while Body stayed Person, 05_submit Chrome test).
+// Only the head noun counts (the last word before "with", "in", "who" or a comma), so "a small
+// red fox with a lantern" is an animal and "a rat catcher" is not.
+const FOUR_LEGGED = /^(fox|cat|kitten|dog|puppy|wolf|bear|horse|pony|deer|stag|rabbit|bunny|hare|lion|tiger|leopard|cow|pig|boar|goat|sheep|lamb|mouse|rat|squirrel|raccoon|badger|otter|elephant)e?s?$/i;
+export const suggestedBody = (description: string): "person" | "animal" => {
+  const head = description.split(/,| with | in | who | that /i)[0].trim().split(/\s+/).at(-1) ?? "";
+  return FOUR_LEGGED.test(head) ? "animal" : "person";
+};
+// How tall a character stands on the stage until placed by hand: an animal is about knee high.
+export const defaultHeight = (o?: Pick<TurnaroundOptions, "body">) => (o?.body === "animal" ? 0.6 : 1.7);
+
 export const fourLegs = (o?: Pick<TurnaroundOptions, "body">) => o?.body === "animal";
 // The view a turnaround paints first, from the character; every other view is turned from it. An
 // animal starts from the side: asked head-on, Qwen kept a cat upright or sat it down, while a side

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 
@@ -9,10 +10,11 @@ import { Button, buttonVariants } from "@/components/ui/button";
 export function NextBar(props: {
   summary: React.ReactNode;
   back?: { href: string; label: string };
-  next: { label: string; onNext?: () => Promise<unknown>; href?: string; disabled?: boolean; hint?: string };
+  next: { label: string; onNext?: () => Promise<unknown>; href?: string; disabled?: boolean; hint?: string }; // onNext may return the path to go to
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   return (
     <div className="nifl-enter sticky bottom-0 z-20 mt-10 border-t bg-background/80 backdrop-blur-md" style={{ "--i": 3 } as React.CSSProperties}>
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
@@ -34,7 +36,13 @@ export function NextBar(props: {
             <ArrowRight data-icon="inline-end" />
           </Link>
         ) : (
-          <Button size="lg" disabled={props.next.disabled || pending} onClick={() => props.next.onNext && start(() => props.next.onNext!().then(() => setError(null), (e: Error) => setError(e.message)))}>
+          <Button size="lg" disabled={props.next.disabled || pending} onClick={() => props.next.onNext && start(() => props.next.onNext!().then(
+                (to) => {
+                  setError(null);
+                  if (typeof to === "string") router.push(to);
+                },
+                (e: Error) => setError(e.message),
+              ))}>
             {pending ? "Saving..." : props.next.label}
             <ArrowRight data-icon="inline-end" />
           </Button>

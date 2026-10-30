@@ -10,6 +10,9 @@ export function StepRail(props: { projectId: string; active: StepSlug; states: P
   const at = STEPS.findIndex((s) => s.slug === props.active);
   // The line runs from the first dot's centre to the last's: half a column in from each side.
   const inset = 50 / STEPS.length;
+  // A step whose page would only send you back (the one before it is not done yet) is not a link:
+  // clicking it looked like nothing happened (05_submit Chrome test).
+  const locked = (i: number) => i > at && i > 0 && props.states[STEPS[i - 1].slug] !== "done";
   return (
     <nav aria-label="Steps" className="nifl-enter -mx-4 -mt-3 overflow-x-auto px-4 pt-6 pb-2">
       <ol className="relative flex items-start">
@@ -45,13 +48,13 @@ export function StepRail(props: { projectId: string; active: StepSlug; states: P
           const cls = "flex flex-1 flex-col items-center gap-2.5 text-center";
           return (
             <li key={s.slug} className="flex flex-1">
-              {s.ready ? (
+              {s.ready && !locked(i) ? (
                 <Link href={`/p/${props.projectId}/${s.slug}`} className={cn(cls, "group")} aria-current={current ? "step" : undefined}>
                   {dot}
                   <span className="transition-colors group-hover:text-foreground">{label}</span>
                 </Link>
               ) : (
-                <span className={cn(cls, "opacity-45")} title="Soon">
+                <span className={cn(cls, "opacity-45")} title={s.ready ? `Finish ${STEPS[i - 1].title} first` : "Soon"}>
                   {dot}
                   {label}
                 </span>
