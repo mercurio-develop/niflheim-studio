@@ -49,7 +49,7 @@ export function SheetSection(props: { projectId: string; sheet: CharacterSheet |
           {props.sheet?.drawn ? (
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => makeSheet(props.projectId, props.items, props.cid))}>
               <RefreshCw />
-              Faces and things again
+              Repaint faces and props
             </Button>
           ) : (
             <Button size="sm" disabled={busy} onClick={() => run(() => makeSheet(props.projectId, props.items, props.cid))}>

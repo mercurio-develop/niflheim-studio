@@ -34,7 +34,8 @@ export async function exportReel(id: string) {
   if (!p) throw new Error("Project not found.");
   const clips = reelClips(p);
   if (!clips.length) throw new Error("Pick a take in at least one shot first.");
-  const joins = clips.slice(1).map((_, i) => p.reel?.joins[i] ?? "cut");
+  // A join nobody chose is a fade (the reel's one join control, Order; Autopilot keeps it).
+  const joins = clips.slice(1).map((_, i) => p.reel?.joins[i] ?? "fade");
   const key = JSON.stringify({ clips: clips.map((c) => c.video), joins });
   await startJob(id, "reel", async (ctx) => {
     const dir = path.join(projectDir(id), "reel", Date.now().toString(36));

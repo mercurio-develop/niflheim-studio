@@ -1,20 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Clapperboard, Play, Square, TriangleAlert } from "lucide-react";
+import { Play, Square, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { More, Section } from "@/components/section";
-import { LoadingDots } from "@/components/loading-dots";
-import { JobStatus } from "@/features/wizard/components/job-status";
+import { Section } from "@/components/section";
 import { FOCUS, FPS, FRAMINGS, MOVES, frameCount, type CameraMove, type Vec } from "@/lib/camera";
-import type { CameraRender, Job } from "@/lib/store";
-import { renderCamera, saveCamera } from "../actions/camera";
+import { saveCamera } from "../actions/camera";
 import { chip } from "./chip";
 
 // Step 3 of the scene: the camera move, aimed at the character. Pick where it starts (a framing,
-// or Free: dragged in Overview, its height set here), a move, how far and how long; the path shows in the stage above (Overview), Play flies it, and frames that leave the
-// space the stage holds are counted. Saved a moment after the last change. Render makes the depth
-// video the shot follows, and a colour preview of what the stage gives along the path.
+// or Free: dragged in Overview, its height set here), a move, how far and how long; the path shows in the stage above (from above), Play flies it, and frames that leave the
+// space the stage holds are counted. Saved a moment after the last change. (The depth-video Render
+// is gone: no take used it; the clay clip in Keyframes is the move's guide now.)
 export function CameraSection(props: {
   projectId: string;
   move: CameraMove;
@@ -28,9 +25,6 @@ export function CameraSection(props: {
   playing: boolean;
   onPlay: (on: boolean) => void;
   ready: boolean; // a character stands on the stage
-  render: CameraRender | null;
-  renderKey: string | null; // today's move, placement and stage, to tell an old render
-  job?: Job; // the stage job, which renders run under
   n?: string; // its number on the page
   top?: React.ReactNode; // above the controls: the stage viewer the path is shown in
 }) {
@@ -39,11 +33,7 @@ export function CameraSection(props: {
   const framing = FRAMINGS.find((x) => x.id === (m.framing ?? "painting"))!;
   const frames = frameCount(m.seconds);
   const [error, setError] = useState<string | null>(null);
-  const [starting, start] = useTransition();
-  const rendering = props.job?.status === "running" && props.job.detail === "Rendering the camera move";
-  const busy = props.job?.status === "running";
-  const current = !!props.render && props.render.key === props.renderKey;
-  const worst = props.render ? Math.max(...props.render.holes) : 0;
+  const [, start] = useTransition();
   const set = (patch: Partial<CameraMove>) => props.onMove({ ...m, ...patch });
 
   const first = useRef(true);
@@ -60,7 +50,7 @@ export function CameraSection(props: {
       n={props.n ?? "1"}
       tone="bg-tone-pink"
       title="Camera"
-      line={props.ready ? "This shot's framing, move and walk. Overview shows the path with a handle on each end; Play flies it." : "Stand the character on the stage in Scene first: every move is aimed at them."}
+      line={props.ready ? "This shot's framing, move and walk. From above shows the path with a handle on each end; Play flies it." : "Stand the character on the stage in Scene first: every move is aimed at them."}
       summary={`${framing.label} · ${spec.label}${m.move === "static" ? "" : ` ${m.amount}${spec.unit}`} · ${m.seconds} s${m.ease ? " · eased" : ""}`}
       open={props.ready}
       actions={
@@ -136,10 +126,10 @@ export function CameraSection(props: {
             {spec.line}
             {m.to ? (
               <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => set({ to: undefined })}>
-                End moved in Overview · back to the preset
+                End moved from above · back to the preset
               </button>
             ) : (
-              <span>Drag either end of the path in Overview to change it.</span>
+              <span>Drag either end of the path from above to change it.</span>
             )}
           </p>
 
@@ -183,7 +173,7 @@ export function CameraSection(props: {
             >
               Walks
             </button>
-            {m.walk && <span className="ml-2 font-mono text-[11px] text-muted-foreground">{Math.hypot(m.walk.to[0] - m.walk.from[0], m.walk.to[2] - m.walk.from[2]).toFixed(1)} m · drag the yellow ring in Overview</span>}
+            {m.walk && <span className="ml-2 font-mono text-[11px] text-muted-foreground">{Math.hypot(m.walk.to[0] - m.walk.from[0], m.walk.to[2] - m.walk.from[2]).toFixed(1)} m · drag the yellow ring from above</span>}
           </div>
 
           {spec.max !== spec.min && (
@@ -237,57 +227,16 @@ export function CameraSection(props: {
         </div>
       )}
 
-      {props.ready && (
-        <More label="Render" summary={current ? "a depth video and a preview of this move" : "a depth video and a preview, not needed for the shot"} open={rendering}>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-[11px] text-muted-foreground">
-              {current ? `Rendered: ${frames} frames, holes up to ${(worst * 100).toFixed(1)}% of a frame` : props.render ? "The move or the stage changed since the last render" : "~15 s · a depth video for the shot, and a preview"}
-            </span>
-            <Button
-              size="sm"
-              variant={current ? "ghost" : "default"}
-              className="ml-auto"
-              disabled={busy || starting}
-              onClick={() =>
-                start(async () => {
-                  setError(null);
-                  try {
-                    await saveCamera(props.projectId, m);
-                    await renderCamera(props.projectId);
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                })
-              }
-            >
-              {starting && !busy ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
-              {current ? "Render again" : "Render"}
-            </Button>
-          </div>
-          {rendering && props.job && <JobStatus message="Rendering the camera move" startedAt={props.job.startedAt} expected={15} />}
-          {props.render && !rendering && (
-            <div className={`grid gap-3 sm:grid-cols-2 ${current ? "" : "opacity-50"}`}>
-              {(["preview", "depth"] as const).map((k) => (
-                <figure key={k} className="flex flex-col gap-1">
-                  <video key={props.render![k]} src={`/api/files/${props.projectId}/${props.render![k]}`} autoPlay loop muted playsInline className="aspect-[832/480] w-full rounded-md border bg-black" />
-                  <figcaption className="text-xs text-muted-foreground">{k === "preview" ? "What the stage gives along the path (holes black)" : "Depth the shot follows (near is white)"}</figcaption>
-                </figure>
-              ))}
-            </div>
-          )}
-        </More>
-      )}
-
       {props.ready && (props.close ?? -1) >= 0 && (
         <p className="flex items-start gap-1.5 text-xs text-destructive">
           <TriangleAlert className="mt-px size-3.5 shrink-0" />
-          From frame {props.close} the camera is inside or right against them: the keys would show a flat card edge on. Drag the path&apos;s end (Overview) away from them, or shorten the move.
+          From frame {props.close} the camera is inside or right against them: the keys would show a flat card edge on. Drag the path&apos;s end (from above) away from them, or shorten the move.
         </p>
       )}
       {props.ready && props.outside > 0 && (
         <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
           <TriangleAlert className="mt-px size-3.5 shrink-0 text-tone-yellow" />
-          {props.outside} of {frames} frames leave the space the stage holds (red in Overview): those will show holes or stretched shapes. A smaller move, or a start nearer the painting&apos;s camera, stays clean.
+          {props.outside} of {frames} frames leave the space the stage holds (red from above): those will show holes or stretched shapes. A smaller move, or a start nearer the painting&apos;s camera, stays clean.
         </p>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}

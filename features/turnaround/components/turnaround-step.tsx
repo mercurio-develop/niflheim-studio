@@ -140,7 +140,7 @@ export function TurnaroundSections(props: {
               ))}
             </div>
 
-            <span className="self-start pt-0.5 text-xs text-muted-foreground">On their own</span>
+            <span className="self-start pt-0.5 text-xs text-muted-foreground">Props for the sheet</span>
             <div className="flex flex-col gap-1">
               <div className="flex flex-wrap items-center gap-1.5">
                 {[...new Set([...offered, ...items])].map((t) => (

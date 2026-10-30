@@ -31,7 +31,7 @@ const EXAMPLES: { start: string; then: string; end: string }[] = [
 // What guides a shot's takes, one or the other (decision 0014): the camera's keyframes for a shot
 // about the move, the character's sheet for a shot about them.
 const KINDS: { id: ShotKind; label: string; line: string }[] = [
-  { id: "camera", label: "Camera move", line: "The takes follow the move: with the clay clip drawn (Keyframes), every frame of it, from the first keyframe; without it, the keyframes. For push-ins, arcs and walks through the set." },
+  { id: "camera", label: "Camera move", line: "The takes follow the move: with the motion guide drawn (Keyframes), every frame of it, from the first keyframe; without it, the keyframes. For push-ins, arcs and walks through the set." },
   { id: "character", label: "Character", line: "The takes hold the character's face, clothes and things to their sheet, 5 s, from the sheet alone unless you start from the first keyframe: for close-ups and acting." },
 ];
 // What a shot can put in its own sheet: the character's painted expressions and poses, and the
@@ -199,11 +199,11 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
               </span>
               <Button type="submit" variant="outline" className="ml-auto" disabled={!canShoot}>
                 <Clapperboard data-icon="inline-start" />
-                Shoot a take
+                One take
               </Button>
               <Button type="button" size="lg" disabled={!canShoot} onClick={() => shoot(3)} title="Shoots until a take is steady with nothing popping in, at most 3, and picks the best">
                 {pending && !running ? <LoadingDots /> : <Repeat data-icon="inline-start" />}
-                Shoot until good
+                Shoot (best of 3)
               </Button>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
@@ -242,7 +242,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                   <span className="flex items-center gap-2">
                     <span className="min-w-0 flex-1">
                       <span className="font-mono text-foreground">Take {i + 1}</span>
-                      {t.layout ? " · follows the clay clip" : t.kind === "character" ? " · held to the sheet" : ""}
+                      {t.layout ? " · follows the motion guide" : t.kind === "character" ? " · held to the sheet" : ""}
                       {t.score && (
                         <span title={`Camera travel ${t.score.travel.toFixed(0)} px of flow; frames where something pops in: ${t.score.popins} (scripts/score_take.py)`}>
                           {" "}· {goodTake(t.score, t.frames) ? (t.score.popins === 0 ? "steady, nothing pops in" : "steady") : `${t.score.popins} frames pop in`}
@@ -271,7 +271,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
       </div>
       <NextBar
         back={{ href: `/p/${props.projectId}/scene`, label: "Scene" }}
-        summary={props.shot?.picked !== undefined ? `Take ${props.shot.picked + 1} picked.` : takes.length ? `${takes.length} take${takes.length > 1 ? "s" : ""}: pick one.` : "Shoot a take to continue."}
+        summary={props.shot?.picked !== undefined ? `Take ${props.shot.picked + 1} picked.` : takes.length ? `${takes.length} take${takes.length > 1 ? "s" : ""}: pick one.` : "Shoot to continue."}
         next={{ label: "Reel", href: `/p/${props.projectId}/export`, disabled: props.shot?.picked === undefined, hint: props.shot?.picked === undefined ? "Pick a take first" : undefined }}
       />
     </>

@@ -17,7 +17,7 @@ export function ViewSwitch(props: { overview: boolean; onOverview: (on: boolean)
           className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors", props.overview === on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
         >
           {on ? <MapIcon className="size-3.5" /> : <Eye className="size-3.5" />}
-          {on ? "Overview" : (props.home ?? "Painting view")}
+          {on ? "From above" : (props.home ?? "Painting view")}
         </button>
       ))}
     </div>
