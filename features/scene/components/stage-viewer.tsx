@@ -56,7 +56,9 @@ function useLook(scene: THREE.Object3D, look: StageLook) {
 export type StagePose = { position: StagePoint; target: StagePoint; at?: StagePoint; card?: Partial<Record<string, string>>; n?: number };
 
 // A camera fixed at one pose, looking at its target; tells when a few frames have been drawn.
-function PoseCamera(props: { pose: StagePose; fov: number; far: number; onDrawn?: (canvas: HTMLCanvasElement) => void }) {
+// settle: frames drawn before the capture is taken (6 for a keyframe; fewer for a clip's frames,
+// where the stage is already loaded: 97 frames at 6 each took minutes in a real browser).
+function PoseCamera(props: { pose: StagePose; fov: number; far: number; settle?: number; onDrawn?: (canvas: HTMLCanvasElement) => void }) {
   const gl = useThree((s) => s.gl);
   const drawn = useRef(0);
   const key = `${props.pose.n ?? ""}|${props.pose.position.join()}|${props.pose.target.join()}`;
@@ -64,12 +66,12 @@ function PoseCamera(props: { pose: StagePose; fov: number; far: number; onDrawn?
   useFrame(({ camera }) => {
     camera.position.set(...props.pose.position);
     camera.lookAt(...props.pose.target);
-    if (++drawn.current === 6) props.onDrawn?.(gl.domElement);
+    if (++drawn.current === (props.settle ?? 6)) props.onDrawn?.(gl.domElement);
   });
   return <PerspectiveCamera makeDefault fov={props.fov} near={0.05} far={props.far} position={props.pose.position} />;
 }
 
-function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look: StageLook; grid?: boolean; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode }) {
+function Mesh(props: { settle?: number; url: string; camera?: StageCamera; filled?: boolean; look: StageLook; grid?: boolean; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode }) {
   // useGLTF caches one scene per URL, and a three object lives in one scene at a time: a second
   // viewer of the same stage (Shots' camera and its off-screen keyframe capture) would take it
   // away from the first, which then draws an empty frame. Each viewer gets its own copy (the
@@ -142,7 +144,7 @@ function Mesh(props: { url: string; camera?: StageCamera; filled?: boolean; look
   if (props.pose)
     return (
       <>
-        <PoseCamera pose={props.pose} fov={view.fov} far={view.far} onDrawn={props.onDrawn} />
+        <PoseCamera pose={props.pose} fov={view.fov} far={view.far} settle={props.settle} onDrawn={props.onDrawn} />
         <primitive object={scene} />
         {props.children}
       </>
@@ -233,7 +235,9 @@ function useModifierHeld() {
   return held;
 }
 
-export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; grid?: boolean; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
+// dpr: the canvas's pixel ratio; captures pass 1 so a frame is exactly the element's 768x448 at any
+// screen scaling (at 113% it came out 870x507 and the clay clip's encode failed).
+export function StageViewer(props: { dpr?: number; settle?: number; mesh: string; camera?: StageCamera; filled?: boolean; look?: StageLook; grid?: boolean; overview?: boolean; free?: boolean; pose?: StagePose; onDrawn?: (canvas: HTMLCanvasElement) => void; onFloor?: (p: StagePoint) => void; onFloorDouble?: (p: StagePoint) => void; children?: React.ReactNode; className?: string }) {
   return (
     <div className={cn("relative", props.className)} style={{ background: FOG }}>
       <StageLoading />
@@ -243,10 +247,10 @@ export function StageViewer(props: { mesh: string; camera?: StageCamera; filled?
           <div className="h-full max-w-full rounded-sm border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" style={{ aspectRatio: SHOT_ASPECT }} />
         </div>
       )}
-      <Canvas dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}>
+      <Canvas dpr={props.dpr ?? [1, 2]} gl={{ preserveDrawingBuffer: true }}>
         <color attach="background" args={[FOG]} />
         <Suspense fallback={null}>
-          <Mesh url={props.mesh} camera={props.camera} filled={props.filled} look={props.look ?? "painting"} grid={props.grid} overview={props.overview} free={props.free} pose={props.pose} onDrawn={props.onDrawn} onFloor={props.onFloor} onFloorDouble={props.onFloorDouble}>
+          <Mesh settle={props.settle} url={props.mesh} camera={props.camera} filled={props.filled} look={props.look ?? "painting"} grid={props.grid} overview={props.overview} free={props.free} pose={props.pose} onDrawn={props.onDrawn} onFloor={props.onFloor} onFloorDouble={props.onFloorDouble}>
             {props.children}
           </Mesh>
         </Suspense>
