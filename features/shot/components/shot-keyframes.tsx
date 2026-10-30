@@ -90,7 +90,7 @@ function Continue(props: { projectId: string; from: string; hasTake: boolean; se
           <p className="min-w-0 flex-1 text-sm text-muted-foreground">{props.hasTake ? `Start this shot where ${props.from} ends: its last frame, everyone where they stood.` : `${props.from} has no take yet: shoot one to continue from it.`}</p>
           <Button size="sm" variant="outline" disabled={!props.hasTake || pending || props.busy} onClick={() => act(() => continueFromPrevious(props.projectId))}>
             {pending ? <LoadingDots /> : <Link2 data-icon="inline-start" />}
-            Continue from {props.from}
+            Start where {props.from} ends
           </Button>
         </>
       )}

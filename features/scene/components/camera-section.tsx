@@ -9,7 +9,7 @@ import { saveCamera } from "../actions/camera";
 import { chip } from "./chip";
 
 // Step 3 of the scene: the camera move, aimed at the character. Pick where it starts (a framing,
-// or Free: dragged in Overview, its height set here), a move, how far and how long; the path shows in the stage above (Overview), Play flies it, and frames that leave the
+// or Free: dragged in Overview, its height set here), a move, how far and how long; the path shows in the stage above (from above), Play flies it, and frames that leave the
 // space the stage holds are counted. Saved a moment after the last change. (The depth-video Render
 // is gone: no take used it; the clay clip in Keyframes is the move's guide now.)
 export function CameraSection(props: {
@@ -50,7 +50,7 @@ export function CameraSection(props: {
       n={props.n ?? "1"}
       tone="bg-tone-pink"
       title="Camera"
-      line={props.ready ? "This shot's framing, move and walk. Overview shows the path with a handle on each end; Play flies it." : "Stand the character on the stage in Scene first: every move is aimed at them."}
+      line={props.ready ? "This shot's framing, move and walk. From above shows the path with a handle on each end; Play flies it." : "Stand the character on the stage in Scene first: every move is aimed at them."}
       summary={`${framing.label} · ${spec.label}${m.move === "static" ? "" : ` ${m.amount}${spec.unit}`} · ${m.seconds} s${m.ease ? " · eased" : ""}`}
       open={props.ready}
       actions={
@@ -126,10 +126,10 @@ export function CameraSection(props: {
             {spec.line}
             {m.to ? (
               <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => set({ to: undefined })}>
-                End moved in Overview · back to the preset
+                End moved from above · back to the preset
               </button>
             ) : (
-              <span>Drag either end of the path in Overview to change it.</span>
+              <span>Drag either end of the path from above to change it.</span>
             )}
           </p>
 
@@ -173,7 +173,7 @@ export function CameraSection(props: {
             >
               Walks
             </button>
-            {m.walk && <span className="ml-2 font-mono text-[11px] text-muted-foreground">{Math.hypot(m.walk.to[0] - m.walk.from[0], m.walk.to[2] - m.walk.from[2]).toFixed(1)} m · drag the yellow ring in Overview</span>}
+            {m.walk && <span className="ml-2 font-mono text-[11px] text-muted-foreground">{Math.hypot(m.walk.to[0] - m.walk.from[0], m.walk.to[2] - m.walk.from[2]).toFixed(1)} m · drag the yellow ring from above</span>}
           </div>
 
           {spec.max !== spec.min && (
@@ -230,13 +230,13 @@ export function CameraSection(props: {
       {props.ready && (props.close ?? -1) >= 0 && (
         <p className="flex items-start gap-1.5 text-xs text-destructive">
           <TriangleAlert className="mt-px size-3.5 shrink-0" />
-          From frame {props.close} the camera is inside or right against them: the keys would show a flat card edge on. Drag the path&apos;s end (Overview) away from them, or shorten the move.
+          From frame {props.close} the camera is inside or right against them: the keys would show a flat card edge on. Drag the path&apos;s end (from above) away from them, or shorten the move.
         </p>
       )}
       {props.ready && props.outside > 0 && (
         <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
           <TriangleAlert className="mt-px size-3.5 shrink-0 text-tone-yellow" />
-          {props.outside} of {frames} frames leave the space the stage holds (red in Overview): those will show holes or stretched shapes. A smaller move, or a start nearer the painting&apos;s camera, stays clean.
+          {props.outside} of {frames} frames leave the space the stage holds (red from above): those will show holes or stretched shapes. A smaller move, or a start nearer the painting&apos;s camera, stays clean.
         </p>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}

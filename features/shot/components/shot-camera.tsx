@@ -149,14 +149,14 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
           onLive={setLive}
         />
       </StageViewer>
-      <ViewSwitch overview={overview} onOverview={view} home="Shot view" />
+      <ViewSwitch overview={overview} onOverview={view} home="Through the lens" />
       <button
         type="button"
         aria-pressed={free}
         onClick={() => (setPlaying(false), setOverview(false), setFree(!free))}
         className="absolute top-2 right-2 z-20 rounded-full border bg-background/80 px-2.5 py-1 text-xs backdrop-blur aria-pressed:border-primary aria-pressed:text-primary"
       >
-        Camera mode
+        Fly the camera
       </button>
       {edits.error && <p className="absolute bottom-2 left-2 z-20 rounded bg-background/80 px-2 py-1 text-xs text-destructive">{edits.error}</p>}
     </div>

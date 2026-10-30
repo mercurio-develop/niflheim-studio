@@ -7,7 +7,7 @@ import { FPS, type Moment } from "@/lib/camera";
 
 // The shot blocked as key moments (decision 0013): a chip per moment on the shot's timeline. The
 // picked moment poses the stage above; there the gizmo moves whoever is picked for this moment only,
-// camera mode's Take shot frames it, and the main character's pose is chosen here. Each moment is a
+// camera mode's Use this view frames it, and the main character's pose is chosen here. Each moment is a
 // keyframe; LTX fills what happens between them.
 export function MomentsBar(props: {
   moments: Moment[];
@@ -20,7 +20,7 @@ export function MomentsBar(props: {
   onFrame: (i: number, frame: number) => void;
   poses: { id: string; label: string }[]; // the main character's finished poses
   onPose: (i: number, pose: string) => void;
-  canShoot: boolean; // camera mode is on: Take shot stores the view for the picked moment
+  canShoot: boolean; // camera mode is on: Use this view stores the view for the picked moment
   onShoot: () => void;
   warnings: string[];
 }) {
@@ -33,7 +33,7 @@ export function MomentsBar(props: {
         <span>Block this shot by key moments: where everyone stands, their pose and the camera at each one.</span>
         <Button size="sm" variant="outline" onClick={props.onBlock}>
           <Plus data-icon="inline-start" />
-          Block with moments
+          Plan marks over time
         </Button>
       </div>
     );
@@ -86,9 +86,9 @@ export function MomentsBar(props: {
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Button size="sm" variant="outline" disabled={!props.canShoot} onClick={props.onShoot}>
               <Camera data-icon="inline-start" />
-              Take shot
+              Use this view
             </Button>
-            {props.canShoot ? "Frames this moment from where camera mode looks." : "Turn on Camera mode, frame the view, then Take shot."}
+            {props.canShoot ? "Frames this moment from where the flown camera looks." : "Turn on Fly the camera, frame the view, then Use this view."}
           </div>
           <span />
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

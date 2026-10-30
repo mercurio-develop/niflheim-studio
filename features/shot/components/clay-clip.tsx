@@ -32,7 +32,7 @@ export function ClayClip(props: { projectId: string; capture: Capture; layout: L
   return (
     <div className="flex flex-col gap-2 border-t pt-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm">Clay clip</span>
+        <span className="text-sm">Motion guide (grey)</span>
         <span className="text-xs text-muted-foreground">
           {props.layout ? (props.current ? `${props.layout.frames} frames · up to date` : "the move or the stage changed since it was drawn") : "the move in grey, every frame, for Camera move takes"}
         </span>
@@ -44,13 +44,13 @@ export function ClayClip(props: { projectId: string; capture: Capture; layout: L
           onClick={() => (setN(0), setError(null), setCapturing(true))}
         >
           {capturing || pending ? <LoadingDots /> : <Box data-icon="inline-start" />}
-          {capturing ? `Drawing ${n} of ${total}` : pending ? "Saving" : props.layout ? "Draw again" : "Draw the clay clip"}
+          {capturing ? `Drawing ${n} of ${total}` : pending ? "Saving" : props.layout ? "Draw again" : "Draw the motion guide"}
         </Button>
       </div>
       {props.layout && <video src={file(props.layout.clip)} controls loop muted playsInline preload="metadata" className="aspect-[768/448] w-full max-w-md rounded-md border bg-black" />}
       {error && <p className="text-xs text-destructive">{error}</p>}
       {props.job?.status === "running" && <p className="text-xs text-muted-foreground">Joining the clip…</p>}
-      {props.job?.status === "error" && <p className="text-xs text-destructive">The clay clip failed: {props.job.error}. Until it is drawn, Camera move takes follow the keyframes.</p>}
+      {props.job?.status === "error" && <p className="text-xs text-destructive">The motion guide failed: {props.job.error}. Until it is drawn, Camera move takes follow the keyframes.</p>}
       {props.layout && !props.current && <p className="text-xs text-muted-foreground">Out of date: Camera move takes follow the keyframes until it is drawn again.</p>}
       {capturing && <KeyCapture {...props.capture} clay projectId={props.projectId} onFrame={setN} onDone={captured} onError={(m) => (setCapturing(false), setError(m))} />}
     </div>
