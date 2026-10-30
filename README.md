@@ -44,7 +44,7 @@ Needs:
 - ComfyUI v0.38+ with the custom node packs and models in [`build/model-files.md`](build/model-files.md)
 - an NVIDIA GPU with 16 GB (or Comfy Cloud, below)
 - ffmpeg on the `PATH`
-- a Python with `numpy opencv-python pillow scipy torch trimesh` for the helper scripts
+- a Python with the packages in `scripts/requirements.txt` for the helper scripts
   (`NIFL_PYTHON` in `.env`; defaults to ComfyUI's `.venv`)
 
 ```bash
@@ -56,8 +56,11 @@ node scripts/comfy-check.ts http://127.0.0.1:8188   # has it every node and mode
 npm run dev                                         # http://localhost:4800
 ```
 
-Docker: `docker compose up -d` serves the app on :4800 and reaches the proxy on the host at
-`host.docker.internal:8189` (start the proxy so it listens there).
+Docker: `docker compose up -d` serves the app on :4800 with Python and ffmpeg inside, so every
+step runs in the container; your projects stay in `./data`. Comfy comes from `.env`: Comfy Cloud
+(below), or the proxy on the host with `COMFY_BASE_URL=http://host.docker.internal:8189`. The
+image needs no GPU, so a home server or NAS with Docker (x86, about 4 GB free) can run it while
+Comfy Cloud renders.
 
 ## Run it on Comfy Cloud
 

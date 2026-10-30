@@ -1,0 +1,12 @@
+# Never in the image: your data, secrets, local builds and tools.
+.git
+node_modules
+.next
+data
+output
+docs
+.env
+.env.*
+!.env.example
+.venv
+**/__pycache__
