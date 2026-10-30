@@ -37,7 +37,16 @@ def score(fs):
     gf = [x.astype(np.float32) for x in g]
     diffs = [np.abs(b - a) for a, b in zip(gf, gf[1:])]
     d = np.array([x.mean() for x in diffs])
-    blocks = np.array([[x[y:y + H // 8, c:c + W // 8].mean() for y in range(0, H, H // 8) for c in range(0, W, W // 8)] for x in diffs])
+    # Pop-in: what the motion does not explain. Each frame is predicted from the one before by
+    # warping it along the backward flow; a moving character or camera is explained, a thing that
+    # appears or melts is not. (Plain frame differences counted a fox trotting into a calm patch.)
+    ys, xs = np.mgrid[0:H, 0:W].astype(np.float32)
+    resid = []
+    for a, b, fa, fb in zip(g, g[1:], gf, gf[1:]):
+        back = cv2.calcOpticalFlowFarneback(b, a, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+        pred = cv2.remap(fa, xs + back[..., 0], ys + back[..., 1], cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        resid.append(np.abs(fb - pred))
+    blocks = np.array([[x[y:y + H // 8, c:c + W // 8].mean() for y in range(0, H, H // 8) for c in range(0, W, W // 8)] for x in resid])
     spikes = (blocks / (np.median(blocks, axis=0) + 0.5)).max(axis=1)
     return dict(frames=len(fs), camera_travel_px=round(float(np.sum(cam)), 1), local_motion=round(float(np.mean(local)), 3),
                 popin_max=round(float(spikes.max()), 1), popin_frames=int((spikes > 6).sum()), change_max_over_mean=round(float(d.max() / (d.mean() + 1e-6)), 1))
