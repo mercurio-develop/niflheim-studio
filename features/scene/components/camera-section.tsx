@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Play, Square, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/section";
-import { FOCUS, FPS, FRAMINGS, MOVES, frameCount, type CameraMove, type Vec } from "@/lib/camera";
+import { FOCUS, FPS, FRAMINGS, MOVES, crossWalk, frameCount, type CameraMove, type Subject, type Vec } from "@/lib/camera";
 import { saveCamera } from "../actions/camera";
 import { chip } from "./chip";
 
@@ -17,7 +17,7 @@ export function CameraSection(props: {
   move: CameraMove;
   onMove: (m: CameraMove) => void;
   start: Vec | null; // where the move starts today, which the Height slider raises or lowers
-  subject: { at: Vec; turn: number } | null; // where the character stands and faces, to start a walk
+  subject: Subject | null; // where the character stands, how tall and which way they face, to start a walk
   subjects?: { id: string; label: string }[]; // what the camera can work around: main, placed assets, none
   poses?: { id: string; label: string }[]; // the character's finished poses (Character → Turnaround)
   outside: number; // frames outside the stage's space
@@ -163,12 +163,10 @@ export function CameraSection(props: {
               type="button"
               aria-pressed={!!m.walk}
               className={chip(!!m.walk)}
-              disabled={!props.subject}
+              disabled={!props.subject || !props.start}
               onClick={() => {
-                if (m.walk || !props.subject) return;
-                const { at, turn } = props.subject;
-                const a = (turn * Math.PI) / 180;
-                set({ walk: { from: at, to: [at[0] + Math.sin(a) * 2, at[1], at[2] + Math.cos(a) * 2] } });
+                if (m.walk || !props.subject || !props.start) return;
+                set({ walk: crossWalk(props.subject, props.start) });
               }}
             >
               Walks
@@ -195,15 +193,11 @@ export function CameraSection(props: {
             Length
           </label>
           <div className="flex items-center gap-3">
-            <input id="cam-seconds" type="range" min={2} max={10} step={0.5} value={m.seconds} onChange={(e) => set({ seconds: Number(e.target.value) })} className="w-full accent-primary" />
+            <input id="cam-seconds" type="range" min={2} max={5} step={0.5} value={Math.min(5, m.seconds)} onChange={(e) => set({ seconds: Number(e.target.value) })} className="w-full accent-primary" />
             <span className="w-14 text-right font-mono text-xs text-muted-foreground">{m.seconds} s</span>
           </div>
-          {m.seconds > 5 && (
-            <>
-              <span />
-              <p className="-mt-1 text-xs text-tone-yellow">Past 5 s a take drifts on a 16 GB card (LTX&apos;s own guidance is about 4 s): two shots of 4 s hold together better than one of {m.seconds} s.</p>
-            </>
-          )}
+          <span />
+          <p className="-mt-1 text-xs text-muted-foreground">Up to 5 s: past that a take drifts (LTX&apos;s own guidance is about 4 s). A longer moment is two shots.</p>
 
           <span className="text-xs text-muted-foreground">Focus</span>
           <div className="flex flex-wrap items-center gap-1.5">
