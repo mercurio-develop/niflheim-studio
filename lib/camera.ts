@@ -165,7 +165,8 @@ export function poses(cam: StageCamera, who: Subject, m: CameraMove, others: Oth
   const main = !m.subject || m.subject === "main" || subjectOf(cam, who, m, others) === who;
   const subject = main ? { ...who, at: a0 } : subjectOf(cam, who, m, others);
   const { position: p0, target: aimAt } = start(cam, subject, m);
-  const preset = ends(p0, aimAt, m, Math.max(0.3, (0.6 * (subject.frame ?? subject.height)) / 1.7));
+  // A push stops short of where tooClose would flag it (a 2.5 m troll's Close-up push crossed it).
+  const preset = ends(p0, aimAt, m, Math.max(0.3, (0.6 * (subject.frame ?? subject.height)) / 1.7, nearOf(subject.height) + 0.1));
   const e = m.to ? { from: preset.from, to: m.to } : preset;
   const carry = main && (m.move === "follow" || m.framing === "pov");
   const out: Pose[] = [];
@@ -186,12 +187,31 @@ export function poses(cam: StageCamera, who: Subject, m: CameraMove, others: Oth
   return out;
 }
 
+// The default walk: across the frame, sideways to the camera, towards the side they face (screen
+// right when they face the camera), about a body and a half long (0.8 to 2 m). Walking along
+// their facing sent a character who faces the camera into it in every default shot.
+export const WALK_MAX = 3; // m: a ring dragged further is pulled back, the take cannot carry more
+export function crossWalk(who: Subject, cam: Vec): { from: Vec; to: Vec } {
+  const d = sub(who.at, cam);
+  const across: Vec = [-d[2], 0, d[0]];
+  const facing: Vec = [Math.sin((who.turn * Math.PI) / 180), 0, Math.cos((who.turn * Math.PI) / 180)];
+  const side = across[0] * facing[0] + across[2] * facing[2] < -0.01 ? -1 : 1;
+  const step = Math.min(2, Math.max(0.8, who.height * 1.5)) / (Math.hypot(across[0], across[2]) || 1);
+  return { from: who.at, to: add(who.at, scale(across, side * step)) };
+}
+export function clampWalk(from: Vec, to: Vec): Vec {
+  const d = sub(to, from);
+  const k = Math.min(1, WALK_MAX / (Math.hypot(d[0], d[2]) || 1));
+  return [from[0] + d[0] * k, to[1], from[2] + d[2] * k];
+}
+
+const nearOf = (height: number) => Math.max(0.25, height * 0.45);
 // The first frame where the camera comes closer to the character than about half their height (at
 // least 0.25 m: a fixed 0.7 m flagged every Mid shot of a small animal) across the ground, or -1. Keys there show a flat card from inside or edge on, and a path
 // that crosses them turns round them in a frame. First person stands in them on purpose.
 export function tooClose(ps: Pose[], who: Subject, m: CameraMove) {
   if (m.framing === "pov") return -1;
-  const near = Math.max(0.25, who.height * 0.45);
+  const near = nearOf(who.height);
   return ps.findIndex((p) => p.at && Math.hypot(p.position[0] - p.at[0], p.position[2] - p.at[2]) < near);
 }
 
