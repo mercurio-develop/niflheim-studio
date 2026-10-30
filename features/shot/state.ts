@@ -1,6 +1,6 @@
 import { frameCount } from "@/lib/camera";
 import { sceneKey } from "@/lib/progress";
-import type { FramingId, MoveId } from "@/lib/camera";
+import type { ShotPreset } from "@/lib/camera";
 import type { Project, ShotKind } from "@/lib/store";
 
 // What the Shots page and the take action both need to know about the active shot. Plain helpers
@@ -26,15 +26,16 @@ export function keysProblem(p: Project): string | null {
 // the character; anything that moves through the set is about the camera.
 export const suggestedKind = (p: Project): ShotKind => ((p.camera?.move ?? "static") === "static" || ["close", "pov"].includes(p.camera?.framing ?? "") ? "character" : "camera");
 
-// The kinds of shot New shot offers: framing, move, kind and length chosen together from what
-// worked in the 05_submit tests. Mid and close shots follow their keyframes (faces matched to the
-// sheet): on one mid shot that faced the camera, steady, the right person, where the sheet's takes
-// turned away or brought in a double. The sheet (Character) is for action, where the character moves
-// a lot and keyframes cannot follow (the fox trotting to the lantern). The bare moves stay under More.
-export const SHOT_TYPES: { id: string; label: string; line: string; framing: FramingId; move: MoveId; kind: ShotKind; seconds: number }[] = [
-  { id: "wide-push", label: "Wide · push in", line: "The place and the character, the camera moving in.", framing: "long", move: "push", kind: "camera", seconds: 4 },
-  { id: "mid-acting", label: "Mid · acting", line: "Waist up, holding on what they do.", framing: "mid", move: "static", kind: "camera", seconds: 5 },
-  { id: "close-reaction", label: "Close-up · reaction", line: "Their face, their expression.", framing: "close", move: "static", kind: "camera", seconds: 5 },
-  { id: "action", label: "Action · keep their look", line: "They move a lot; their sheet keeps them the same.", framing: "long", move: "static", kind: "character", seconds: 5 },
-  { id: "wide-follow", label: "Wide · follow", line: "The camera goes with them as they move.", framing: "long", move: "follow", kind: "camera", seconds: 4 },
+// The shot presets: framing, camera move and what the actor does, chosen together with one click
+// (Camera, and New shot). They are the moves that held in the 05_submit tests: a standing actor
+// with a simple move, or one short walk; a walk with a moving camera popped the most, and walking
+// off never happened. Each was checked on the fox, the troll and the keeper: never too close, the
+// actor in frame (lib/camera.ts presetMove). Mid and close shots follow their keyframes (faces
+// matched to the sheet). The bare controls stay under More.
+export const SHOT_TYPES: (ShotPreset & { label: string; line: string; kind: ShotKind })[] = [
+  { id: "establish", label: "Establish", line: "From the painting's own view, the camera pushes in slowly; they stand in the place.", framing: "painting", move: "push", amount: 0.8, seconds: 4, actor: "stands", kind: "camera" },
+  { id: "across", label: "Walk across", line: "The painting's own view holds; they cross the frame.", framing: "painting", move: "static", amount: 0, seconds: 4, actor: "across", kind: "camera" },
+  { id: "approach", label: "Approach", line: "They walk up to their mark as the camera eases back.", framing: "long", move: "pull", amount: 0.8, seconds: 4, actor: "approach", kind: "camera" },
+  { id: "orbit", label: "Hero orbit", line: "The camera circles them, 30 degrees; they stand.", framing: "mid", move: "arc", amount: 30, seconds: 4, actor: "stands", kind: "camera" },
+  { id: "reaction", label: "Reaction", line: "Close on their face; the camera holds.", framing: "close", move: "static", amount: 0, seconds: 4, actor: "stands", kind: "camera" },
 ];

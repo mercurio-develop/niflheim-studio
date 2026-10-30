@@ -10,9 +10,10 @@ import { CameraSection } from "@/features/scene/components/camera-section";
 import { StageViewer } from "@/features/scene/components/stage-viewer";
 import { finishedPoses, fileUrl, urlsOf } from "@/lib/stage-context";
 import { ViewSwitch } from "@/features/scene/components/view-switch";
-import { DEFAULT_MOVE, cardAt, clampWalk, frameCount, inside, momentsOf, placeAt, poses, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
+import { DEFAULT_MOVE, cardAt, clampWalk, presetMove, frameCount, inside, momentsOf, placeAt, poses, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
 import { saveMoments } from "../actions/moments";
 import { MomentsBar } from "./moments-bar";
+import { SHOT_TYPES } from "../state";
 import type { Block, CharacterPose, SceneAsset, SetData, StageData } from "@/lib/store";
 
 // Where camera mode's camera is and looks, every frame, for Take shot.
@@ -201,6 +202,11 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
         )
       }
       ready={ready}
+      presets={SHOT_TYPES}
+      onPreset={(id, side) => {
+        const p = SHOT_TYPES.find((x) => x.id === id);
+        if (p && ready) pick({ ...presetMove(cam!, { at: pl!.at!, height: pl!.height, turn: pl!.turn }, p, side), subject: move.subject, pose: move.pose, focus: move.focus });
+      }}
       more={more}
       onMore={(on) => (setMore(on), on || (setFree(false), setSel(null)))}
     />
