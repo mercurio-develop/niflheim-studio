@@ -9,7 +9,7 @@ import { meshFromViews, paintViews } from "@/lib/asset-3d";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { CID, getProject, projectDir, updateProject, type SceneAsset } from "@/lib/store";
-import { viewImage } from "@/lib/progress";
+import { defaultHeight, viewImage } from "@/lib/progress";
 import { mediumOf, styleById } from "@/lib/styles";
 
 const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
@@ -140,7 +140,7 @@ export async function addCastMember(id: string, rawCid: unknown) {
   }
   if (!views.front || !views.side || !views.back) throw new Error(`Paint ${m.name}'s turnaround first (front, side and back).`);
   const aid = stamp();
-  const asset: SceneAsset = { id: aid, name: m.name, kind: "character", from: "cast", cid, prompt: m.character.prompt, image: views.front, views, height: 1.7, turn: 0 };
+  const asset: SceneAsset = { id: aid, name: m.name, kind: "character", from: "cast", cid, prompt: m.character.prompt, image: views.front, views, height: defaultHeight(m.turnaround?.options), turn: 0 };
   await updateProject(id, (q) => void (q.sceneAssets = [...(q.sceneAssets ?? []), asset]));
   await startJob(id, jobKey(aid), (ctx) => build(id, aid, ctx), `Cutting out ${asset.name}`);
   done(id);

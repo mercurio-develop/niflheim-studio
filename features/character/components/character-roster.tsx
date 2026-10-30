@@ -107,7 +107,7 @@ export function CharacterRoster(props: { projectId: string; selected: string; ca
           }}
         >
           <span className="text-sm font-medium">New character</span>
-          <Input aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name: the dragon" maxLength={40} disabled={pending} autoFocus />
+          <Input aria-label="Name" autoComplete="off" data-1p-ignore data-lpignore="true" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name: the dragon" maxLength={40} disabled={pending} autoFocus />
           <Textarea aria-label="Describe the character" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="A small red dragon with stubby wings and a round belly" rows={2} maxLength={600} disabled={pending} />
           <div className="flex items-center gap-2">
             <Button type="submit" size="sm" disabled={pending || !name.trim() || !prompt.trim()}>

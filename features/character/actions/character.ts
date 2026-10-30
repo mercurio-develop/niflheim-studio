@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
-import { redirect } from "next/navigation";
 import { cropBox, maskBox, pngSize, removePrompt, type Box } from "@/lib/brush";
 import { parentIn, stackMoves } from "@/lib/history";
 import { mergeParts, partsFromTags } from "@/lib/parts";
@@ -554,7 +553,9 @@ export async function cancel(id: string, key: string, rawTarget = "character", r
   done(id);
 }
 
-// Next: this version is the character. Later steps read character.versions[current].
+// Next: this version is the character. Later steps read character.versions[current]. Returns
+// where to go: a redirect thrown from an action called by the Next bar was shown as the red text
+// "NEXT_REDIRECT" instead of navigating (05_submit Chrome test).
 export async function finishCharacter(id: string, rawCid?: unknown) {
   const cid = Cid.parse(rawCid) ?? "c1";
   await updateProject(id, (p) => {
@@ -562,7 +563,7 @@ export async function finishCharacter(id: string, rawCid?: unknown) {
     if (c.current === null) throw new Error("Pick a concept first.");
     c.doneAt = new Date().toISOString();
   });
-  redirect(`/p/${id}/scene`);
+  return `/p/${id}/scene`;
 }
 
 // The cast: more characters in the same project, each with its own concepts, turnaround, poses
