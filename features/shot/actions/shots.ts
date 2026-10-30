@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { DEFAULT_MOVE, MOVES } from "@/lib/camera";
+import { DEFAULT_MOVE, MOVES, presetMove } from "@/lib/camera";
+import { currentFill } from "@/lib/progress";
 import { DEFAULT_NEGATIVE } from "../graph";
 import { SHOT_TYPES } from "../state";
 import { SHOT_FIELDS, updateProject, type Project, type ShotData } from "@/lib/store";
@@ -35,8 +36,9 @@ const ShotId = z.string().regex(/^s\d{1,3}$/);
 const Name = z.string().trim().min(1).max(40);
 
 // A new shot of the same scene, starting from a camera move preset; it becomes the active one.
-// A new shot from a shot type (SHOT_TYPES: framing, move, kind and length together) or, under
-// More, from a bare camera move.
+// A new shot from a preset (SHOT_TYPES: framing, move, the actor's walk, kind and length together)
+// or, under More, from a bare camera move. The walk needs the actor on the stage; without them the
+// shot gets the camera half and the walk comes when the preset is picked again in Camera.
 export async function newShot(id: string, raw: unknown) {
   const key = z.enum([...SHOT_TYPES.map((t) => t.id), ...MOVES.map((m) => m.id)] as [string, ...string[]]).parse(raw);
   const type = SHOT_TYPES.find((t) => t.id === key);
@@ -48,7 +50,13 @@ export async function newShot(id: string, raw: unknown) {
     const shot = `s${n}`;
     q.shots = [...(q.shots ?? []), { id: shot, name: `Shot ${n} · ${type?.label ?? spec.label}` }];
     load(q, shot);
-    q.camera = { ...DEFAULT_MOVE, move: spec.id, amount: spec.value, ...(type ? { framing: type.framing, seconds: type.seconds } : {}) };
+    const cam = currentFill(q)?.camera;
+    const at = q.stage?.at;
+    q.camera = type
+      ? cam && at
+        ? presetMove(cam, { at, height: q.stage!.height, turn: q.stage!.turn }, type)
+        : { ...DEFAULT_MOVE, preset: type.id, framing: type.framing, move: type.move, amount: type.amount, seconds: type.seconds }
+      : { ...DEFAULT_MOVE, move: spec.id, amount: spec.value };
     if (type) q.shot = { action: "", negative: DEFAULT_NEGATIVE, takes: [], kind: type.kind };
   });
   done(id);

@@ -19,7 +19,7 @@ export type FocusId = "deep" | "soft" | "strong";
 // and looks, and for anyone on the stage (who: "main" or an asset id) where they stand, which way
 // they face and which pose they wear. The keys are taken at the moments; between them positions
 // and turns ease, a pose holds until the next moment sets another. None: the move above as before.
-export type CameraMove = { move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec }; focus?: FocusId; pose?: string; poseThen?: string; subject?: string; moments?: Moment[] };
+export type CameraMove = { preset?: string; side?: 1 | -1; move: MoveId; amount: number; seconds: number; ease: boolean; framing?: FramingId; from?: Vec; to?: Vec; walk?: { from: Vec; to: Vec }; focus?: FocusId; pose?: string; poseThen?: string; subject?: string; moments?: Moment[] };
 export type Mark = { at?: Vec; turn?: number; pose?: string };
 export type Moment = { frame: number; camera?: { from: Vec; look: Vec }; marks: Record<string, Mark> };
 // at: where the character stands at that frame.
@@ -199,6 +199,27 @@ export function crossWalk(who: Subject, cam: Vec): { from: Vec; to: Vec } {
   const step = Math.min(2, Math.max(0.8, who.height * 1.5)) / (Math.hypot(across[0], across[2]) || 1);
   return { from: who.at, to: add(who.at, scale(across, side * step)) };
 }
+// Walks up to their mark: from a body and a half further back (1 to 2.5 m) along the line from the
+// camera, ending where they stand, so they come towards the camera and stop at their framing.
+export function approachWalk(who: Subject, cam: Vec): { from: Vec; to: Vec } {
+  const d: Vec = [who.at[0] - cam[0], 0, who.at[2] - cam[2]];
+  const k = Math.min(2.5, Math.max(1, who.height * 1.5)) / (Math.hypot(d[0], d[2]) || 1);
+  return { from: add(who.at, scale(d, k)), to: who.at };
+}
+
+// A shot preset: framing, move and the actor's motion chosen together (features/shot/state.ts
+// SHOT_TYPES), made into a camera move from where the actor stands. side: which way a walk across
+// goes (1 towards the side they face, screen right when they face the camera).
+export type Actor = "stands" | "across" | "approach";
+export type ShotPreset = { id: string; framing: FramingId; move: MoveId; amount: number; seconds: number; actor: Actor };
+export function presetMove(cam: StageCamera, who: Subject, p: ShotPreset, side: 1 | -1 = 1): CameraMove {
+  const m: CameraMove = { ...DEFAULT_MOVE, preset: p.id, side, framing: p.framing, move: p.move, amount: p.amount, seconds: p.seconds, ease: true };
+  if (p.actor === "stands") return m;
+  const start = poses(cam, who, m)[0].position;
+  const walk = p.actor === "across" ? crossWalk({ ...who, turn: side > 0 ? who.turn : who.turn + 180 }, start) : approachWalk(who, start);
+  return { ...m, walk };
+}
+
 export function clampWalk(from: Vec, to: Vec): Vec {
   const d = sub(to, from);
   const k = Math.min(1, WALK_MAX / (Math.hypot(d[0], d[2]) || 1));

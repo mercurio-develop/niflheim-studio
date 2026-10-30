@@ -13,6 +13,8 @@ const done = (id: string) => {
 const Point = z.tuple([z.number(), z.number(), z.number()]).refine((v) => v.every((x) => Number.isFinite(x) && Math.abs(x) < 500));
 const Move = z
   .object({
+    preset: z.string().regex(/^[a-z-]{1,24}$/).optional(),
+    side: z.union([z.literal(1), z.literal(-1)]).optional(),
     move: z.enum(MOVES.map((m) => m.id) as [string, ...string[]]),
     amount: z.number(),
     seconds: z.number().min(2).max(10),
