@@ -30,17 +30,15 @@ export default function Home() {
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center gap-16 px-4 pt-24 pb-16">
         <section className="flex w-full flex-col items-center gap-6 text-center">
-          {/* One line across the column on desktop; wraps on phones. */}
-          <h4 className="w-full text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-[4.55rem] lg:leading-none lg:tracking-tighter lg:whitespace-nowrap">
-            Design a character, give them a world, aim the camera and add the effects.
-          </h4>
+          <h1 className="max-w-4xl text-2xl font-semibold tracking-tight text-balance sm:text-3xl lg:text-4xl lg:leading-tight">
+            Design a character, give them a world, aim the camera and shoot the takes.
+          </h1>
           <div className="mt-4 flex w-full justify-center">
             <StartForm />
           </div>
         </section>
 
         <section className="flex w-full flex-col gap-4">
-          <h2 className="text-sm text-muted-foreground">Five steps. Each one saved, swappable, re-runnable.</h2>
           <Pipeline />
         </section>
       </main>
