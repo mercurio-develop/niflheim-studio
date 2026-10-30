@@ -11,6 +11,8 @@ import { parentIn, stackMoves } from "@/lib/history";
 import { mergeParts, partsFromTags } from "@/lib/parts";
 import { CID, charDir, charKey, charOf, getProject, projectDir, updateProject, type Edit, type Project, type Version, type ViewId } from "@/lib/store";
 import { mediumOf, styleById } from "@/lib/styles";
+import { suggestedBody } from "@/lib/progress";
+import { generateTurnaround } from "@/features/turnaround/actions/turnaround";
 import { Count, Index, Prompt, REFERENCE_TYPES, StyleId, referenceError } from "../schemas";
 
 const rel = (id: string, files: string[]) => files.map((f) => path.relative(projectDir(id), f));
@@ -189,8 +191,43 @@ export async function pickConcept(id: string, rawIndex: number, rawSet?: number,
   });
   const c = charOf(p, cid).character;
   const at = c.current!;
-  if (!c.versions[at].tags) await startJob(id, charKey(cid, "tags"), (ctx) => tagVersion(id, at, c.versions[at].image, ctx, "character", cid)).catch(() => {});
+  const image = c.versions[at].image;
+  // On rails: the turnaround and its sheet start by themselves. A new version's parts are read
+  // first, so the sheet gets the things they carry; without that job the painting starts now.
+  const tagging = !c.versions[at].tags
+    ? await startJob(id, charKey(cid, "tags"), async (ctx) => {
+        try {
+          await tagVersion(id, at, image, ctx, "character", cid);
+        } finally {
+          await paintTurnaround(id, cid, image);
+        }
+      }).then(() => true, () => false)
+    : false;
+  if (!tagging) await paintTurnaround(id, cid, image);
   done(id);
+}
+
+// Things worn or carried, the ones offered for the sheet: the rule of itemChoices in
+// features/turnaround/components/sheet-section.tsx, a client module this file cannot import.
+const BODY_PART = /(hair|eyes?|skin|face|beard|ears?|tail|fur|paws?|legs?|arms?|hands?)$/;
+const CARRIED = /(bag|satchel|backpack|pouch|lantern|sword|staff|book|hat|helmet|cape|cloak|coat|scarf)$/;
+const carried = (tags: string[]) => [...new Set(tags.filter((t) => !BODY_PART.test(t)))].sort((a, b) => Number(CARRIED.test(b)) - Number(CARRIED.test(a)));
+
+// Paint the picked version's turnaround and sheet (the Turnaround's own Generate) unless it has
+// one or another version was picked meanwhile. The Body is guessed from the description (an
+// animal stands on four legs) or kept from the last Generate; the chip beside the views corrects
+// it. A turnaround already running is left alone: Generate again is there for this version.
+async function paintTurnaround(id: string, cid: string, image: string) {
+  const p = await getProject(id);
+  if (!p) return;
+  const data = charOf(p, cid);
+  const c = data.character;
+  const v = c.current === null ? undefined : c.versions[c.current];
+  if (v?.image !== image || data.turnaround?.source === image) return;
+  const was = data.turnaround?.options;
+  const body = was?.body ?? suggestedBody(c.prompt ?? "");
+  const options = { pose: body === "animal" ? ("designed" as const) : (was?.pose ?? "relaxed"), hide: [], keep: [], extras: was?.extras ?? [], body, items: carried(v.tags ?? []).slice(0, 2) };
+  await generateTurnaround(id, options, cid).catch(() => {});
 }
 
 export async function selectVersion(id: string, rawIndex: number, rawTarget = "character", rawCid?: unknown) {

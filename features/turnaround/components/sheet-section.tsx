@@ -8,7 +8,7 @@ import { LoadingDots } from "@/components/loading-dots";
 import { Textarea } from "@/components/ui/textarea";
 import type { CharacterSheet, Job, SheetCell } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { addExpression, addItem, cancelSheet, makeSheet, removeCell, rerollCell } from "../actions/sheet";
+import { addExpression, cancelSheet, makeSheet, removeCell, rerollCell } from "../actions/sheet";
 
 // Tags that are a part of the body or hair, not a thing worn or carried: never offered as items.
 // The things offered for the sheet, carried ones first (Set up picks them before Generate).
@@ -29,7 +29,6 @@ const CARRIED = /(bag|satchel|backpack|pouch|lantern|sword|staff|book|hat|helmet
 export function SheetSection(props: { projectId: string; sheet: CharacterSheet | null; items: string[]; jobs: Record<string, Job>; locked: boolean; cid?: string }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [word, setWord] = useState("");
-  const [thing, setThing] = useState("");
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -76,19 +75,8 @@ export function SheetSection(props: { projectId: string; sheet: CharacterSheet |
       {props.sheet?.drawn && <FadeImage src={file(props.sheet.drawn)} alt="The reference sheet" className="aspect-[768/448] w-full max-w-2xl rounded-md border bg-black object-contain" />}
       {props.sheet?.drawn && (
         <span className="text-xs text-muted-foreground">
-          Any picture can be painted again on its own: a body with Again or Fix on its view above (the sheet redraws), a face, a thing or an expression with its ↻ below, or with its prompt edited (✎).
+          Any picture can be painted again on its own: a body with Again or Fix on its view above (the sheet redraws), a face, a thing or an expression with its ↻ below, or with its prompt edited (✎). Other things to carry are picked in Set up, then Repaint faces and props.
         </span>
-      )}
-
-      {props.sheet?.drawn && (
-        <form className="flex flex-wrap items-center gap-1.5" onSubmit={(e) => (e.preventDefault(), run(() => addItem(props.projectId, thing, props.cid).then(() => setThing(""))))}>
-          <span className="text-xs text-muted-foreground">A thing they wear or carry, in your words:</span>
-          <input aria-label="A thing they wear or carry" value={thing} maxLength={40} placeholder="a truck tire" onChange={(e) => setThing(e.target.value)} className="h-7 w-48 rounded-md border bg-transparent px-2 text-xs" />
-          <Button type="submit" size="sm" variant="ghost" disabled={busy || thing.trim().length < 2 || cells.filter((c) => c.kind === "item").length >= MAX_ITEMS}>
-            <Plus />
-            Add to the sheet
-          </Button>
-        </form>
       )}
 
       {props.sheet?.cells.some((c) => c.id === "face-front" && c.image) && (

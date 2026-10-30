@@ -123,7 +123,8 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
                 key={`${cid}-${c.current}`}
                 id="edit"
                 cid={cid}
-                open={!Object.keys(views).length}
+                // Folded: picking a concept goes straight on to the turnaround; Edit opens by hand.
+                open={false}
                 projectId={project.id}
                 version={version}
                 parentImage={moves.parent === null ? null : c.versions[moves.parent].image}
@@ -159,7 +160,7 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
         <VersionsSidebar key={cid} projectId={project.id} cid={cid} versions={c.versions} current={c.current} busy={editing} />
       </div>
       <NextBar
-        summary={!v1 ? `Pick a concept for ${cards[0].name} to continue` : complete ? <><span className="font-mono text-xs">v{c1.current! + 1}</span> · {v1.label} · every side painted</> : t1 && !fresh1 ? "This version has no turnaround yet" : "Generate the turnaround to continue"}
+        summary={!v1 ? `Pick a concept for ${cards[0].name} to continue` : complete ? <><span className="font-mono text-xs">v{c1.current! + 1}</span> · {v1.label} · every side painted</> : t1 && !fresh1 ? "This version has no turnaround yet" : "The turnaround paints by itself; Scene opens when every view is in"}
         next={{ label: "Scene", disabled: !complete || !!ownJob, hint, onNext: finishCharacter.bind(null, project.id) }}
       />
     </>

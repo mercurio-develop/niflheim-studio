@@ -52,6 +52,14 @@ export function TurnaroundSections(props: {
   cid?: string; // which character (default c1)
 }) {
   const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: suggestedBody(props.description ?? "") === "animal" ? "designed" : "relaxed", hide: [], keep: [], extras: [], items: itemChoices(props.tags).slice(0, 2), body: suggestedBody(props.description ?? "") });
+  // A Generate that started on the server (picking a concept paints the turnaround by itself)
+  // brings its options here once; what the user changes in between is kept until the next one.
+  const painted0 = JSON.stringify(props.options);
+  const [seenOptions, setSeenOptions] = useState(painted0);
+  if (painted0 !== seenOptions) {
+    setSeenOptions(painted0);
+    if (props.options) setOptions(props.options);
+  }
   const items = options.items ?? [];
   const [thing, setThing] = useState("");
   const offered = itemChoices(props.tags);
@@ -83,6 +91,9 @@ export function TurnaroundSections(props: {
   const painting = running ? Number(job?.detail?.match(/\((\d+)\/\d+\)/)?.[1] ?? 1) - 1 : -1;
   const waiting = (i: number) => (starting && !running) || (running && i >= painting);
   const changed = JSON.stringify(props.options) !== JSON.stringify(options);
+  // The concept was just picked: its parts are read, then the views and the sheet start by themselves.
+  const queued = !props.options && !running && props.jobs.tags?.status === "running";
+  const bodyChanged = !!props.options && (props.options.body ?? "person") !== (options.body ?? "person");
   const chips = [...props.tags].sort((a, b) => Number(HELD.test(b)) - Number(HELD.test(a)));
   const fail = (e: Error) => setError(e.message);
 
@@ -120,17 +131,8 @@ export function TurnaroundSections(props: {
         className="nifl-enter"
         style={{ "--i": 3 } as React.CSSProperties}
       >
-        <More label="Set up" summary={`${options.body === "animal" ? "Animal · four legs" : options.body === "creature" ? "Creature" : "Person"} · ${poseLabel(options)}${items.length ? ` · with ${items.join(", ")}` : ""}${options.hide.length ? ` · without ${options.hide.join(", ")}` : ""}${options.extras.length ? ` · + ${options.extras.join(", ")}` : ""}`} open={none}>
+        <More label="Set up" summary={`${poseLabel(options)}${items.length ? ` · with ${items.join(", ")}` : ""}${options.hide.length ? ` · without ${options.hide.join(", ")}` : ""}${options.extras.length ? ` · + ${options.extras.join(", ")}` : ""}`} open={none}>
           <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
-            <span className="text-xs text-muted-foreground">Body</span>
-            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Body">
-              {BODIES.map(([b, text]) => (
-                <button key={b} type="button" role="radio" aria-checked={(options.body ?? "person") === b} onClick={() => setOptions((o) => ({ ...o, body: b, pose: b === "animal" ? "designed" : o.pose }))} className={chip((options.body ?? "person") === b)}>
-                  {text}
-                </button>
-              ))}
-            </div>
-
             <span className="text-xs text-muted-foreground">Pose</span>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Pose">
               {(options.body === "animal" ? (["designed"] as const) : (["relaxed", "designed"] as const)).map((p) => (
@@ -207,7 +209,17 @@ export function TurnaroundSections(props: {
             </div>
           </div>
         </More>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {/* Body beside the views it shapes: guessed from the description, changed here; the
+                views and the sheet follow it on the next Generate. */}
+            <span className="text-xs text-muted-foreground">Body</span>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Body">
+              {BODIES.map(([b, text]) => (
+                <button key={b} type="button" role="radio" aria-checked={(options.body ?? "person") === b} onClick={() => setOptions((o) => ({ ...o, body: b, pose: b === "animal" ? "designed" : o.body === "animal" ? "relaxed" : o.pose }))} className={chip((options.body ?? "person") === b)}>
+                  {text}
+                </button>
+              ))}
+            </div>
             <span className="font-mono text-[11px] text-muted-foreground">
               {wanted.length} views · ~{Math.round((wanted.length * PER_VIEW) / 10) * 10} s
               {props.options && changed ? " · settings changed" : ""}
@@ -215,7 +227,7 @@ export function TurnaroundSections(props: {
             <Button
               size="lg"
               className="ml-auto"
-              disabled={anyRunning || pending || starting}
+              disabled={anyRunning || pending || starting || queued}
               onClick={() => {
                 setError(null);
                 startGenerate(() => generateTurnaround(props.projectId, options, props.cid).catch(fail));
@@ -225,6 +237,8 @@ export function TurnaroundSections(props: {
               {props.options ? "Generate again" : "Generate turnaround"}
             </Button>
           </div>
+          {queued && <p className="text-xs text-muted-foreground">Reading the parts; the views and the sheet start by themselves in a moment.</p>}
+          {bodyChanged && !anyRunning && <p className="text-xs text-muted-foreground">Painted as {BODIES.find(([b]) => b === (props.options!.body ?? "person"))![1].toLowerCase()}: Generate again repaints every view and the sheet with the new body.</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
           {running && job && <JobStatus message={job.detail ?? "Painting the views"} startedAt={job.startedAt} expected={shown.length * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, "turnaround", props.cid)} />}
           {/* Turnarounds from before views were painted fresh have no options and no front. */}
