@@ -53,7 +53,9 @@ export function frontPrompt(o: TurnaroundOptions): string {
   const pose =
     o.pose === "tpose"
       ? "Make this character do a T-pose for a 3D model sheet: arms fully extended sideways in a straight horizontal line, forming a T shape with the body, legs together and straight."
-      : "";
+      : o.pose === "relaxed"
+        ? "Make this character stand in a relaxed, natural pose: arms down at their sides, hands relaxed, weight on one leg, not a T-pose."
+        : "";
   const view = o.pose === "tpose" ? "Front view, full body, facing the viewer." : VIEWS[0].prompt + " Keep the arm positions. Add nothing that is not in this picture.";
   return [pose, hide, view, KEEP].filter(Boolean).join(" ");
 }
@@ -68,7 +70,9 @@ export function viewPrompt(id: ViewId, o?: TurnaroundOptions): string {
       ? id === "side"
         ? "Keep the T-pose: both arms stay stretched straight out at shoulder height, the near arm pointing toward the viewer, foreshortened."
         : "Keep the T-pose: both arms stay stretched straight out sideways at shoulder height."
-      : "Keep the same stance and arm positions; only the angle changes.";
+      : o?.pose === "relaxed"
+        ? "Keep the same relaxed pose: the arms down at their sides, the legs as they are; only the angle changes."
+        : "Keep the same stance and arm positions; only the angle changes.";
   return `${v.prompt} ${tpose} Keep the same items as in this image. ${KEEP}`;
 }
 
