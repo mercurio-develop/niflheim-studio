@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { DEFAULT_MOVE, momentsOf, type CameraMove, type Mark } from "@/lib/camera";
 import { allShots, getProject, projectDir, updateProject, type Project } from "@/lib/store";
 import { PYTHON } from "@/lib/python";
+import { startJob } from "@/lib/jobs";
 
 const run = promisify(execFile);
 const LAST_FRAME = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "last_frame.py");
@@ -39,22 +40,27 @@ function lastMarks(m?: CameraMove): Record<string, Mark> {
 export async function continueFromPrevious(id: string) {
   const p = await getProject(id);
   if (!p) throw new Error("Project not found.");
-  if (p.jobs.keyframes?.status === "running") throw new Error("Wait for the keyframes to finish.");
   const prev = await previousTake(p);
   if (!prev?.video) throw new Error("The shot before this one has no take yet.");
-  const frame = path.join(projectDir(id), "shot", "seed", `${Date.now().toString(36)}.png`);
-  await mkdir(path.dirname(frame), { recursive: true });
-  await run(PYTHON, ["-I", LAST_FRAME, path.join(projectDir(id), prev.video), frame]);
-  const marks = lastMarks(prev.shot.camera);
-  await updateProject(id, (q) => {
-    const m: CameraMove = { ...(q.camera ?? DEFAULT_MOVE) };
-    const ms = momentsOf(m);
-    if (Object.keys(marks).length) {
-      m.moments = ms[0]?.frame === 0 ? [{ ...ms[0], marks: { ...ms[0].marks, ...marks } }, ...ms.slice(1)] : [{ frame: 0, marks }, ...ms];
-    }
-    q.camera = m;
-    q.seededFrom = { shot: prev.shot.id, take: prev.take, frame: path.relative(projectDir(id), frame) };
-  });
+  const video = prev.video;
+  // The last frame is grabbed in the keyframes job (a second, but never inside the request); the
+  // job's lock also keeps it from racing a keyframe paint.
+  await startJob(id, "keyframes", async (ctx) => {
+    const frame = path.join(projectDir(id), "shot", "seed", `${Date.now().toString(36)}.png`);
+    await mkdir(path.dirname(frame), { recursive: true });
+    await run(PYTHON, ["-I", LAST_FRAME, path.join(projectDir(id), video), frame]);
+    if (!(await ctx.alive())) return;
+    const marks = lastMarks(prev.shot.camera);
+    await updateProject(id, (q) => {
+      const m: CameraMove = { ...(q.camera ?? DEFAULT_MOVE) };
+      const ms = momentsOf(m);
+      if (Object.keys(marks).length) {
+        m.moments = ms[0]?.frame === 0 ? [{ ...ms[0], marks: { ...ms[0].marks, ...marks } }, ...ms.slice(1)] : [{ frame: 0, marks }, ...ms];
+      }
+      q.camera = m;
+      q.seededFrom = { shot: prev.shot.id, take: prev.take, frame: path.relative(projectDir(id), frame) };
+    });
+  }, "Taking the last frame of the shot before");
   done(id);
 }
 
