@@ -5,6 +5,7 @@ import { MapPin, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Textarea } from "@/components/ui/textarea";
 import type { Job, SceneAsset } from "@/lib/store";
 import { cancelAsset, deleteAsset, makeAsset, remakeAsset } from "../actions/assets";
@@ -95,52 +96,63 @@ export function AssetsPanel(props: {
       </div>
 
       {props.assets.length > 0 && (
-        <ul className="flex flex-col gap-2">
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {props.assets.map((a) => {
             const job = props.jobs[`scene-asset:${a.id}`];
             const running = job?.status === "running";
+            const failed = job?.status === "error";
+            const ready = assetReady(a);
             const thumb = a.views?.front ?? a.image;
+            const status = running ? "Making the 3D" : failed ? "Failed" : !ready ? "Stopped" : a.at ? "On the stage" : "3D ready";
             return (
-              <li key={a.id} className="flex items-center gap-2 text-sm">
-                {thumb ? <FadeImage src={file(thumb)} alt="" className="size-10 shrink-0 rounded border object-cover" /> : <span className="size-10 shrink-0 rounded border bg-card/40" />}
-                <button type="button" aria-pressed={props.picked === a.id} disabled={!a.at} className={chip(props.picked === a.id)} onClick={() => props.onPick(props.picked === a.id ? null : a.id)}>
-                  {a.name}
-                </button>
-                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              <li key={a.id} className={`flex flex-col gap-2 rounded-lg border bg-card/40 p-2 text-sm ${props.picked === a.id ? "ring-2 ring-primary" : ""}`}>
+                <div className="aspect-square w-full overflow-hidden rounded-md border bg-card/40">
+                  {thumb ? <FadeImage src={file(thumb)} alt={a.name} className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">No picture yet</span>}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <button type="button" aria-pressed={props.picked === a.id} disabled={!a.at} className={`${chip(props.picked === a.id)} min-w-0 truncate`} onClick={() => props.onPick(props.picked === a.id ? null : a.id)}>
+                    {a.name}
+                  </button>
+                  <StatusDot on={ready && !failed} pending={running} label={status} />
+                </div>
+                <p className="min-h-4 truncate text-xs text-muted-foreground">
                   {running ? (
                     <span className="inline-flex items-center gap-1.5">
                       <LoadingDots />
                       {job.detail}
                     </span>
-                  ) : job?.status === "error" ? (
-                    <span className="text-destructive">Failed: {job.error}</span>
-                  ) : !assetReady(a) ? (
-                    "Stopped before it was finished"
-                  ) : a.at ? (
+                  ) : failed ? (
+                    <span className="text-destructive">{job.error}</span>
+                  ) : ready && a.at ? (
                     `${a.height.toFixed(2)} m tall`
+                  ) : ready ? (
+                    "Put it on the stage"
                   ) : (
-                    "Ready: put it on the stage"
+                    "Stopped before it was finished"
                   )}
-                </span>
-                {running && (
-                  <Button variant="ghost" size="icon" aria-label={`Stop making the ${a.name}`} onClick={() => run(() => cancelAsset(props.projectId, a.id))}>
-                    <Square />
+                </p>
+                <div className="flex items-center gap-1">
+                  {ready && (
+                    <Button variant={props.placing === a.id ? "default" : "ghost"} size="sm" onClick={() => props.onPlace(props.placing === a.id ? null : a.id)}>
+                      <MapPin data-icon="inline-start" />
+                      {a.at ? "Move" : "Place"}
+                    </Button>
+                  )}
+                  {running && (
+                    <Button variant="ghost" size="icon" aria-label={`Stop making the ${a.name}`} onClick={() => run(() => cancelAsset(props.projectId, a.id))}>
+                      <Square />
+                    </Button>
+                  )}
+                  {!running && !ready && (
+                    <Button variant="ghost" size="sm" aria-label={`Make the ${a.name} again`} onClick={() => run(() => remakeAsset(props.projectId, a.id))}>
+                      <RefreshCw data-icon="inline-start" />
+                      Retry
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon" className="ml-auto" aria-label={`Remove the ${a.name}`} disabled={running} onClick={() => run(() => deleteAsset(props.projectId, a.id))}>
+                    <Trash2 />
                   </Button>
-                )}
-                {!running && !assetReady(a) && (
-                  <Button variant="ghost" size="icon" aria-label={`Make the ${a.name} again`} onClick={() => run(() => remakeAsset(props.projectId, a.id))}>
-                    <RefreshCw />
-                  </Button>
-                )}
-                {assetReady(a) && (
-                  <Button variant={props.placing === a.id ? "default" : "ghost"} size="sm" onClick={() => props.onPlace(props.placing === a.id ? null : a.id)}>
-                    <MapPin data-icon="inline-start" />
-                    {a.at ? "Move" : "Place"}
-                  </Button>
-                )}
-                <Button variant="ghost" size="icon" aria-label={`Remove the ${a.name}`} disabled={running} onClick={() => run(() => deleteAsset(props.projectId, a.id))}>
-                  <Trash2 />
-                </Button>
+                </div>
               </li>
             );
           })}
