@@ -25,11 +25,10 @@ const jobKey = (aid: string) => `scene-asset:${aid}`;
 
 const Name = z.string().trim().min(2).max(40);
 const Aid = z.string().regex(/^[a-z0-9]{1,16}$/);
-const Kind = z.enum(["object", "character"]).default("object");
 const Source = z.discriminatedUnion("from", [
-  z.object({ from: z.literal("prompt"), name: Name, prompt: z.string().trim().min(3).max(300), kind: Kind }),
-  z.object({ from: z.literal("upload"), name: Name, kind: Kind }),
-  z.object({ from: z.literal("character"), name: Name, kind: Kind }),
+  z.object({ from: z.literal("prompt"), name: Name, prompt: z.string().trim().min(3).max(300) }),
+  z.object({ from: z.literal("upload"), name: Name }),
+  z.object({ from: z.literal("character"), name: Name }),
 ]);
 
 // A cast member, painted like the main character's concepts: whole figure, front view, on grey.
@@ -96,14 +95,14 @@ async function build(id: string, aid: string, ctx: JobCtx) {
 // A new asset for the scene: described, uploaded, or one of the character's assets (by name). Its
 // model is made right away; it stands on the stage once placed.
 export async function makeAsset(id: string, form: FormData) {
-  const src = Source.parse({ from: form.get("from"), name: form.get("name"), prompt: form.get("prompt") ?? undefined, kind: form.get("kind") ?? undefined });
+  const src = Source.parse({ from: form.get("from"), name: form.get("name"), prompt: form.get("prompt") ?? undefined });
   const p = await getProject(id);
   if (!p) throw new Error("Project not found.");
   if ((p.sceneAssets?.length ?? 0) >= 12) throw new Error("A scene holds up to 12 assets.");
   const aid = stamp();
   // An object starts in proportion to the main character (a 1 m lantern towered over a 0.55 m fox).
   const near = Math.min(1, Math.max(0.3, (p.stage?.height ?? 1.7) * 0.6));
-  const asset: SceneAsset = { id: aid, name: src.name, kind: src.kind, from: src.from, height: src.kind === "character" ? 1.7 : near, turn: 0 };
+  const asset: SceneAsset = { id: aid, name: src.name, kind: "object", from: src.from, height: near, turn: 0 };
   if (src.from === "prompt") asset.prompt = src.prompt;
   if (src.from === "upload") {
     const file = form.get("image");

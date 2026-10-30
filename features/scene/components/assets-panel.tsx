@@ -35,7 +35,6 @@ export function AssetsPanel(props: {
   onPlace: (id: string | null) => void;
   onChange: (id: string, patch: Pick<SceneAsset, "height" | "turn">) => void;
 }) {
-  const [kind, setKind] = useState<"object" | "character">("object");
   const [from, setFrom] = useState<From>("prompt");
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -51,7 +50,6 @@ export function AssetsPanel(props: {
     run(async () => {
       const form = new FormData();
       form.set("from", from);
-      form.set("kind", kind);
       form.set("name", from === "character" ? shelf : name);
       if (from === "prompt") form.set("prompt", prompt);
       if (from === "upload") {
@@ -68,14 +66,7 @@ export function AssetsPanel(props: {
   return (
     <div className="flex flex-col gap-3">
       <CastPicker projectId={props.projectId} cast={props.cast} jobs={props.jobs} />
-      <p className="text-xs text-muted-foreground">Someone else for the scene (a friend, a unicorn) or an object in 3D, standing on the stage. They show in every shot, and the keyframes paint them in the scene&apos;s style. Say what they do in the shot&apos;s beats.</p>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {(["character", "object"] as const).map((k) => (
-          <button key={k} type="button" aria-pressed={kind === k} className={chip(kind === k)} onClick={() => setKind(k)}>
-            {k === "character" ? "A character" : "An object"}
-          </button>
-        ))}
-      </div>
+      <p className="text-xs text-muted-foreground">An object for the scene in 3D, standing on the stage. It shows in every shot, and the keyframes paint it in the scene&apos;s style. Other characters are made in the Character step.</p>
       <div className="flex flex-wrap items-center gap-1.5">
         {FROM.map((x) => (
           <button key={x.id} type="button" aria-pressed={from === x.id} className={chip(from === x.id)} disabled={x.id === "character" && !props.characterAssets.length} title={x.id === "character" && !props.characterAssets.length ? "Nothing yet: in Character, hide an object from the turnaround and keep it, and it shows up here" : undefined} onClick={() => setFrom(x.id)}>
@@ -93,13 +84,13 @@ export function AssetsPanel(props: {
             ))}
           </select>
         ) : (
-          <input aria-label="Its name" value={name} maxLength={40} placeholder={kind === "character" ? "their name: Mia" : "its name: wooden cart"} onChange={(e) => setName(e.target.value)} className="h-9 rounded-md border bg-transparent px-2 text-sm" />
+          <input aria-label="Its name" value={name} maxLength={40} placeholder={"its name: wooden cart"} onChange={(e) => setName(e.target.value)} className="h-9 rounded-md border bg-transparent px-2 text-sm" />
         )}
-        {from === "prompt" && <Textarea aria-label="Describe it" value={prompt} maxLength={300} rows={2} placeholder={kind === "character" ? "a young woman with curly red hair, denim jacket and white sneakers" : "a weathered wooden hand cart with one broken wheel"} onChange={(e) => setPrompt(e.target.value)} />}
+        {from === "prompt" && <Textarea aria-label="Describe it" value={prompt} maxLength={300} rows={2} placeholder={"a weathered wooden hand cart with one broken wheel"} onChange={(e) => setPrompt(e.target.value)} />}
         {from === "upload" && <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" aria-label="Its picture" className="text-sm" />}
         <Button size="sm" className="self-start" disabled={pending || (from === "prompt" ? name.trim().length < 2 || prompt.trim().length < 3 : from === "upload" ? name.trim().length < 2 : !shelf)} onClick={make}>
           {pending ? <LoadingDots /> : <Plus data-icon="inline-start" />}
-          {kind === "character" ? "Make them" : "Make it in 3D"}
+          Make it in 3D
         </Button>
       </div>
 
