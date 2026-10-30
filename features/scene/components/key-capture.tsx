@@ -30,6 +30,7 @@ export function KeyCapture(props: {
   mesh: string;
   camera: StageCamera;
   cutouts: Partial<Record<ViewId, string>>;
+  noMain?: boolean; // the shot leaves the main character out
   at: StagePoint;
   height: number;
   turn: number;
@@ -73,7 +74,7 @@ export function KeyCapture(props: {
           assets={props.poses[i].assets ?? props.assets}
           wait
           clay={props.clay}
-          main={{ cutouts: (props.poses[i].card as typeof props.cutouts | undefined) ?? props.cutouts, at: props.poses[i].at ?? props.at, height: props.height, turn: props.poses[i].turn ?? props.turn }}
+          main={props.noMain ? null : { cutouts: (props.poses[i].card as typeof props.cutouts | undefined) ?? props.cutouts, at: props.poses[i].at ?? props.at, height: props.height, turn: props.poses[i].turn ?? props.turn }}
         />
       </StageViewer>
     </div>

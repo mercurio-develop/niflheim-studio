@@ -16,7 +16,7 @@ import { KeyframesPanel } from "./keyframes";
 
 // The active shot's keyframes, made here from the Scene's stage, placement and camera move (moved
 // from Scene, decision 0010): the stage is captured off screen at each key pose and painted.
-export function ShotKeyframes(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; keyframes: Keyframes | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[]; job?: Job; continuity: { from: string; hasTake: boolean; seeded: SeededFrom | null } | null; layout: LayoutClip | null; layoutJob?: Job; beatsChanged?: boolean }) {
+export function ShotKeyframes(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; keyframes: Keyframes | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[]; job?: Job; continuity: { from: string; hasTake: boolean; seeded: SeededFrom | null } | null; layout: LayoutClip | null; layoutJob?: Job; beatsChanged?: boolean; noMain?: boolean; canCut?: boolean }) {
   const s = props.set;
   const fill = s?.stage && s.stage.image === s.image ? s.stage.fill : undefined;
   const cam = fill?.camera;
@@ -31,7 +31,7 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
   }
   const urls = (c: Partial<Record<string, string>>) => Object.fromEntries(Object.entries(c).map(([v, f]) => [v, `/api/files/${props.projectId}/${f}`]));
   const cards = props.poses.map((p) => ({ id: p.id, cutouts: urls(p.cutouts) }));
-  const key = sceneKeyFrom(move, at, props.placement.height, fill.mesh, props.placement.turn, props.blocks, props.assets, props.placement.source);
+  const key = sceneKeyFrom(move, at, props.placement.height, fill.mesh, props.placement.turn, props.blocks, props.assets, props.placement.source, !props.noMain);
   // The stage at frame f of the move: the camera, the character's pose and turn, every object's spot
   // (with key moments, the moment's).
   const poseAt = (f: number) => ({
@@ -44,6 +44,7 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
     mesh: `/api/files/${props.projectId}/${fill.mesh}`,
     camera: cam,
     cutouts: urls(props.placement.cutouts),
+    noMain: props.noMain,
     at,
     height: props.placement.height,
     turn: props.placement.turn,
@@ -52,13 +53,14 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
   };
   return (
     <div className="flex flex-col gap-3">
-      <ShootCapturer projectId={props.projectId} move={move} base={base} keys={keyFrames(move).map(poseAt)} clay={Array.from({ length: frameCount(move.seconds) }, (_, f) => poseAt(Math.min(f, path.length - 1)))} keysCurrent={!!props.keyframes && props.keyframes.key === key && props.keyframes.keys.every(Boolean) && props.keyframes.frames.at(-1) === frameCount(move.seconds) - 1} clayCurrent={props.layout?.key === key && props.layout.frames === frameCount(move.seconds)} />
+      <ShootCapturer projectId={props.projectId} move={move} base={base} keys={keyFrames(move).map(poseAt)} clay={Array.from({ length: frameCount(move.seconds) }, (_, f) => poseAt(Math.min(f, path.length - 1)))} keysCurrent={!!props.keyframes && props.keyframes.key === key && props.keyframes.keys.every(Boolean) && (props.keyframes.full ?? props.keyframes.frames.at(-1)) === frameCount(move.seconds) - 1} clayCurrent={props.layout?.key === key && props.layout.frames === frameCount(move.seconds)} />
       {props.continuity && <Continue projectId={props.projectId} {...props.continuity} busy={props.job?.status === "running"} />}
       <KeyframesPanel
         projectId={props.projectId}
         keyframes={props.keyframes}
         current={!!props.keyframes && props.keyframes.key === key && !props.beatsChanged}
         beatsChanged={props.beatsChanged}
+        canCut={props.canCut}
         frames={keyFrames(move)}
         job={props.job}
       />

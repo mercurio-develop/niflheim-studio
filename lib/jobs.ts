@@ -18,7 +18,9 @@ const SHARED: Record<string, { keys: string[]; busy: string }> = {
   stage: { keys: ["set"], busy: "The set is being built; wait for it or cancel it first." },
 };
 
-export async function startJob(projectId: string, key: string, work: (ctx: JobCtx) => Promise<void>, detail?: string) {
+// beside: jobs this one may start next to because it waits for them before it uses the GPU (a
+// take waiting on the keyframes it is shot from).
+export async function startJob(projectId: string, key: string, work: (ctx: JobCtx) => Promise<void>, detail?: string, beside: string[] = []) {
   // Each run gets its own id, so a late finish (or failure) of a cancelled run never
   // overwrites the run that replaced it under the same key.
   const run = randomUUID();
@@ -27,7 +29,7 @@ export async function startJob(projectId: string, key: string, work: (ctx: JobCt
     const shared = SHARED[key];
     if (shared?.keys.some((k) => p.jobs[k]?.status === "running")) throw new Error(shared.busy);
     // One GPU job at a time: a second Generate used to start while the first was still on Comfy.
-    const other = Object.entries(p.jobs).find(([k, j]) => k !== key && j.status === "running");
+    const other = Object.entries(p.jobs).find(([k, j]) => k !== key && !beside.includes(k) && j.status === "running");
     if (other) throw new Error("A generation is already running; wait for it or cancel it first.");
     p.jobs[key] = { status: "running", startedAt: new Date().toISOString(), run, ...(detail ? { detail } : {}) };
   });

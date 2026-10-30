@@ -1,19 +1,19 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Dices, ScanFace } from "lucide-react";
+import { Dices, ScanFace, Scissors } from "lucide-react";
 import { FadeImage } from "@/components/fade-image";
 import { Textarea } from "@/components/ui/textarea";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import type { Job, Keyframes } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { fixKeyFace, rerollKey, saveCaption } from "../actions/keyframes";
+import { cutKeys, fixKeyFace, rerollKey, saveCaption, uncutKeys } from "../actions/keyframes";
 
 // The shot's keyframes as a Guides preview: the stage at frames 0, 32, 64... of the camera move,
 // each repainted into a finished frame. One Shoot makes them (repainting what is stale, faces
 // fixed); here they are only shown. Under More, any one can be painted again or its face fixed,
 // and Florence-2's caption of it edited (merged into the take prompt in order).
-export function KeyframesPanel(props: { projectId: string; keyframes: Keyframes | null; current: boolean; frames: number[]; job?: Job; beatsChanged?: boolean }) {
+export function KeyframesPanel(props: { projectId: string; keyframes: Keyframes | null; current: boolean; frames: number[]; job?: Job; beatsChanged?: boolean; canCut?: boolean }) {
   const k = props.keyframes;
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -27,7 +27,7 @@ export function KeyframesPanel(props: { projectId: string; keyframes: Keyframes 
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-medium">Keyframes</span>
         <span className="font-mono text-[11px] text-muted-foreground">
-          frames {props.frames.join(", ")} · the shot follows them · {k ? (props.current ? "up to date" : props.beatsChanged ? "painted before What happens changed: One Shoot paints them again" : "out of date: One Shoot paints them again") : "made by One Shoot"}
+          frames {props.frames.join(", ")} · the shot follows them · {k ? (props.current ? "up to date" : props.beatsChanged ? "painted before What happens changed: Generate paints them again" : "out of date: Generate paints them again") : "made by Generate"}
         </span>
       </div>
       {running && props.job && <JobStatus message={props.job.detail ?? "Painting the keyframes"} startedAt={props.job.startedAt} expected={props.frames.length * 100} />}
@@ -49,7 +49,7 @@ export function KeyframesPanel(props: { projectId: string; keyframes: Keyframes 
         </ol>
       )}
       {k && k.keys.some(Boolean) && (
-        <details className="group text-sm">
+        <details className="group text-sm" open>
           <summary className="w-fit cursor-pointer text-xs text-muted-foreground hover:text-foreground">More</summary>
           <ol className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {k.raw.map((raw, i) =>
@@ -71,6 +71,12 @@ export function KeyframesPanel(props: { projectId: string; keyframes: Keyframes 
                       <ScanFace className="size-3" />
                       Fix face
                     </button>
+                    {props.canCut && i > 0 && i < k.raw.length - 1 && (
+                      <button type="button" disabled={busy} title={`End the take here, at frame ${k.frames[i]} (${((k.frames[i] + 1) / 24).toFixed(1)} s): the keys after it go`} onClick={() => act(() => cutKeys(props.projectId, i))} className="flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50">
+                        <Scissors className="size-3" />
+                        Cut here
+                      </button>
+                    )}
                   </div>
                   <KeyCaption key={`${raw}-${k.captions?.[i] ?? ""}`} text={k.captions?.[i] ?? ""} frame={k.frames[i]} disabled={busy} onSave={(t) => act(() => saveCaption(props.projectId, i, t))} />
                 </li>
@@ -78,6 +84,15 @@ export function KeyframesPanel(props: { projectId: string; keyframes: Keyframes 
             )}
           </ol>
         </details>
+      )}
+      {k?.full !== undefined && (
+        <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          Cut at frame {k.frames.at(-1)}: the take is {((k.frames.at(-1)! + 1) / 24).toFixed(1)} s instead of {((k.full + 1) / 24).toFixed(1)} s.
+          <button type="button" disabled={busy} onClick={() => act(() => uncutKeys(props.projectId))} className="underline hover:text-foreground disabled:opacity-50">
+            Full length again
+          </button>
+          (Generate draws the keys again)
+        </p>
       )}
       {props.job?.status === "error" && <p className="text-sm text-destructive">Keyframes failed: {props.job.error}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}

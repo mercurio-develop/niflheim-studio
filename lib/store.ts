@@ -129,13 +129,15 @@ export type CameraRender = { depth: string; preview: string; holes: number[]; ke
 // null until done). One prompt and seed for all, so they share a look; note: what the user asked
 // to see in the frame. key: the camera render key (lib/camera.ts renderKey) they were made from.
 // detail: each painted key also gets the face and hand pass (03_key_detail).
-export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)[]; prompt: string; note: string; seed: number; key: string; at: string; detail?: boolean; captions?: (string | null)[]; beats?: string };
+export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)[]; prompt: string; note: string; seed: number; key: string; at: string; detail?: boolean; captions?: (string | null)[]; beats?: string; full?: number }; // full: the move's last frame when the keys after a cut were dropped
 
 // The shot: what happens, and the LTX-2.5 takes of it (MP4 with audio, 768x448, the camera move's
 // 8n+1 frames at 24 fps), each guided by the keyframes it was made from (keys: Keyframes.at).
 // score: scripts/score_take.py on arrival: camera travel (px of flow), pop-in frames and worst spike.
 export type TakeScore = { travel: number; popins: number; worst: number };
-export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore; prompt?: string; kind?: ShotKind; layout?: boolean; strip?: string }; // strip: frames 0, 30, 60, 90, 120 side by side
+export type Take = { video: string; action: string; seed: number; frames: number; keys: string; seconds: number; at: string; score?: TakeScore; prompt?: string; kind?: ShotKind; layout?: boolean; strip?: string; setup?: TakeSetup }; // strip: frames 0, 30, 60, 90, 120 side by side
+// What a take was made from, as you set it (shown as what changed since the take before).
+export type TakeSetup = { in: string[]; subject?: string; expression?: string; beats: { start: string; then?: string; end?: string }; kind: ShotKind; move: string; seconds: number };
 // beats: what happens first, then, and by the end (action joins them, for older readers).
 // kind: what guides its takes (decision 0014): "camera", the keyframes along the move (and later the
 // stage's clay clip, Layout-to-Render); "character", the character's sheet (Ingredients IC-LoRA), from
@@ -146,7 +148,9 @@ export type ShotKind = "camera" | "character";
 // expression in the front close-up's place, a pose's views, and up to two props (scene assets).
 export type ShotSheet = { expression?: string; pose?: string; props: string[]; drawn: string; rows: SheetRow[] };
 // pickedBy: One Shoot picked the steadiest take (auto), or you did.
-export type Shot = { action: string; beats?: { start: string; then?: string; end?: string }; negative: string; takes: Take[]; picked?: number; pickedBy?: "auto" | "you"; kind?: ShotKind; expression?: string; sheet?: ShotSheet };
+// off: who and what on the stage is left out of this shot ("main": the main character); subject:
+// the placed asset the shot is about while the main character is out.
+export type Shot = { action: string; beats?: { start: string; then?: string; end?: string }; negative: string; takes: Take[]; picked?: number; pickedBy?: "auto" | "you"; off?: string[]; subject?: string; kind?: ShotKind; expression?: string; sheet?: ShotSheet };
 
 // One shot of the scene: its name, and (while not active) its move, render, keyframes and takes.
 export type ShotRef = { id: string; name: string };
@@ -240,6 +244,7 @@ export type Project = {
   // character .. mesh above are the first character ("c1"); every other one lives in cast.
   characterName?: string; // c1's own name once renamed; otherwise read from its prompt
   cast?: CastMember[];
+  expressions?: string[]; // said in words for a take, added on Shots and shared by every shot
   set?: SetData;
   stage?: StageData;
   blocks?: Block[]; // greybox shapes on the stage, painted into what their label says

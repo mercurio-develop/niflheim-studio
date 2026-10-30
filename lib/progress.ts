@@ -139,14 +139,18 @@ export const currentFill = (p: Project) => (p.set?.stage && p.set.stage.image ==
 // and objects, and which turnaround front the cards were cut from): keyframes and the clay clip
 // keep the key they were made from, and are out of date when it changes. A new Looks good makes
 // a new front, so the keys stay tied to the character that was standing when they were painted.
-export function sceneKeyFrom(camera: CameraMove, at: Vec, height: number, mesh: string, turn: number, blocks: Parameters<typeof propsKey>[0], assets: Parameters<typeof propsKey>[1], source: string) {
-  return renderKey(camera, at, height, mesh, turn) + propsKey(blocks, assets) + `|${source}`;
+export function sceneKeyFrom(camera: CameraMove, at: Vec, height: number, mesh: string, turn: number, blocks: Parameters<typeof propsKey>[0], assets: Parameters<typeof propsKey>[1], source: string, main = true) {
+  return renderKey(camera, at, height, mesh, turn) + propsKey(blocks, assets) + `|${source}` + (main ? "" : "|nomain");
 }
+
+// Who and what the active shot shows: everything placed on the stage but what it switched off.
+export const shotAssets = (p: Pick<Project, "sceneAssets" | "shot">) => (p.sceneAssets ?? []).filter((a) => !p.shot?.off?.includes(a.id));
+export const mainInShot = (p: Pick<Project, "shot">) => !p.shot?.off?.includes("main");
 
 export function sceneKey(p: Project) {
   const fill = currentFill(p);
   if (!fill?.camera?.floor || !p.stage?.at || !p.camera) return null;
-  return sceneKeyFrom(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn, p.blocks, p.sceneAssets, p.stage.source);
+  return sceneKeyFrom(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn, p.blocks, shotAssets(p), p.stage.source, mainInShot(p));
 }
 
 // Why a placement no longer fits: the turnaround front changed (cut out again) or the set was
@@ -173,10 +177,10 @@ function shotState(p: Project): StepState {
   const hasTakes = !!p.shot?.takes.length;
   if (!hasTakes && !k?.keys.length) return "todo";
   const key = sceneKey(p);
-  const keysOld = !k?.keys.length || !k.keys.every(Boolean) || !key || k.key !== key || (!!p.camera && k.frames.at(-1) !== frameCount(p.camera.seconds) - 1);
+  const keysOld = !k?.keys.length || !k.keys.every(Boolean) || !key || k.key !== key || (!!p.camera && (k.full ?? k.frames.at(-1)) !== frameCount(p.camera.seconds) - 1);
   const sheetOld = !!p.sheet?.source && p.sheet.source !== characterImage(p);
   if (sceneState(p) !== "done" || keysOld || sheetOld) return "stale";
-  return p.shot?.picked !== undefined ? "done" : "todo";
+  return p.shot?.takes.length ? "done" : "todo";
 }
 
 export function stepStates(p: Project, cid = "c1"): Partial<Record<StepSlug, StepState>> {

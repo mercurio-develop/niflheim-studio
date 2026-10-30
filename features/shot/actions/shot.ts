@@ -1,6 +1,7 @@
 "use server";
 
 import path from "node:path";
+import { rm } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
@@ -9,13 +10,12 @@ import { focusPhrase, frameCount, keyFrames, momentsOf, poses, sees } from "@/li
 import { characterImage, currentFill, sceneKey } from "@/lib/progress";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob } from "@/lib/jobs";
-import { allShots, getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
+import { allShots, getProject, projectDir, updateProject, type Project, type Take, type TakeScore, type TakeSetup } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { DEFAULT_NEGATIVE, END_NEW_POSE_STRENGTH, END_STRENGTH, middleImageNode, shapeShot } from "../graph";
-import { beatsStale, keysProblem, suggestedKind } from "../state";
+import { asShot, beatsStale, keysProblem, subjectOf, suggestedKind } from "../state";
 import { addIngredients, firstKeyOnly, namedCaptions, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, whoOf, withSheet } from "../ingredients";
 import { PYTHON } from "@/lib/python";
-import { goodTake, takeRank } from "@/lib/score";
 import { repaintKeys, saveKeys } from "./keyframes";
 import { saveClay } from "./layout";
 
@@ -25,6 +25,13 @@ const SCORE = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "s
 
 // Five frames of a take side by side (0, 30, 60, 90 and 120, or as far as it goes), to see at a
 // glance whether the character stays themselves through it. A take without one is kept as it is.
+// The clay clip's first `frames` frames, for a take cut short.
+async function trimClip(file: string, frames: number) {
+  const out = file.replace(/\.mp4$/, `-${frames}.mp4`);
+  await run("ffmpeg", ["-v", "error", "-y", "-i", file, "-frames:v", String(frames), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", out]);
+  return out;
+}
+
 async function stripOf(file: string, frames: number): Promise<string | undefined> {
   const out = path.join(path.dirname(file), "strip.jpg");
   const at = [0, 30, 60, 90, 120].filter((f) => f < frames);
@@ -136,10 +143,10 @@ const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 // effect (04_shot ACCEPT proof 3: take D = take B frame for frame). The graph keeps a default.
 const Beat = z.string().trim().max(300);
 const Input = z
-  .object({ action: z.string().trim().max(500).optional(), beats: z.object({ start: Beat, then: Beat.optional(), end: Beat.optional() }).optional(), tries: z.number().int().min(1).max(4).optional(), expression: z.string().trim().max(60).optional(), fromKey: z.boolean().optional(), seed: z.number().int().min(0).max(2 ** 31).optional() })
+  .object({ action: z.string().trim().max(500).optional(), beats: z.object({ start: Beat, then: Beat.optional(), end: Beat.optional() }).optional(), tries: z.number().int().min(1).max(4).optional(), expression: z.string().trim().max(60).optional(), fromKey: z.boolean().optional(), seed: z.number().int().min(0).max(2 ** 31).optional(), keysOnly: z.boolean().optional() })
   .transform((x) => {
     const beats: Beats = x.beats ?? { start: x.action ?? "" };
-    return { beats, action: [beats.start, beats.then, beats.end].map((s) => s?.trim()).filter(Boolean).join(", then "), tries: x.tries ?? 1, expression: x.expression || undefined, fromKey: x.fromKey ?? false, seed: x.seed };
+    return { beats, action: [beats.start, beats.then, beats.end].map((s) => s?.trim()).filter(Boolean).join(", then "), tries: x.tries ?? 1, expression: x.expression || undefined, fromKey: x.fromKey ?? false, seed: x.seed, keysOnly: x.keysOnly ?? false };
   })
   .refine((x) => x.beats.start.length >= 3, "Say what happens first, in a few words.");
 
@@ -163,7 +170,7 @@ export async function saveBeats(id: string, raw: unknown) {
 
 // Takes of the shot: LTX-2.5 distilled guided by every keyframe (ends 0.7, middle 0.5), with
 // audio, about 1.5 to 2 minutes each on the 4080 for 97 to 121 frames. With tries > 1 it shoots
-// until one is good (new seed each time), at most `tries`, and picks the best of them.
+// that many (a new seed each), every one kept: you choose in your own editor.
 // A character take (kind "character"): the sheet's cells said by place, then the shot.
 // The shot's own sheet when it drew one (an expression, a pose, props), else the character's.
 function sheetFor(p: Project, video: string, expression?: string) {
@@ -198,6 +205,8 @@ export async function oneShoot(id: string, form: FormData, raw: unknown) {
   if (form.has("f0")) await saveClay(id, form);
   const q = form.has("key0") ? null : await getProject(id);
   if (q && beatsStale(q) && ((q.shot?.kind ?? suggestedKind(q)) === "camera" || input.fromKey)) await repaintKeys(id);
+  // Stop after the keyframes: they are painted (as their own job) for you to check before shooting.
+  if (input.keysOnly) return done(id);
   await shoot(id, input, true);
 }
 
@@ -234,24 +243,29 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
   const kind = p.shot?.kind ?? suggestedKind(p);
   const late = keysProblem(p);
   if (late && (kind === "camera" || fromKey)) throw new Error(late);
-  const length = frameCount(p.camera.seconds);
+  // Keys cut short end the take on their last frame.
+  const length = k?.full !== undefined ? k.frames.at(-1)! + 1 : frameCount(p.camera.seconds);
   const keys = (k?.keys ?? []) as string[];
   // A character take is the sheet's trained length, from the sheet alone or from the first key too
   // (only when that key shows the same character: a key painted with someone else wins the face,
   // 05_submit take mvu4qdjl); a camera take follows every key over the move.
-  const sheet = kind === "character" ? sheetFor(p, shotPrompt(p, beats), expression) : null;
+  const v = asShot(p);
+  const said = (x: string) => (expression ? `${x} Their expression: ${expression}.` : x);
+  const sheet = kind === "character" ? sheetFor(v, shotPrompt(v, beats), expression) : null;
   // A camera take with an up-to-date clay clip runs Layout-to-Render (03_shot_layout): the clip
   // guides every frame and only the first key is painted (the take follows the move and the
   // blocking; 05_submit proof: camera travel 33 px and no pop-ins against 1.2 px and 41 keys-only).
-  const clip = !sheet && p.layout && p.layout.frames === length && p.layout.key === sceneKey(p) ? p.layout : null;
+  const clip = !sheet && p.layout && p.layout.frames >= length && p.layout.key === sceneKey(p) ? p.layout : null;
+  const clipFile = clip && (clip.frames > length ? await trimClip(abs(id, clip.clip), length) : abs(id, clip.clip));
   const frames = sheet ? SHEET_FRAMES : length;
   // Lightricks: never "clay", "3D" or "Unreal" in a Layout-to-Render prompt, or the take looks like the clip.
-  const prompt = sheet?.prompt ?? (clip ? shotPrompt(p, beats).replace(/\b(clay|3D|Unreal)\b\s*/gi, "") : shotPrompt(p, beats));
+  const prompt = sheet?.prompt ?? said(clip ? shotPrompt(v, beats).replace(/\b(clay|3D|Unreal)\b\s*/gi, "") : shotPrompt(v, beats));
+  const names = new Map([["main", whoOf(p.character.prompt ?? "").name.replace(/^the /, "")], ...(p.sceneAssets ?? []).map((a) => [a.id, a.name] as [string, string])]);
+  const setup: TakeSetup = { in: [...names].filter(([i]) => !p.shot?.off?.includes(i) && (i === "main" || p.sceneAssets?.find((a) => a.id === i)?.at)).map(([, n]) => n), subject: subjectOf(p)?.name, expression, beats, kind, move: p.camera.move, seconds: Math.round((length / 24) * 10) / 10 };
   const ms = momentsOf(p.camera);
   const endStrength = ms.length > 1 && (ms[0].marks.main?.pose ?? "") !== (ms.at(-1)!.marks.main?.pose ?? "") ? END_NEW_POSE_STRENGTH : END_STRENGTH;
-    const made: { index: number; score?: TakeScore }[] = [];
     for (let n = 1; n <= tries; n++) {
-      if (tries > 1) await ctx.progress(`Shooting take ${n} of up to ${tries}`);
+      if (tries > 1) await ctx.progress(`Shooting take ${n} of ${tries}`);
       // A take's own seed with new words or a new expression varies only those (Same seed).
       const seed = n === 1 && input.seed !== undefined ? input.seed : Math.floor(Math.random() * 2 ** 31);
       const [video] = await runWorkflow({
@@ -270,7 +284,7 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
           if (!fromKey) sheetOnly(g);
         },
         set: [["20", "text", prompt], ["21", "text", negative], ["40", "noise_seed", seed]],
-        videos: clip ? [["401", abs(id, clip.clip)]] : undefined,
+        videos: clipFile ? [["401", clipFile]] : undefined,
         images: clip
           ? [["1", abs(id, keys[0])]]
           : sheet
@@ -285,20 +299,38 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
       if (!(await ctx.alive())) return;
       await ctx.progress(tries > 1 ? `Checking take ${n}` : "Checking the take");
       const [score, strip] = await Promise.all([scoreTake(video), stripOf(video, frames)]);
-      let index = 0;
       await updateProject(id, (q) => {
-        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k?.at ?? "", seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind, layout: !!clip, strip: strip && path.relative(projectDir(id), strip) };
+        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k?.at ?? "", seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind, layout: !!clip, strip: strip && path.relative(projectDir(id), strip), setup };
         q.shot = { action, negative, ...q.shot, takes: [...(q.shot?.takes ?? []), take] };
-        index = q.shot.takes.length - 1;
       });
-      made.push({ index, score });
-      if (goodTake(score, frames)) break;
     }
-    if (tries > 1) {
-      const best = made.reduce((a, b) => (takeRank(b.score, frames) < takeRank(a.score, frames) ? b : a));
-      await updateProject(id, (q) => void (q.shot && ((q.shot.picked = best.index), (q.shot.pickedBy = "auto"))));
-    }
-  }, tries > 1 ? `Shooting up to ${tries} takes` : "Shooting the take");
+  }, tries > 1 ? `Shooting ${tries} takes` : "Shooting the take", wait ? ["keyframes", "layout"] : []);
+  done(id);
+}
+
+// Who and what is in this shot: ids switched off ("main": the main character) and, with the main
+// character out, the placed asset it is about. Changing it puts the keys out of date.
+const InShot = z.object({ off: z.array(z.string().max(40)).max(40), subject: z.string().max(40).optional() });
+export async function setInShot(id: string, raw: unknown) {
+  const { off, subject } = InShot.parse(raw);
+  await updateProject(id, (q) => {
+    if (q.jobs.keyframes?.status === "running") throw new Error("The keyframes are being painted; wait for them first.");
+    const ids = new Set(["main", ...(q.sceneAssets ?? []).map((a) => a.id)]);
+    q.shot = { action: "", negative: DEFAULT_NEGATIVE, takes: [], ...q.shot, off: off.filter((x) => ids.has(x)), subject: subject && ids.has(subject) ? subject : undefined };
+  });
+  done(id);
+}
+
+// An expression said in your own words, kept for every shot.
+export async function addExpression(id: string, raw: unknown) {
+  const text = z.string().trim().min(2).max(60).parse(raw);
+  await updateProject(id, (q) => void (q.expressions = [...new Set([...(q.expressions ?? []), text])].slice(-20)));
+  done(id);
+}
+
+export async function removeExpression(id: string, raw: unknown) {
+  const text = z.string().parse(raw);
+  await updateProject(id, (q) => void (q.expressions = (q.expressions ?? []).filter((x) => x !== text)));
   done(id);
 }
 
@@ -306,6 +338,20 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
 export async function setShotKind(id: string, raw: unknown) {
   const kind = z.enum(["camera", "character"]).parse(raw);
   await updateProject(id, (q) => void (q.shot = { action: "", negative: DEFAULT_NEGATIVE, takes: [], ...q.shot, kind }));
+  done(id);
+}
+
+// A take let go: its file and strip are removed and it leaves the list.
+export async function deleteTake(id: string, raw: unknown) {
+  const i = z.number().int().min(0).parse(raw);
+  let gone: Take | undefined;
+  await updateProject(id, (q) => {
+    if (!q.shot?.takes[i]) throw new Error("No such take.");
+    [gone] = q.shot.takes.splice(i, 1);
+    if (q.shot.picked === i) q.shot.picked = undefined;
+    else if (q.shot.picked !== undefined && q.shot.picked > i) q.shot.picked -= 1;
+  });
+  for (const f of [gone?.video, gone?.strip]) if (f) await rm(path.join(projectDir(id), f), { force: true });
   done(id);
 }
 

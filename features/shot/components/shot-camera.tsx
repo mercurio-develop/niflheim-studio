@@ -32,7 +32,7 @@ const near = (a: Vec, b: Vec) => Math.hypot(a[0] - b[0], a[2] - b[2]);
 // The active shot's camera (decision 0011): the Scene's stage with the character standing where
 // the Scene put them, and this shot's framing, move and walk. Overview shows the path with a gizmo
 // on each end and on the walk; Play flies it. Each shot keeps its own; saved as it is tuned.
-export function ShotCamera(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[] }) {
+export function ShotCamera(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[]; noMain?: boolean }) {
   const s = props.set;
   const fill = s?.stage && s.stage.image === s.image ? s.stage.fill : undefined;
   const cam = fill?.camera;
@@ -133,7 +133,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
           projectId={props.projectId}
           blocks={edits.blocks}
           assets={shownAssets}
-          main={{ cutouts: cardAt(move, frame, urls(pl!.cutouts), ready4.map((p) => ({ id: p.id, cutouts: urls(p.cutouts) }))), at: shownMain!.at, height: pl!.height, turn: shownMain!.turn, live }}
+          main={props.noMain ? null : { cutouts: cardAt(move, frame, urls(pl!.cutouts), ready4.map((p) => ({ id: p.id, cutouts: urls(p.cutouts) }))), at: shownMain!.at, height: pl!.height, turn: shownMain!.turn, live }}
           picked={edits.picked}
           onPick={playing ? undefined : edits.setPicked}
           onMoveMain={sel !== null ? (at, turn) => mark("main", { at, turn }) : edits.onMoveMain}

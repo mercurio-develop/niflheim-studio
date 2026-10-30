@@ -1,5 +1,5 @@
 import { frameCount } from "@/lib/camera";
-import { placementStale, sceneKey } from "@/lib/progress";
+import { mainInShot, placementStale, sceneKey, shotAssets } from "@/lib/progress";
 import type { ShotPreset } from "@/lib/camera";
 import type { Project, ShotKind } from "@/lib/store";
 
@@ -10,6 +10,25 @@ import type { Project, ShotKind } from "@/lib/store";
 // may take its share of 10.5 MB (108 KB at 4 s, 44 KB at 10 s). A detailed stage made a fixed
 // 44 KB cap refuse every 4 s clip (05_submit demo).
 export const clayFrameMax = (frames: number) => Math.floor((10.5 * 1024 * 1024) / Math.max(1, frames));
+
+// The placed asset a shot without the main character is about: the one it names, else the first shown.
+export function subjectOf(p: Project) {
+  if (mainInShot(p)) return null;
+  const on = shotAssets(p).filter((a) => a.at);
+  return on.find((a) => a.id === p.shot?.subject) ?? on[0] ?? null;
+}
+
+// The project as the shot's prompts see it: only who and what is in the shot, and with the main
+// character out, the subject in their place (its name and description, a cast member's sheet and
+// poses; an object has no sheet). Keys and staleness read the project itself (sceneKey).
+export function asShot(p: Project): Project {
+  const assets = shotAssets(p);
+  const s = subjectOf(p);
+  if (!s) return { ...p, sceneAssets: assets };
+  const member = s.kind === "character" ? p.cast?.find((m) => m.id === s.cid) : undefined;
+  const about = member?.character.prompt ?? (s.prompt && s.prompt.toLowerCase() !== s.name.toLowerCase() ? `${s.name}, ${s.prompt}` : s.name);
+  return { ...p, character: { ...p.character, prompt: about }, sheet: member?.sheet, poses: member?.poses ?? [], sceneAssets: assets.filter((a) => a.id !== s.id) };
+}
 
 // Why the keyframes cannot guide a take, or null when they can: every key painted, covering today's
 // move, and drawn from today's stage (a key of a stage that has changed since, say with someone
@@ -25,7 +44,7 @@ export const beatsStale = (p: Project) => !!p.keyframes && (p.keyframes.beats ??
 export function keysProblem(p: Project): string | null {
   const k = p.keyframes;
   if (!p.camera || !k?.keys.length || !k.keys.every(Boolean)) return "Make the keyframes first.";
-  if (k.frames.at(-1) !== frameCount(p.camera.seconds) - 1) return "The camera move changed since the keyframes were made: make them again.";
+  if ((k.full ?? k.frames.at(-1)) !== frameCount(p.camera.seconds) - 1) return "The camera move changed since the keyframes were made: make them again.";
   if (placementStale(p) === "turnaround") return "Cut out the new turnaround on Scene first, then make the keyframes.";
   if (k.key !== sceneKey(p)) return "The stage changed since the keyframes were made (someone moved, came or left, or the character was recut): make them again.";
   if (beatsStale(p)) return "What happens changed since the keyframes were painted: paint them again.";

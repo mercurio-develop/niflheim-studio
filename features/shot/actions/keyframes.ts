@@ -10,7 +10,7 @@ import { startJob } from "@/lib/jobs";
 import { sceneKey } from "@/lib/progress";
 import { getProject, projectDir, updateProject, type Keyframes, type Project } from "@/lib/store";
 import { styleById } from "@/lib/styles";
-import { beatsKey } from "../state";
+import { asShot, beatsKey } from "../state";
 import { faceFixable, faceReference, matchFace } from "../face";
 import { nameInCaption, whoOf } from "../ingredients";
 
@@ -90,7 +90,7 @@ export async function saveKeys(id: string, form: FormData, rawNote: unknown, raw
     raw.push(rel(id, file));
   }
   const s = seed();
-  await updateProject(id, (q) => void (q.keyframes = { frames, raw, keys: raw.map(() => null), captions: raw.map(() => null), prompt: keyPrompt(q, note), note, seed: s, key, at: new Date().toISOString(), detail }));
+  await updateProject(id, (q) => void (q.keyframes = { frames, raw, keys: raw.map(() => null), captions: raw.map(() => null), prompt: keyPrompt(asShot(q), note), note, seed: s, key, at: new Date().toISOString(), detail }));
   await refine(id, raw.map((_, i) => i));
   done(id);
 }
@@ -142,7 +142,7 @@ const withFirst = (g: Record<string, { class_type: string; inputs: Record<string
 // job; every key uses the saved prompt and seed, a re-rolled one a new seed. Key 1 goes first and
 // is the reference for the rest (in a continued shot, key 1 is the previous take's last frame).
 async function refine(id: string, which: number[], reroll = false) {
-  const p = await load(id);
+  const p = asShot(await load(id));
   const k = p.keyframes;
   if (!k) throw new Error("Make the keyframes first.");
   const all = which.length === k.raw.length;
@@ -207,6 +207,25 @@ async function refine(id: string, which: number[], reroll = false) {
   }, "Painting the keyframes");
 }
 
+// A shorter take from the same move: the keys after key i go and the take ends on it (the camera
+// covers the move up to there). Full length again marks the keys out of date, so Generate draws them all.
+export async function cutKeys(id: string, rawIndex: unknown) {
+  const i = z.number().int().min(1).max(8).parse(rawIndex);
+  await updateProject(id, (q) => {
+    const k = q.keyframes;
+    if (!k || i >= k.frames.length - 1) throw new Error("Cut before the last key.");
+    if (q.jobs.keyframes?.status === "running") throw new Error("A key is still being painted; wait for it first.");
+    k.full ??= k.frames.at(-1);
+    for (const list of [k.frames, k.raw, k.keys, k.captions ?? []]) list.splice(i + 1);
+  });
+  done(id);
+}
+
+export async function uncutKeys(id: string) {
+  await updateProject(id, (q) => void (q.keyframes && q.keyframes.full !== undefined && ((q.keyframes.key = ""), (q.keyframes.full = undefined))));
+  done(id);
+}
+
 // Every key painted again from the same captures, with today's beats (One Shoot, when only the beats changed).
 export async function repaintKeys(id: string) {
   const p = await load(id);
@@ -227,7 +246,7 @@ export async function rerollKey(id: string, rawIndex: unknown) {
 // Match one key's face to the character's sheet again (Fix face), as it is now.
 export async function fixKeyFace(id: string, rawIndex: unknown) {
   const i = z.number().int().min(0).max(8).parse(rawIndex);
-  const p = await load(id);
+  const p = asShot(await load(id));
   const key = p.keyframes?.keys[i];
   const ref = faceReference(p);
   if (!key) throw new Error("No such key.");

@@ -1,11 +1,13 @@
 // The wizard, in order. Home and the step rail both read this.
 // Style and VFX are cut and the turnaround is part of Character (decision 0010); Shots and Reel keep
 // the shot/export routes.
-export const STEPS = [
+export const ALL_STEPS = [
   { slug: "character", n: "01", title: "Character", line: "Concept art, part swaps, every side.", art: "/steps/01-character.webp", body: "Describe someone and get four concepts. Pick one, point at a part (the coat, the boots) and say what it becomes. Then the same character from every side, and a sheet for later shots. A 3D model is last and optional.", ready: true },
   { slug: "scene", n: "02", title: "Scene", line: "One painting becomes a 3D stage. Stand them in it.", art: "/steps/03-scene.webp", body: "Paint a place or drop in a painting. It becomes a 3D stage; stand the character in it.", ready: true },
-  { slug: "shot", n: "03", title: "Shots", line: "Camera and walk per shot, keyframes, then LTX-2.5 takes.", art: "/steps/07-shot.webp", body: "For each shot: a framing (long, mid, close-up, first person), a camera move and where the character walks; then keyframes of it, say what they do, and LTX-2.5 shoots takes on your own GPU. Keep the best one.", ready: true },
-  { slug: "export", n: "04", title: "Reel", line: "Autopilot or by hand: one MP4 reel.", art: "/steps/08-export.webp", body: "Autopilot plans the shots and makes the reel in one press, or order the picked takes yourself, choose the cuts and export one MP4.", ready: true },
+  { slug: "shot", n: "03", title: "Shots", line: "Camera and walk per shot, keyframes, then LTX-2.5 takes.", art: "/steps/07-shot.webp", body: "For each shot: a framing (long, mid, close-up, first person), a camera move and where the character walks; then keyframes of it, say what they do, and LTX-2.5 shoots takes on your own GPU. Download them for your own editor.", ready: true },
+  { slug: "export", n: "04", title: "Reel", line: "Autopilot or by hand: one MP4 reel.", art: "/steps/08-export.webp", body: "Autopilot plans the shots and makes the reel in one press, or order the picked takes yourself, choose the cuts and export one MP4.", ready: true, hidden: true },
 ] as const;
 
-export type StepSlug = (typeof STEPS)[number]["slug"];
+// Reel is hidden for now: takes are downloaded and cut in your own editor (its route stays).
+export const STEPS = ALL_STEPS.filter((s) => !("hidden" in s && s.hidden));
+export type StepSlug = (typeof ALL_STEPS)[number]["slug"];
