@@ -8,7 +8,9 @@ import path from "node:path";
 const base = (process.argv[2] ?? process.env.COMFYUI_URL ?? "http://127.0.0.1:8188").replace(/\/$/, "");
 const dir = path.join(process.cwd(), "workflows");
 // Inputs that name a model file, and the folder ComfyUI lists it under.
-const MODEL_FIELDS: Record<string, string> = { unet_name: "diffusion_models", clip_name: "text_encoders", vae_name: "vae", lora_name: "loras", ckpt_name: "checkpoints", control_net_name: "controlnet" };
+// MoGe and BiRefNet name their models too; SAM3Segment downloads its own. The Ingredients LoRA is
+// added in code (features/shot/ingredients.ts), so it is checked by name below.
+const MODEL_FIELDS: Record<string, string> = { unet_name: "diffusion_models", clip_name: "text_encoders", vae_name: "vae", lora_name: "loras", ckpt_name: "checkpoints", control_net_name: "controlnet", model_name: "geometry_estimation", bg_removal_name: "background_removal" };
 
 const nodes = new Map<string, Set<string>>();
 const models = new Map<string, Set<string>>();
@@ -19,6 +21,8 @@ for (const f of readdirSync(dir).filter((x) => x.endsWith(".api.json"))) {
     for (const [k, v] of Object.entries(n.inputs)) if (MODEL_FIELDS[k] && typeof v === "string") (models.get(`${MODEL_FIELDS[k]}/${v}`) ?? models.set(`${MODEL_FIELDS[k]}/${v}`, new Set()).get(`${MODEL_FIELDS[k]}/${v}`)!).add(f);
   }
 }
+
+models.set(`loras/${process.env.LTX_INGREDIENTS_LORA || "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors"}`, new Set(["Character takes (features/shot/ingredients.ts)"]));
 
 const info = (await (await fetch(`${base}/object_info`)).json()) as Record<string, unknown>;
 const missingNodes = [...nodes].filter(([c]) => !info[c]);

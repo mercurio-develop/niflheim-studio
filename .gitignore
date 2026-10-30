@@ -74,3 +74,4 @@ npm-debug.log*
 
 # --- local notes / decisions (kept out of the public repo) ---
 /docs/
+.pyenv/

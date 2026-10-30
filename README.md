@@ -50,24 +50,33 @@ compared, swapped or undone, and re-running a step marks the later ones stale.
 
 Needs:
 
-- Node 22+ and [uv](https://docs.astral.sh/uv/)
+- Node 22.18+ (it runs the `.ts` scripts directly) and [uv](https://docs.astral.sh/uv/) for the
+  Python helpers' venv and the Comfy API proxy
 - ComfyUI v0.38+ with the custom node packs and models in [`build/model-files.md`](build/model-files.md)
 - an NVIDIA GPU with 16 GB (or Comfy Cloud, below)
 - ffmpeg on the `PATH`
-- a Python with `numpy opencv-python pillow scipy torch trimesh` for the helper scripts
+- a Python with the packages in `scripts/requirements.txt` for the helper scripts
   (`NIFL_PYTHON` in `.env`; defaults to ComfyUI's `.venv`)
 
 ```bash
-cp .env.example .env
+git clone https://github.com/mercurio-develop/niflheim-studio.git
+cd niflheim-studio
 npm ci
+cp .env.example .env                                # Comfy Cloud: set COMFY_API_KEY, empty COMFY_BASE_URL
+uv venv .pyenv && uv pip install --python .pyenv/bin/python -r scripts/requirements.txt
+echo "NIFL_PYTHON=$PWD/.pyenv/bin/python" >> .env   # the helper scripts' Python
+# Local ComfyUI only:
 ~/ComfyUI/run.sh --port 8188                        # or however you start ComfyUI
 ./scripts/comfy-proxy.sh                            # Comfy API v2 proxy on :8189 (the SDK talks to it)
 node scripts/comfy-check.ts http://127.0.0.1:8188   # has it every node and model the graphs use?
-npm run dev                                         # http://localhost:4800
+npm run dev                                         # http://localhost:4800 (or: npm run build && npm start)
 ```
 
-Docker: `docker compose up -d` serves the app on :4800 and reaches the proxy on the host at
-`host.docker.internal:8189` (start the proxy so it listens there).
+Docker: `docker compose up -d` serves the app on :4800 with Python and ffmpeg inside, so every
+step runs in the container; your projects stay in `./data`. Comfy comes from `.env`: Comfy Cloud
+(below), or the proxy on the host with `COMFY_BASE_URL=http://host.docker.internal:8189`. The
+image needs no GPU, so a home server or NAS with Docker (x86, about 4 GB free) can run it while
+Comfy Cloud renders.
 
 ## Run it on Comfy Cloud
 
@@ -114,7 +123,8 @@ and LTX-2.5 with its Gemma 4 text encoder. Files, folders and licences:
 [`build/model-files.md`](build/model-files.md). Third-party assets:
 [`THIRD_PARTY_NOTICES/`](THIRD_PARTY_NOTICES/README.md).
 
-Two licences to know: LTX-2.5 (LTX-2.x Community License) is free under USD 10M yearly revenue,
+Two licences to know: LTX-2.5 and its Layout-to-Render and Ingredients IC-LoRAs (LTX-2.x Community
+License) are free under USD 10M yearly revenue,
 and Hunyuan3D-2 (the character's 3D model) is not licensed in the EU, the UK or South Korea;
 the 3D model is optional, the rest of the wizard works without it.
 

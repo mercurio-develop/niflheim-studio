@@ -1,0 +1,9 @@
+# The helper scripts' Python (scripts/*.py): take scoring, the reel, the stage fill, the sheet, the
+# face patch, mesh colours. The Docker image installs these; a local run points NIFL_PYTHON at a
+# Python that has them (ComfyUI's venv has them all). torch is the CPU build in the image.
+numpy
+opencv-python-headless
+pillow
+scipy
+trimesh
+torch

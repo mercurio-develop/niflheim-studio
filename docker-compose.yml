@@ -5,10 +5,9 @@ services:
     restart: unless-stopped
     ports:
       - "4800:4800"
+    # Comfy comes from .env: COMFY_API_KEY with COMFY_BASE_URL empty for Comfy Cloud, or
+    # COMFY_BASE_URL=http://host.docker.internal:8189 for the Comfy API proxy on the host.
     env_file: .env
-    environment:
-      # The Comfy API proxy runs on the host (scripts/comfy-proxy.sh); reach it from the container.
-      COMFY_BASE_URL: http://host.docker.internal:8189
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

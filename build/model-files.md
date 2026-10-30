@@ -24,11 +24,15 @@ this is not legal advice. `node scripts/comfy-check.ts <comfy url>` says which a
 | `ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors` | `diffusion_models/` | 03_shot | Lightricks/LTX-2.5 (int8 repack), gated | LTX-2.x Community License: free under USD 10M yearly revenue; acceptable-use policy |
 | `ltx-2.5-video-vae-bf16.safetensors` | `vae/` | 03_shot | Lightricks/LTX-2.5 | LTX-2.x Community License |
 | `ltx-2.5-audio-vae-bf16.safetensors` | `vae/` | 03_shot | Lightricks/LTX-2.5 | LTX-2.x Community License |
-| `gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors` | `text_encoders/` | 03_shot | Lightricks/LTX-2.5 (Gemma 4 12B + projection) | Gemma 4 is Apache-2.0; this Lightricks file ships under the LTX-2.x Community License |
+| `gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors` | `text_encoders/` | 03_shot, 03_shot_layout | Lightricks/LTX-2.5 (Gemma 4 12B + projection) | Gemma 4 is Apache-2.0; this Lightricks file ships under the LTX-2.x Community License |
+| `ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors` | `loras/` | 03_shot_layout (Camera move takes with a clay clip) | Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render, gated | LTX-2.x Community License |
+| `ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors` (Comfy Cloud) or `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` (set `LTX_INGREDIENTS_LORA`) | `loras/` | Character takes with the sheet (added to 03_shot by features/shot/ingredients.ts) | Lightricks/LTX-2.3-22b-IC-LoRA-Ingredients, Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients, gated | LTX-2.x Community License |
 
 Custom node packs: ComfyUI-RMBG (`SAM3Segment`), ComfyUI-Florence2
 (`DownloadAndLoadFlorence2Model`, `Florence2Run`), ComfyUI-KJNodes (`GrowMaskWithBlur`),
-ComfyUI-Impact-Pack (`MaskToSEGS`, `DetailerForEach`). Everything else is core ComfyUI (v0.38+).
+ComfyUI-Impact-Pack (`MaskToSEGS`, `DetailerForEach`), ComfyUI-LTXVideo (`LTXICLoRALoaderModelOnly`,
+`LTXAddVideoICLoRAGuide`, for 03_shot_layout). Everything else is core ComfyUI (v0.38+). Comfy Cloud
+has every node and model above.
 
 ## Licence notes
 
