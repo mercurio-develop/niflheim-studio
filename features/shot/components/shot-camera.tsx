@@ -116,7 +116,11 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   });
   const shownMain = pl?.at ? placeAt(move, "main", { at: pl.at, turn: pl.turn }, frame) : null;
   const shownAssets = liveAssets.map((a) => (a.at ? { ...a, ...(({ at, turn }) => ({ at, turn }))(placeAt(move, a.id, { at: a.at, turn: a.turn }, frame)) } : a));
-  const posed = sel !== null && moment?.camera && !overview && !free ? { position: moment.camera.from, target: moment.camera.look, n: sel } : undefined;
+  // Shot view: a selected moment's camera, else the shot's own first frame (its framing and start),
+  // not the painting's camera (which showed whatever framing was chosen: 05_submit Chrome test).
+  const first = path?.poses[0];
+  const posed =
+    overview || free || playing ? undefined : sel !== null && moment?.camera ? { position: moment.camera.from, target: moment.camera.look, n: sel } : first ? { position: first.position, target: first.target, n: -1 } : undefined;
 
   const viewer = ready && path && (
     <div className="relative aspect-[7/4] overflow-hidden rounded-lg border">
@@ -145,7 +149,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
           onLive={setLive}
         />
       </StageViewer>
-      <ViewSwitch overview={overview} onOverview={view} />
+      <ViewSwitch overview={overview} onOverview={view} home="Shot view" />
       <button
         type="button"
         aria-pressed={free}

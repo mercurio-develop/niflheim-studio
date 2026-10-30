@@ -129,17 +129,19 @@ export function start(cam: StageCamera, who: Subject, m: CameraMove): Pose {
   return { position: home(cam).position, target: chest };
 }
 
-// The first and last pose of a move; frames ease between them (an arc turns on its circle).
-function ends(p0: Vec, aimAt: Vec, m: CameraMove): { from: Vec; to: Vec; arc?: { centre: Vec; angle: number } } {
+// The first and last pose of a move; frames ease between them (an arc turns on its circle). gap:
+// how near a push may come to what it aims at, in proportion to the subject (0.6 m for a person;
+// a fixed 0.6 m put the camera inside a 0.55 m fox, 05_submit Chrome test).
+function ends(p0: Vec, aimAt: Vec, m: CameraMove, gap = 0.6): { from: Vec; to: Vec; arc?: { centre: Vec; angle: number } } {
   const toAim = sub(aimAt, p0);
   const dir = scale(toAim, 1 / (len(toAim) || 1));
   const right: Vec = [-dir[2], 0, dir[0]]; // horizontal, screen right
   const r = len([right[0], 0, right[2]]) || 1;
   switch (m.move) {
     case "push":
-      return { from: p0, to: add(p0, scale(dir, Math.min(m.amount, len(toAim) - 0.6))) };
+      return { from: p0, to: add(p0, scale(dir, Math.max(0, Math.min(m.amount, len(toAim) - gap)))) };
     case "pull":
-      return { from: add(p0, scale(dir, Math.min(m.amount, len(toAim) - 0.6))), to: p0 };
+      return { from: add(p0, scale(dir, Math.max(0, Math.min(m.amount, len(toAim) - gap)))), to: p0 };
     case "arc":
       return { from: p0, to: p0, arc: { centre: aimAt, angle: (m.amount * Math.PI) / 180 } };
     case "crane":
@@ -161,8 +163,9 @@ export function poses(cam: StageCamera, who: Subject, m: CameraMove, others: Oth
   const a0 = m.walk?.from ?? who.at;
   const a1 = m.walk?.to ?? a0;
   const main = !m.subject || m.subject === "main" || subjectOf(cam, who, m, others) === who;
-  const { position: p0, target: aimAt } = start(cam, main ? { ...who, at: a0 } : subjectOf(cam, who, m, others), m);
-  const preset = ends(p0, aimAt, m);
+  const subject = main ? { ...who, at: a0 } : subjectOf(cam, who, m, others);
+  const { position: p0, target: aimAt } = start(cam, subject, m);
+  const preset = ends(p0, aimAt, m, Math.max(0.3, (0.6 * (subject.frame ?? subject.height)) / 1.7));
   const e = m.to ? { from: preset.from, to: m.to } : preset;
   const carry = main && (m.move === "follow" || m.framing === "pov");
   const out: Pose[] = [];
@@ -183,12 +186,12 @@ export function poses(cam: StageCamera, who: Subject, m: CameraMove, others: Oth
   return out;
 }
 
-// The first frame where the camera comes closer to the character than half their height (at least
-// 0.7 m) across the ground, or -1. Keys there show a flat card from inside or edge on, and a path
+// The first frame where the camera comes closer to the character than about half their height (at
+// least 0.25 m: a fixed 0.7 m flagged every Mid shot of a small animal) across the ground, or -1. Keys there show a flat card from inside or edge on, and a path
 // that crosses them turns round them in a frame. First person stands in them on purpose.
 export function tooClose(ps: Pose[], who: Subject, m: CameraMove) {
   if (m.framing === "pov") return -1;
-  const near = Math.max(0.7, who.height * 0.45);
+  const near = Math.max(0.25, who.height * 0.45);
   return ps.findIndex((p) => p.at && Math.hypot(p.position[0] - p.at[0], p.position[2] - p.at[2]) < near);
 }
 

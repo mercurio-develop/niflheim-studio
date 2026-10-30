@@ -124,7 +124,8 @@ export function CameraPath(props: {
 }
 
 // A move gizmo on a point of the path: arrows and planes, no rotation or scale, the same size on
-// screen at any distance. flat: along the ground only (a walk stays on the floor).
+// screen at any distance (small: at 90 px they buried a 0.55 m fox). flat: along the ground only (a
+// walk stays on the floor).
 function Handle(props: { at: THREE.Vector3; flat?: boolean; onDrag: (p: THREE.Vector3) => void }) {
   return (
     <PivotControls
@@ -135,7 +136,7 @@ function Handle(props: { at: THREE.Vector3; flat?: boolean; onDrag: (p: THREE.Ve
       activeAxes={props.flat ? [true, false, true] : [true, true, true]}
       depthTest={false}
       fixed
-      scale={props.flat ? 70 : 90}
+      scale={props.flat ? 40 : 48}
       lineWidth={3}
       onDrag={(_l, _dl, w) => props.onDrag(new THREE.Vector3().setFromMatrixPosition(w))}
     />
