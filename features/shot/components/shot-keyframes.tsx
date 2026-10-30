@@ -59,11 +59,8 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
         current={!!props.keyframes && props.keyframes.key === key}
         frames={keyFrames(move)}
         job={props.job}
-        move={move}
-        // Each key wears the pose the move (or its moments) gives at its frame.
-        capture={{ ...base, poses: keyFrames(move).map(poseAt) }}
       />
-      <ClayClip projectId={props.projectId} layout={props.layout} job={props.layoutJob} current={props.layout?.key === key} capture={{ ...base, poses: Array.from({ length: frameCount(move.seconds) }, (_, f) => poseAt(Math.min(f, path.length - 1))) }} />
+      <ClayClip projectId={props.projectId} layout={props.layout} job={props.layoutJob} current={props.layout?.key === key} />
     </div>
   );
 }

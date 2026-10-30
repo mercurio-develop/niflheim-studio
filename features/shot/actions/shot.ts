@@ -9,7 +9,7 @@ import { focusPhrase, frameCount, keyFrames, momentsOf, poses, sees } from "@/li
 import { currentFill } from "@/lib/progress";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob } from "@/lib/jobs";
-import { getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
+import { allShots, getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { DEFAULT_NEGATIVE, END_NEW_POSE_STRENGTH, END_STRENGTH, middleImageNode, shapeShot } from "../graph";
 import { sceneKey } from "@/lib/progress";
@@ -141,6 +141,13 @@ const Input = z
   })
   .refine((x) => x.beats.start.length >= 3, "Say what happens first, in a few words.");
 
+
+// Every shot's saved beats (the active shot's or its stash), for Autopilot to show and shoot with.
+export async function shotBeats(id: string) {
+  const p = await getProject(id);
+  if (!p) throw new Error("Project not found.");
+  return Object.fromEntries(allShots(p).map((s) => [s.id, s.shot?.beats ?? (s.shot?.action ? { start: s.shot.action } : null)]));
+}
 
 // The beats, saved as they are typed: the keyframes paint the later ones (actions/keyframes.ts
 // beatOf), so they have to be on the shot before the keys are made, not only when a take is shot.

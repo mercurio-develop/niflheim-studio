@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Check, CircleAlert, Play, RotateCcw, Square, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,18 +8,26 @@ import { LoadingDots } from "@/components/loading-dots";
 import { Section } from "@/components/section";
 import { KeyCapture } from "@/features/scene/components/key-capture";
 import type { StagePose } from "@/features/scene/components/stage-viewer";
-import { saveKeys } from "@/features/shot/actions/keyframes";
-import { renderTake } from "@/features/shot/actions/shot";
+import { saveCamera } from "@/features/scene/actions/camera";
+import { oneShoot, shotBeats } from "@/features/shot/actions/shot";
+import { clayFrameMax } from "@/features/shot/state";
 import { selectShot } from "@/features/shot/actions/shots";
-import { cardAt, keyFrames, poses, type CameraMove } from "@/lib/camera";
+import { cardAt, frameCount, keyFrames, poses, type CameraMove } from "@/lib/camera";
 import type { StageCamera } from "@/lib/stage-fill";
 import type { Autopilot as Pilot, AutopilotShot, AutopilotStep, Block, Join, SceneAsset, ViewId } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { jobState, markStep, pickBest, savePlan, startAutopilot, stopAutopilot } from "../actions/autopilot";
+import { jobState, markStep, savePlan, startAutopilot, stopAutopilot } from "../actions/autopilot";
 import { exportReel, saveReel } from "../actions/reel";
 
 export type PilotShot = { id: string; name: string; move: CameraMove | null };
 export type SceneCapture = { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; blocks: Block[]; assets: SceneAsset[]; poses: { id: string; cutouts: Partial<Record<ViewId, string>> }[] };
+
+// A shot's beats are kept in its action joined as "first, then next, then last".
+const beatsOf = (action: string) => {
+  const [start = "", then, end] = action.split(/,\s*then\s+/i);
+  return { start, then: then || undefined, end: end || undefined };
+};
+const joinBeats = (b: { start: string; then?: string; end?: string }) => [b.start, b.then, b.end].map((x) => x?.trim()).filter(Boolean).join(", then ");
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -43,12 +51,12 @@ async function wait(id: string, key: "keyframes" | "shot" | "reel") {
 export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; pilot: Pilot | null; scene: SceneCapture | null; joins: Join[] }) {
   const id = props.projectId;
   const [plan, setPlan] = useState<AutopilotShot[]>(() =>
-    props.shots.map((s) => props.pilot?.plan.find((p) => p.shot === s.id) ?? { shot: s.id, include: !!s.move, action: "", takes: 2 }),
+    props.shots.map((s) => props.pilot?.plan.find((p) => p.shot === s.id) ?? { shot: s.id, include: !!s.move, action: "", takes: 1 }),
   );
   const join: Join = props.pilot?.join ?? "fade";
   const [steps, setSteps] = useState(props.pilot?.steps ?? []);
   const [driving, setDriving] = useState(false);
-  const [capture, setCapture] = useState<{ poses: StagePose[]; done: (b: Blob[]) => void; fail: (m: string) => void } | null>(null);
+  const [capture, setCapture] = useState<{ clay: boolean; poses: StagePose[]; done: (b: Blob[]) => void; fail: (m: string) => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
   const stop = useRef(false);
@@ -56,14 +64,19 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
   const remaining = steps.some((s) => s.status !== "done");
   const canResume = !driving && !!props.pilot && props.pilot.state !== "done" && props.pilot.state !== "idle" && remaining;
 
+  // Each shot's beats come from the shot itself (typed in its Shoot step) until written here.
+  useEffect(() => {
+    shotBeats(id).then((all) => setPlan((cur) => cur.map((p) => (p.action.trim() || !all[p.shot] ? p : { ...p, action: joinBeats(all[p.shot]!) })))).catch(() => {});
+  }, [id]);
   const edit = (i: number, patch: Partial<AutopilotShot>) => setPlan(plan.map((p, j) => (j === i ? { ...p, ...patch } : p)));
 
   // Capture a shot's keyframes in the browser (the stage viewer off screen at each key pose).
-  const captureKeys = (move: CameraMove) =>
+  const captureKeys = (move: CameraMove, clay = false) =>
     new Promise<Blob[]>((resolve, reject) => {
       const s = props.scene!;
       const ps = poses(s.camera, s, move, s.assets);
-      setCapture({ poses: keyFrames(move).map((f) => ({ ...ps[f], card: cardAt(move, f, s.cutouts, s.poses) })), done: (b) => (setCapture(null), resolve(b)), fail: (m) => (setCapture(null), reject(new Error(m))) });
+      const at = clay ? Array.from({ length: frameCount(move.seconds) }, (_, f) => Math.min(f, ps.length - 1)) : keyFrames(move);
+      setCapture({ clay, poses: at.map((f) => ({ ...ps[f], card: cardAt(move, f, s.cutouts, s.poses) })), done: (b) => (setCapture(null), resolve(b)), fail: (m) => (setCapture(null), reject(new Error(m))) });
     });
 
   async function runStep(i: number, list: typeof steps) {
@@ -93,16 +106,19 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
       if (st.kind === "keys") {
         const move = props.shots.find((s) => s.id === st.shot)?.move;
         if (!move) throw new Error(`${name(st.shot)} has no camera move: set one in Shots.`);
-        const pngs = await captureKeys(move);
+        // One Shoot per shot: draw the keys and the clay clip here, the server paints them (face
+        // pass on), shoots up to 3 takes with the shot's beats and picks the steadiest.
+        await saveCamera(id, move);
         const form = new FormData();
-        pngs.forEach((b, k) => form.set(`key${k}`, new File([b], `key${k}.jpg`, { type: "image/jpeg" })));
-        await saveKeys(id, form, "");
+        (await captureKeys(move)).forEach((b, k) => form.set(`key${k}`, new File([b], `key${k}.jpg`, { type: "image/jpeg" })));
+        const clay = await captureKeys(move, true);
+        if (clay.some((b) => b.size >= clayFrameMax(clay.length))) throw new Error("A clay frame came out too big to send; shorten the move.");
+        clay.forEach((b, k) => form.set(`f${k}`, new File([b], `${k}.jpg`, { type: "image/jpeg" })));
+        await oneShoot(id, form, { beats: beatsOf(plan.find((p) => p.shot === st.shot)!.action), tries: 3 });
         await wait(id, "keyframes");
-      } else if (st.kind === "take") {
-        await renderTake(id, { action: plan.find((p) => p.shot === st.shot)!.action });
         await wait(id, "shot");
-      } else if (st.kind === "pick") {
-        await pickBest(id, st.shot);
+      } else if (st.kind === "take" || st.kind === "pick") {
+        // Done by One Shoot above (its takes and its pick).
       } else {
         const order = plan.filter((p) => p.include).map((p) => p.shot);
         await saveReel(id, { order, joins: order.slice(1).map((_, i) => props.joins[i] ?? "fade") });
@@ -133,14 +149,14 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
     start(async () => {
       setError(null);
       try {
-        await savePlan(id, { plan, join });
+        await savePlan(id, { plan: plan.map((p) => ({ ...p, takes: 1 })), join });
         await startAutopilot(id);
         // The same steps startAutopilot saved: per shot keyframes, takes, the pick; then the reel.
         const list: AutopilotStep[] = plan
           .filter((p) => p.include)
           .flatMap((p): AutopilotStep[] => [
             { shot: p.shot, kind: "keys", status: "todo" },
-            ...Array.from({ length: p.takes }, (_, n): AutopilotStep => ({ shot: p.shot, kind: "take", n: n + 1, status: "todo" })),
+            { shot: p.shot, kind: "take", n: 1, status: "todo" },
             { shot: p.shot, kind: "pick", status: "todo" },
           ]);
         list.push({ shot: "", kind: "export", status: "todo" });
@@ -158,10 +174,10 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
     setError(null);
     start(() => drive(list));
   };
-  const label = (s: (typeof steps)[number]) => (s.kind === "export" ? "Put the reel together" : `${name(s.shot)} · ${s.kind === "keys" ? "keyframes" : s.kind === "take" ? `take ${s.n}` : "pick the best take"}`);
+  const label = (s: (typeof steps)[number]) => (s.kind === "export" ? "Put the reel together" : `${name(s.shot)} · ${s.kind === "keys" ? "One Shoot: keys, clay clip, beats" : s.kind === "take" ? "up to 3 takes" : "steadiest take picked"}`);
 
   return (
-    <Section id="autopilot" n="1" tone="bg-tone-yellow" title="Autopilot" line="Say what happens in each shot and press Make the reel: keyframes, takes, the best take of each and the reel, one after another. Keep this page open while it runs."
+    <Section id="autopilot" n="1" tone="bg-tone-yellow" title="Autopilot" line="Say what happens in each shot in up to three beats (first, then, by the end) and press Make the reel: One Shoot per shot (keyframes painted with the beats, up to 3 takes, the steadiest picked), then the reel. Keep this page open while it runs."
       summary={driving ? "Running…" : "Make the whole reel in one press"}
       actions={
         <>
@@ -197,20 +213,17 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
             <span className="truncate text-sm" title={s.name}>
               {s.name}
             </span>
-            <Input className="col-span-full row-start-2 sm:col-span-1 sm:row-start-auto" value={plan[i].action} disabled={driving} onChange={(e) => edit(i, { action: e.target.value })} placeholder="what happens: slowly turns to look toward the camera" aria-label={`What happens in ${s.name}`} />
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              takes
-              <select value={plan[i].takes} disabled={driving} onChange={(e) => edit(i, { takes: Number(e.target.value) })} className="rounded border bg-background px-1 py-0.5 text-xs">
-                {[1, 2, 3, 4].map((n) => (
-                  <option key={n}>{n}</option>
-                ))}
-              </select>
-            </label>
+            <div className="col-span-full row-start-2 grid gap-1 sm:col-span-1 sm:row-start-auto sm:grid-cols-3">
+              {(["start", "then", "end"] as const).map((n) => (
+                <Input key={n} value={beatsOf(plan[i].action)[n] ?? ""} disabled={driving} maxLength={300} onChange={(e) => edit(i, { action: joinBeats({ ...beatsOf(plan[i].action), [n]: e.target.value }) })} placeholder={n === "start" ? "first: lifts the tire" : n === "then" ? "then: bites it" : "by the end: walks off"} aria-label={`Beat ${n} of ${s.name}`} />
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground">3 takes</span>
           </div>
         ))}
         <div className="flex flex-wrap items-center gap-1.5 pt-1">
           <span className="text-xs text-muted-foreground">Joins between shots: as set in Order below (a fade unless you choose).</span>
-          <span className="ml-2 font-mono text-[11px] text-muted-foreground">~{Math.round(plan.filter((p) => p.include).reduce((t, p) => t + 2.5 + p.takes * 2, 0))} min</span>
+          <span className="ml-2 font-mono text-[11px] text-muted-foreground">~{plan.filter((p) => p.include).length * 12} min</span>
         </div>
       </div>
 
@@ -240,7 +253,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
         </ol>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {capture && props.scene && <KeyCapture {...props.scene} projectId={props.projectId} poses={capture.poses} onDone={capture.done} onError={capture.fail} />}
+      {capture && props.scene && <KeyCapture {...props.scene} projectId={props.projectId} poses={capture.poses} clay={capture.clay} onDone={capture.done} onError={capture.fail} />}
     </Section>
   );
 }
