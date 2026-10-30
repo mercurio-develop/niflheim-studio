@@ -1,5 +1,6 @@
 import { frameCount } from "@/lib/camera";
 import { sceneKey } from "@/lib/progress";
+import type { FramingId, MoveId } from "@/lib/camera";
 import type { Project, ShotKind } from "@/lib/store";
 
 // What the Shots page and the take action both need to know about the active shot. Plain helpers
@@ -24,3 +25,16 @@ export function keysProblem(p: Project): string | null {
 // The kind a shot is suggested to be (decision 0014): still, close or first-person shots are about
 // the character; anything that moves through the set is about the camera.
 export const suggestedKind = (p: Project): ShotKind => ((p.camera?.move ?? "static") === "static" || ["close", "pov"].includes(p.camera?.framing ?? "") ? "character" : "camera");
+
+// The kinds of shot New shot offers: framing, move, kind and length chosen together from what
+// worked in the 05_submit tests. Mid and close shots follow their keyframes (faces matched to the
+// sheet): on one mid shot that faced the camera, steady, the right person, where the sheet's takes
+// turned away or brought in a double. The sheet (Character) is for action, where the character moves
+// a lot and keyframes cannot follow (the fox trotting to the lantern). The bare moves stay under More.
+export const SHOT_TYPES: { id: string; label: string; line: string; framing: FramingId; move: MoveId; kind: ShotKind; seconds: number }[] = [
+  { id: "wide-push", label: "Wide · push in", line: "The place and the character, the camera moving in.", framing: "long", move: "push", kind: "camera", seconds: 4 },
+  { id: "mid-acting", label: "Mid · acting", line: "Waist up, holding on what they do.", framing: "mid", move: "static", kind: "camera", seconds: 5 },
+  { id: "close-reaction", label: "Close-up · reaction", line: "Their face, their expression.", framing: "close", move: "static", kind: "camera", seconds: 5 },
+  { id: "action", label: "Action · keep their look", line: "They move a lot; their sheet keeps them the same.", framing: "long", move: "static", kind: "character", seconds: 5 },
+  { id: "wide-follow", label: "Wide · follow", line: "The camera goes with them as they move.", framing: "long", move: "follow", kind: "camera", seconds: 4 },
+];

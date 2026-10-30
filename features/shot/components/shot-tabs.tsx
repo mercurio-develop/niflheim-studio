@@ -5,6 +5,7 @@ import { Check, Pencil, Plus, X } from "lucide-react";
 import { MOVES } from "@/lib/camera";
 import { cn } from "@/lib/utils";
 import { deleteShot, newShot, renameShot, selectShot } from "../actions/shots";
+import { SHOT_TYPES } from "../state";
 
 export type ShotTab = { id: string; name: string; active: boolean; picked: boolean };
 
@@ -12,6 +13,7 @@ export type ShotTab = { id: string; name: string; active: boolean; picked: boole
 // camera move, rename or remove one. A dot marks a shot with a picked take, ready for the reel.
 export function ShotTabs(props: { projectId: string; shots: ShotTab[]; locked?: boolean }) {
   const [adding, setAdding] = useState(false);
+  const [bare, setBare] = useState(false); // the bare camera moves, under More
   const [renaming, setRenaming] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +67,31 @@ export function ShotTabs(props: { projectId: string; shots: ShotTab[]; locked?: 
         </button>
       </div>
       {adding && (
+        <div className="flex flex-col gap-2">
+          <span className="text-xs text-muted-foreground">Shot type</span>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {SHOT_TYPES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setAdding(false);
+                  run(() => newShot(props.projectId, t.id));
+                }}
+                className="flex flex-col items-start rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors hover:border-ring/60"
+              >
+                <span className="text-foreground">{t.label}</span>
+                <span className="text-muted-foreground">{t.line}</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" aria-expanded={bare} onClick={() => setBare(!bare)} className="self-start text-xs text-muted-foreground hover:text-foreground">
+            {bare ? "Hide the camera moves" : "More: start from a camera move"}
+          </button>
+        </div>
+      )}
+      {adding && bare && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Start from</span>
           {MOVES.map((m) => (

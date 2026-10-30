@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { DEFAULT_MOVE, MOVES } from "@/lib/camera";
+import { DEFAULT_NEGATIVE } from "../graph";
+import { SHOT_TYPES } from "../state";
 import { SHOT_FIELDS, updateProject, type Project, type ShotData } from "@/lib/store";
 
 const done = (id: string) => {
@@ -33,17 +35,21 @@ const ShotId = z.string().regex(/^s\d{1,3}$/);
 const Name = z.string().trim().min(1).max(40);
 
 // A new shot of the same scene, starting from a camera move preset; it becomes the active one.
-export async function newShot(id: string, rawMove: unknown) {
-  const move = z.enum(MOVES.map((m) => m.id) as [string, ...string[]]).parse(rawMove);
-  const spec = MOVES.find((m) => m.id === move)!;
+// A new shot from a shot type (SHOT_TYPES: framing, move, kind and length together) or, under
+// More, from a bare camera move.
+export async function newShot(id: string, raw: unknown) {
+  const key = z.enum([...SHOT_TYPES.map((t) => t.id), ...MOVES.map((m) => m.id)] as [string, ...string[]]).parse(raw);
+  const type = SHOT_TYPES.find((t) => t.id === key);
+  const spec = MOVES.find((m) => m.id === (type?.move ?? key))!;
   await updateProject(id, (q) => {
     idle(q);
     park(q);
     const n = Math.max(0, ...(q.shots ?? []).map((s) => Number(s.id.slice(1)))) + 1;
     const shot = `s${n}`;
-    q.shots = [...(q.shots ?? []), { id: shot, name: `Shot ${n} · ${spec.label}` }];
+    q.shots = [...(q.shots ?? []), { id: shot, name: `Shot ${n} · ${type?.label ?? spec.label}` }];
     load(q, shot);
-    q.camera = { ...DEFAULT_MOVE, move: spec.id, amount: spec.value };
+    q.camera = { ...DEFAULT_MOVE, move: spec.id, amount: spec.value, ...(type ? { framing: type.framing, seconds: type.seconds } : {}) };
+    if (type) q.shot = { action: "", negative: DEFAULT_NEGATIVE, takes: [], kind: type.kind };
   });
   done(id);
 }
