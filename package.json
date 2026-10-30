@@ -2,6 +2,8 @@
   "name": "niflheim-studio",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
   "type": "module",
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 4800",

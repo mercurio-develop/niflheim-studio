@@ -11,7 +11,7 @@ import { projectDir, type AssetView, type MeshColourView } from "@/lib/store";
 // Hunyuan3D-2 MV from the front, side and back, coloured from the views (scripts/mesh_colour.py).
 
 const run = promisify(execFile);
-const PYTHON = process.env.NIFL_PYTHON ?? path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
+const PYTHON = process.env.NIFL_PYTHON || path.join(homedir(), "ComfyUI", ".venv", "bin", "python");
 const COLOUR = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "mesh_colour.py");
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const rel = (id: string, f: string) => path.relative(projectDir(id), f);
