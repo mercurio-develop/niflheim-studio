@@ -53,6 +53,7 @@ export function TurnaroundSections(props: {
 }) {
   const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: suggestedBody(props.description ?? "") === "animal" ? "designed" : "relaxed", hide: [], keep: [], extras: [], items: itemChoices(props.tags).slice(0, 2), body: suggestedBody(props.description ?? "") });
   const items = options.items ?? [];
+  const [thing, setThing] = useState("");
   const offered = itemChoices(props.tags);
   const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);
   const [editing, setEditing] = useState<ViewId | null>(null);
@@ -141,18 +142,30 @@ export function TurnaroundSections(props: {
 
             <span className="self-start pt-0.5 text-xs text-muted-foreground">On their own</span>
             <div className="flex flex-col gap-1">
-              <div className="flex flex-wrap gap-1.5">
-                {offered.length ? (
-                  offered.map((t) => (
-                    <button key={t} type="button" aria-pressed={items.includes(t)} disabled={!items.includes(t) && items.length >= MAX_ITEMS} onClick={() => setOptions((o) => ({ ...o, items: items.includes(t) ? items.filter((x) => x !== t) : [...items, t] }))} className={chip(items.includes(t))}>
-                      {t}
-                    </button>
-                  ))
-                ) : (
-                  <span className="text-xs text-muted-foreground">No parts tagged on this version.</span>
-                )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[...new Set([...offered, ...items])].map((t) => (
+                  <button key={t} type="button" aria-pressed={items.includes(t)} disabled={!items.includes(t) && items.length >= MAX_ITEMS} onClick={() => setOptions((o) => ({ ...o, items: items.includes(t) ? items.filter((x) => x !== t) : [...items, t] }))} className={chip(items.includes(t))}>
+                    {t}
+                  </button>
+                ))}
+                <input
+                  aria-label="Add a thing in your own words"
+                  value={thing}
+                  maxLength={40}
+                  placeholder="+ a thing: a truck tire"
+                  disabled={items.length >= MAX_ITEMS}
+                  onChange={(e) => setThing(e.target.value)}
+                  onKeyDown={(e) => {
+                    const t = thing.trim().toLowerCase();
+                    if (e.key !== "Enter" || !/^[a-z][a-z \-]{1,39}$/.test(t)) return;
+                    e.preventDefault();
+                    setOptions((o) => ({ ...o, items: [...new Set([...(o.items ?? []), t])].slice(0, MAX_ITEMS) }));
+                    setThing("");
+                  }}
+                  className="h-7 w-44 rounded-full border bg-transparent px-2.5 text-xs disabled:opacity-50"
+                />
               </div>
-              <span className="text-xs text-muted-foreground">Up to {MAX_ITEMS} things they wear or carry, painted alone for the sheet.</span>
+              <span className="text-xs text-muted-foreground">Up to {MAX_ITEMS} things they wear or carry, painted alone for the sheet: pick from the tags or type one (Enter).</span>
             </div>
 
             <span className="self-start pt-0.5 text-xs text-muted-foreground">Hide</span>
