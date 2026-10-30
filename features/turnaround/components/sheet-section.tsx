@@ -1,20 +1,22 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Pencil, RefreshCw, Square } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
 import { Textarea } from "@/components/ui/textarea";
 import type { CharacterSheet, Job, SheetCell } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { cancelSheet, makeSheet, rerollCell } from "../actions/sheet";
+import { addExpression, cancelSheet, deleteExpression, makeSheet, rerollCell } from "../actions/sheet";
 
 // Tags that are a part of the body or hair, not a thing worn or carried: never offered as items.
 // The things offered for the sheet, carried ones first (Set up picks them before Generate).
 export const itemChoices = (tags: string[]) => [...new Set(tags.filter((t) => !BODY.test(t)))].sort((a, b) => Number(CARRIED.test(b)) - Number(CARRIED.test(a)));
 const BODY = /(hair|eyes?|skin|face|beard|ears?|tail|fur|paws?|legs?|arms?|hands?)$/;
 export const MAX_ITEMS = 3;
+// Expressions a shot often needs; any other in the user's words.
+const EXPRESSIONS = ["smiling", "angry", "scared", "sad", "surprised", "determined"];
 // Things carried or worn on top come first: they are what a take most often drops or swaps.
 const CARRIED = /(bag|satchel|backpack|pouch|lantern|sword|staff|book|hat|helmet|cape|cloak|coat|scarf)$/;
 
@@ -26,6 +28,7 @@ const CARRIED = /(bag|satchel|backpack|pouch|lantern|sword|staff|book|hat|helmet
 // The views are re-rolled or fixed in the turnaround above; the sheet redraws with them.
 export function SheetSection(props: { projectId: string; sheet: CharacterSheet | null; items: string[]; jobs: Record<string, Job>; locked: boolean; cid?: string }) {
   const [editing, setEditing] = useState<string | null>(null);
+  const [word, setWord] = useState("");
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -70,6 +73,31 @@ export function SheetSection(props: { projectId: string; sheet: CharacterSheet |
       {error && <span className="text-xs text-destructive">{error}</span>}
 
       {props.sheet?.drawn && <FadeImage src={file(props.sheet.drawn)} alt="The reference sheet" className="aspect-[768/448] w-full max-w-2xl rounded-md border bg-black object-contain" />}
+      {props.sheet?.drawn && (
+        <span className="text-xs text-muted-foreground">
+          Any picture can be painted again on its own: a body with Again or Fix on its view above (the sheet redraws), a face, a thing or an expression with its ↻ below, or with its prompt edited (✎).
+        </span>
+      )}
+
+      {props.sheet?.cells.some((c) => c.id === "face-front" && c.image) && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs text-muted-foreground">Expressions: painted from the front close-up, so a shot can hold them to their face with that look</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {EXPRESSIONS.filter((e) => !cells.some((c) => c.kind === "expression" && c.label === e)).map((e) => (
+              <button key={e} type="button" disabled={busy} onClick={() => run(() => addExpression(props.projectId, e, props.cid))} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-ring/60 hover:text-foreground disabled:opacity-50">
+                <Plus className="size-3" />
+                {e}
+              </button>
+            ))}
+            <form className="flex items-center gap-1.5" onSubmit={(e) => (e.preventDefault(), run(() => addExpression(props.projectId, word, props.cid).then(() => setWord(""))))}>
+              <input aria-label="An expression in your own words" value={word} maxLength={40} placeholder="or your own: a nervous half-smile" onChange={(e) => setWord(e.target.value)} className="h-7 w-48 rounded-md border bg-transparent px-2 text-xs" />
+              <Button type="submit" size="sm" variant="ghost" disabled={busy || word.trim().length < 3}>
+                Add
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {cells.length > 0 && (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -88,6 +116,11 @@ export function SheetSection(props: { projectId: string; sheet: CharacterSheet |
                   <button type="button" aria-label={`Paint ${c.label} again`} disabled={busy || !c.image} onClick={() => run(() => rerollCell(props.projectId, c.id, null, props.cid))} className="rounded-md border bg-background/80 p-1 text-muted-foreground hover:text-foreground disabled:opacity-50">
                     <RefreshCw className="size-3" />
                   </button>
+                  {c.kind === "expression" && (
+                    <button type="button" aria-label={`Remove ${c.label}`} disabled={busy} onClick={() => run(() => deleteExpression(props.projectId, c.id, props.cid))} className="rounded-md border bg-background/80 p-1 text-muted-foreground hover:text-foreground disabled:opacity-50">
+                      <X className="size-3" />
+                    </button>
+                  )}
                 </div>
               </div>
               <span className={cn("truncate text-xs", c.image ? "text-foreground" : "text-muted-foreground")}>{c.label}</span>
