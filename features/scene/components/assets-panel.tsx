@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { MapPin, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
+import { Brush, MapPin, Plus, RefreshCw, Square, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
@@ -9,6 +9,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { Textarea } from "@/components/ui/textarea";
 import type { Job, SceneAsset } from "@/lib/store";
 import { cancelAsset, deleteAsset, makeAsset, remakeAsset } from "../actions/assets";
+import { AssetEditor } from "./asset-editor";
 import { chip } from "./chip";
 import { assetReady } from "./scene-assets";
 import { CastPicker, type CastOption } from "./cast-picker";
@@ -40,6 +41,8 @@ export function AssetsPanel(props: {
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
   const [shelf, setShelf] = useState(props.characterAssets[0] ?? "");
+  const [editFirst, setEditFirst] = useState(false); // keep the picture for editing before the 3D
+  const [editing, setEditing] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -52,6 +55,7 @@ export function AssetsPanel(props: {
       const form = new FormData();
       form.set("from", from);
       form.set("name", from === "character" ? shelf : name);
+      if (editFirst) form.set("edit", "1");
       if (from === "prompt") form.set("prompt", prompt);
       if (from === "upload") {
         const f = fileRef.current?.files?.[0];
@@ -89,9 +93,13 @@ export function AssetsPanel(props: {
         )}
         {from === "prompt" && <Textarea aria-label="Describe it" value={prompt} maxLength={300} rows={2} placeholder={"a weathered wooden hand cart with one broken wheel"} onChange={(e) => setPrompt(e.target.value)} />}
         {from === "upload" && <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" aria-label="Its picture" className="text-sm" />}
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <input type="checkbox" checked={editFirst} onChange={(e) => setEditFirst(e.target.checked)} className="accent-primary" />
+          Edit the picture first (brush, change, remove, parts), then make the 3D
+        </label>
         <Button size="sm" className="self-start" disabled={pending || (from === "prompt" ? name.trim().length < 2 || prompt.trim().length < 3 : from === "upload" ? name.trim().length < 2 : !shelf)} onClick={make}>
           {pending ? <LoadingDots /> : <Plus data-icon="inline-start" />}
-          Make it in 3D
+          {editFirst ? "Make the picture" : "Make it in 3D"}
         </Button>
       </div>
 
@@ -103,7 +111,8 @@ export function AssetsPanel(props: {
             const failed = job?.status === "error";
             const ready = assetReady(a);
             const thumb = a.views?.front ?? a.image;
-            const status = running ? "Making the 3D" : failed ? "Failed" : !ready ? "Stopped" : a.at ? "On the stage" : "3D ready";
+            const held = !!a.hold && !running;
+            const status = running ? "Making the 3D" : held ? "Picture ready" : failed ? "Failed" : !ready ? "Stopped" : a.at ? "On the stage" : "3D ready";
             return (
               <li key={a.id} className={`flex flex-col gap-2 rounded-lg border bg-card/40 p-2 text-sm ${props.picked === a.id ? "ring-2 ring-primary" : ""}`}>
                 <div className="aspect-square w-full overflow-hidden rounded-md border bg-card/40">
@@ -121,6 +130,8 @@ export function AssetsPanel(props: {
                       <LoadingDots />
                       {job.detail}
                     </span>
+                  ) : held && a.image ? (
+                    "Edit the picture, then make the 3D"
                   ) : failed ? (
                     <span className="text-destructive">{job.error}</span>
                   ) : ready && a.at ? (
@@ -143,7 +154,13 @@ export function AssetsPanel(props: {
                       <Square />
                     </Button>
                   )}
-                  {!running && !ready && (
+                  {!running && !ready && a.image && a.kind !== "character" && (
+                    <Button variant={editing === a.id ? "default" : "ghost"} size="sm" aria-label={`Edit the picture of the ${a.name}`} onClick={() => setEditing(editing === a.id ? null : a.id)}>
+                      <Brush data-icon="inline-start" />
+                      Edit
+                    </Button>
+                  )}
+                  {!running && !ready && !held && (
                     <Button variant="ghost" size="sm" aria-label={`Make the ${a.name} again`} onClick={() => run(() => remakeAsset(props.projectId, a.id))}>
                       <RefreshCw data-icon="inline-start" />
                       Retry
@@ -158,6 +175,8 @@ export function AssetsPanel(props: {
           })}
         </ul>
       )}
+
+      {props.assets.map((a) => (a.id === editing && a.image ? <AssetEditor key={a.id} projectId={props.projectId} asset={a} job={props.jobs[`scene-asset-edit:${a.id}`]} onClose={() => setEditing(null)} /> : null))}
 
       {picked && (
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 sm:max-w-xl">
