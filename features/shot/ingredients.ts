@@ -67,7 +67,7 @@ export function sheetPrompt(rows: SheetRows, who: SheetElement, props: SheetElem
     if (faces) lines.push(`**${at} Left (Character):** ${faces > 1 ? `${faces} close-ups of the face` : "A close-up of the face"} of ${who.name}${faces > 1 ? ", from the front, three-quarter and side" : ""}${desc}.`);
     const shownItems = row.cells.filter((c) => c.startsWith("item")).map((c) => items[Number(c.slice(4)) - 1]).filter(Boolean);
     if (shownItems.length) lines.push(`**${at} Right (Wardrobe and Props):** ${who.name}'s ${shownItems.join(" and ")}, each on its own.`);
-    if (row.cells.some((c) => VIEWS.includes(c))) lines.push(`**${at} (Character Turnaround):** ${who.name}, full body, seen from the front, three-quarter, side and back, in the same clothes${desc}.`);
+    if (row.cells.some((c) => VIEWS.includes(c))) lines.push(`**${at} (Character Turnaround):** ${who.name}, full body, seen from the front, three-quarter, side and back, the same look in every view${desc}.`);
     const shown = new Set(row.cells.filter((c) => c.startsWith("prop")).map((c) => Number(c.slice(4, c.indexOf(":"))) - 1));
     [...shown].forEach((i) => {
       const p = props[i];
