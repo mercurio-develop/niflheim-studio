@@ -6,7 +6,7 @@ import { runWorkflow } from "@/lib/comfy";
 import type { JobCtx } from "@/lib/jobs";
 import { characterImage, fourLegs, viewImage } from "@/lib/progress";
 import { PYTHON } from "@/lib/python";
-import { charDir, charOf, getProject, projectDir, updateProject, type SheetCell, type SheetRow } from "@/lib/store";
+import { charDir, charOf, getProject, projectDir, updateProject, type SheetCell, type SheetRow, type ViewId } from "@/lib/store";
 
 // The character's Ingredients reference sheet (the LTX-2.5 IC-LoRA that keeps who and what is in a
 // take), laid out like Lightricks' own sheets: three close-ups of the face and the things they wear
@@ -49,12 +49,16 @@ export function planCells(items: string[], animal = false): SheetCell[] {
 }
 
 // What a cell is painted from: a face from the turnaround's front, an item from the character as
-// drawn (the turnaround may have hidden it).
+// drawn (the turnaround may have hidden it). An animal's face comes from the view at its own angle:
+// a fox's side profile painted from the front came out as a woman in armour holding a fox.
 async function fromOf(id: string, cid: string, cell: SheetCell) {
   const p = await getProject(id);
   if (!p) return null;
   if (cell.kind === "expression") return charOf(p, cid).sheet?.cells.find((c) => c.id === "face-front")?.image ?? null;
-  return cell.kind === "item" ? (charOf(p, cid).turnaround?.source ?? characterImage(p, cid)) : viewImage(p, "front", cid);
+  if (cell.kind === "item") return charOf(p, cid).turnaround?.source ?? characterImage(p, cid);
+  const angle = cell.id.replace(/^face-/, "") as ViewId;
+  const own = fourLegs(charOf(p, cid).turnaround?.options) && ["threequarter", "side"].includes(angle) ? viewImage(p, angle, cid) : null;
+  return own ?? viewImage(p, "front", cid);
 }
 
 export async function paintCell(id: string, cid: string, cell: SheetCell, ctx: JobCtx) {

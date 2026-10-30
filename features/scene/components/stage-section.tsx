@@ -22,8 +22,9 @@ const SIZES: Record<Block["kind"], Block["size"]> = { box: [1, 1, 1], cylinder: 
 
 // The 3D stage MoGe builds from the chosen painting, and the character standing in it: one
 // viewer. Once the stage is levelled (floor y = 0, metres), the character is cut out of the
-// turnaround by itself and stands where the floor is clicked, as a card that turns with the
-// camera; height and facing are saved a moment after the last change.
+// turnaround by itself and stands a long shot ahead of the painting's camera, facing it
+// (actions/scene.ts standUnplaced), as a card that turns with the camera; a click on the floor
+// moves them, and height and facing are saved a moment after the last change.
 export function StageSection(props: {
   projectId: string;
   set: SetData | null;
@@ -52,6 +53,17 @@ export function StageSection(props: {
   const [at, setAt] = useState<StagePoint | null>(props.placement?.at ?? null);
   const [height, setHeight] = useState(props.placement?.height ?? 1.7);
   const [turn, setTurn] = useState(props.placement?.turn ?? 0);
+  // The spot the server stood them on arrives after the cutout: taken once, while none is set here.
+  const placed = JSON.stringify(props.placement?.at ?? null);
+  const [seenPlaced, setSeenPlaced] = useState(placed);
+  if (placed !== seenPlaced) {
+    setSeenPlaced(placed);
+    if (!at && props.placement?.at) {
+      setAt(props.placement.at);
+      setHeight(props.placement.height);
+      setTurn(props.placement.turn);
+    }
+  }
   const [look, setLook] = useState<StageLook>("painting");
   const [blocks, setBlocks] = useState<Block[]>(props.blocks);
   const [picked, setPicked] = useState<string | null>(null);
@@ -119,6 +131,8 @@ export function StageSection(props: {
   useEffect(() => {
     if (first.current) return void (first.current = false);
     if (!at || !ready) return;
+    const was = props.placement;
+    if (was?.at && at.every((x, i) => x === was.at![i]) && height === was.height && turn === was.turn) return; // nothing new to save
     const t = setTimeout(() => run(() => placeCharacter(props.projectId, { at, height, turn })), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,7 +151,7 @@ export function StageSection(props: {
   const cam = filled?.camera;
   const distance = at && cam ? Math.hypot(at[0] - cam.c2w[0][3], at[2] - cam.c2w[2][3]) : null;
   const line = ready
-    ? "Click the floor where they stand. Drag to look around: the card turns to you and shows the matching view of the turnaround."
+    ? "They stand a long shot from the camera; click the floor to move them. Drag to look around: the card turns to you and shows the matching view of the turnaround."
     : floor
       ? "The stage is ready. The character is being cut out of the turnaround to stand in it."
       : filled

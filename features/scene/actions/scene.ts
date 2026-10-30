@@ -7,7 +7,7 @@ import { z } from "zod";
 import { runWorkflow } from "@/lib/comfy";
 import { fillStage } from "@/lib/stage-fill";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
-import { shiftMain } from "@/lib/camera";
+import { home, sees, shiftMain, type Vec } from "@/lib/camera";
 import { currentFill, defaultHeight } from "@/lib/progress";
 import { getProject, projectDir, updateProject, type Project, type ViewId } from "@/lib/store";
 import { REFERENCE_TYPES, StyleId, referenceError } from "@/features/character/schemas";
@@ -132,6 +132,7 @@ async function fill(id: string, ctx: JobCtx) {
   await updateProject(id, (q) => {
     if (q.set?.stage?.mesh !== stage.mesh) return; // rebuilt meanwhile
     q.set.stage.fill = { mesh: rel(id, r.mesh), cameras: rel(id, r.cameras), views: r.views.map((v) => rel(id, v.filled)), holes: r.holes, camera: r.camera };
+    standUnplaced(q);
   });
 }
 
@@ -174,10 +175,38 @@ export async function cutOutCharacter(id: string) {
     }
     await updateProject(id, (q) => {
       q.stage = { height: defaultHeight(q.turnaround?.options), turn: 0, ...q.stage, source: views.front!, cutouts };
+      standUnplaced(q);
     });
   }, "Cutting out the character");
   done(id);
 }
+
+// A long shot's distance (lib/camera.ts SHOT.long): the whole person and the place around them.
+const LONG = 6;
+
+// A character nobody has placed yet stands by itself once the stage is levelled: a long shot
+// ahead of the painting's camera, or further if their feet would fall below the frame there (a
+// knee-high fox 2 m from a camera 1.4 m up was out of the picture), never past the set's middle;
+// on the floor, turned to face the camera. One the user placed is never moved.
+function standUnplaced(q: Project) {
+  const fill = currentFill(q);
+  const cam = fill?.camera;
+  if (!fill || !q.stage || q.stage.at || !Object.keys(q.stage.cutouts).length || !cam?.floor) return;
+  const { position, look } = home(cam);
+  const ahead = [look[0] - position[0], look[2] - position[2]];
+  const n = Math.hypot(ahead[0], ahead[1]);
+  if (!n) return; // looking straight down: no way ahead on the floor
+  const pose = { position, target: look };
+  const spot = (d: number): Vec => [position[0] + (ahead[0] / n) * d, 0, position[2] + (ahead[1] / n) * d];
+  const whole = (d: number) => sees(pose, spot(d), cam.fov, cam.aspect) && sees(pose, add3(spot(d), [0, q.stage!.height, 0]), cam.fov, cam.aspect);
+  let dist = Math.min((LONG * q.stage.height) / 1.7, cam.middle);
+  while (!whole(dist) && dist < cam.middle) dist = Math.min(cam.middle, dist + 0.25);
+  const at = spot(dist);
+  // turn 0 faces +z (lib/camera.ts start, "pov"): the angle of the way back to the camera.
+  const turn = Math.round((Math.atan2(position[0] - at[0], position[2] - at[2]) * 180) / Math.PI);
+  Object.assign(q.stage, { at, turn, fill: fill.mesh });
+}
+const add3 = (a: Vec, b: Vec): Vec => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 
 const Placement = z.object({
   at: z.tuple([z.number(), z.number(), z.number()]).refine((a) => a.every((x) => Number.isFinite(x) && Math.abs(x) < 500), "The spot is off the stage."),
