@@ -12,6 +12,7 @@ import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
 import type { Job, Keyframes, Shot, ShotKind } from "@/lib/store";
+import { goodTake } from "@/lib/score";
 import { cn } from "@/lib/utils";
 import { cancelShot, pickTake, renderTake, setShotKind } from "../actions/shot";
 import { drawShotSheet } from "../actions/sheet";
@@ -244,7 +245,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                       {t.layout ? " · follows the clay clip" : t.kind === "character" ? " · held to the sheet" : ""}
                       {t.score && (
                         <span title={`Camera travel ${t.score.travel.toFixed(0)} px of flow; frames where something pops in: ${t.score.popins} (scripts/score_take.py)`}>
-                          {" "}· {t.score.popins === 0 ? "steady, nothing pops in" : `${t.score.popins} pop-in${t.score.popins === 1 ? "" : "s"}`}
+                          {" "}· {goodTake(t.score, t.frames) ? (t.score.popins === 0 ? "steady, nothing pops in" : "steady") : `${t.score.popins} frames pop in`}
                         </span>
                       )}
                     </span>

@@ -16,6 +16,7 @@ import { sceneKey } from "@/lib/progress";
 import { keysProblem, suggestedKind } from "../state";
 import { addIngredients, firstKeyOnly, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, whoOf, withSheet } from "../ingredients";
 import { PYTHON } from "@/lib/python";
+import { goodTake, takeRank } from "@/lib/score";
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const run = promisify(execFile);
@@ -130,10 +131,6 @@ const Input = z
   })
   .refine((x) => x.beats.start.length >= 3, "Say what happens first, in a few words.");
 
-// A take is good when nothing pops in and the worst frame-to-frame change stays small; of several,
-// the one with the fewest pop-ins, then the calmest.
-const good = (s?: TakeScore) => !!s && s.popins === 0 && s.worst < 6;
-const rank = (s?: TakeScore) => (s ? s.popins * 100 + s.worst : 1e9);
 
 // Takes of the shot: LTX-2.5 distilled guided by every keyframe (ends 0.7, middle 0.5), with
 // audio, about 1.5 to 2 minutes each on the 4080 for 97 to 121 frames. With tries > 1 it shoots
@@ -222,10 +219,10 @@ export async function renderTake(id: string, raw: unknown) {
         index = q.shot.takes.length - 1;
       });
       made.push({ index, score });
-      if (good(score)) break;
+      if (goodTake(score, frames)) break;
     }
     if (tries > 1) {
-      const best = made.reduce((a, b) => (rank(b.score) < rank(a.score) ? b : a));
+      const best = made.reduce((a, b) => (takeRank(b.score, frames) < takeRank(a.score, frames) ? b : a));
       await updateProject(id, (q) => void (q.shot && (q.shot.picked = best.index)));
     }
   }, tries > 1 ? `Shooting up to ${tries} takes` : "Shooting the take");
