@@ -27,7 +27,10 @@ export type Edit = { kind: "change" | "add" | "remove"; what: string; change?: s
 // body: person (two legs), animal (four legs: never upright, never a T-pose) or creature; projects
 // from before have none and are read as a person.
 export type Body = "person" | "animal" | "creature";
-export type TurnaroundOptions = { pose: "designed" | "tpose"; hide: string[]; keep: string[]; extras: ("top" | "bottom")[]; body?: Body };
+// pose: relaxed (arms down, the default: the sheet's and the stage's views), as designed (the
+// concept's own pose), or tpose (older projects; the 3D model no longer needs it).
+// items: what they wear or carry, painted on their own for the sheet (at most 3).
+export type TurnaroundOptions = { pose: "relaxed" | "designed" | "tpose"; hide: string[]; keep: string[]; extras: ("top" | "bottom")[]; body?: Body; items?: string[] };
 export type AssetView = "front" | "threequarter" | "side" | "back";
 export type ViewStack = { versions: Version[]; current: number };
 // A hidden object: its cutout and mask from the character it came off, and its own views once made.

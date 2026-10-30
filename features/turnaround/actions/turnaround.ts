@@ -8,6 +8,7 @@ import { ASSETS } from "../flags";
 import { paintViews } from "@/lib/asset-3d";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
+import { drawSheet, paintSheet } from "../sheet";
 import { characterImage, firstView, frontPrompt, viewImage, viewPrompt, VIEWS, viewsFor } from "@/lib/progress";
 import { CID, charDir, charKey, charOf, getProject, projectDir, updateProject, type Edit, type TurnaroundOptions, type ViewId } from "@/lib/store";
 
@@ -16,11 +17,12 @@ const Cid = z.string().regex(CID).optional();
 const View = z.enum(["front", "threequarter", "side", "back", "top", "bottom"]);
 const Name = z.string().trim().toLowerCase().min(2).max(40).regex(/^[a-z][a-z \-]*$/);
 const Options = z.object({
-  pose: z.enum(["designed", "tpose"]),
+  pose: z.enum(["relaxed", "designed", "tpose"]),
   hide: z.array(Name).max(12),
   keep: z.array(Name).max(12).default([]),
   extras: z.array(z.enum(["top", "bottom"])).max(2),
   body: z.enum(["person", "animal", "creature"]).default("person"),
+  items: z.array(z.string().trim().toLowerCase().min(2).max(40).regex(/^[a-z][a-z \-]*$/)).max(3).default([]),
 });
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const rel = (id: string, f: string) => path.relative(projectDir(id), f);
@@ -161,7 +163,7 @@ async function removeObject(id: string, from: string, mask: string, strokes: Box
   return rel(id, image);
 }
 
-const describe = (o: TurnaroundOptions) => [o.body === "animal" ? "on four legs" : o.pose === "tpose" ? "T-pose" : "as designed", ...o.hide.map((h) => `no ${h}`)].join(", ");
+const describe = (o: TurnaroundOptions) => [o.body === "animal" ? "on four legs" : o.pose === "tpose" ? "T-pose" : o.pose === "relaxed" ? "relaxed" : "as designed", ...o.hide.map((h) => `no ${h}`)].join(", ");
 
 // Generate: each hidden object is found, kept (if asked) and painted out of the character with its
 // mask; then the front from that clean character (pose, prompt), then every view from that front.
@@ -210,6 +212,9 @@ export async function generateTurnaround(id: string, rawOptions: z.input<typeof 
         await ctx.progress(`Making the ${label(v.id).toLowerCase()} view (${i + 2}/${views.length})`);
         if (!(await makeView(id, v.id, anchor, viewPrompt(v.id, options), ctx, `${label(v.id)} · from the ${label(first).toLowerCase()}`, cid))) return;
       }
+      // The sheet comes with the views: the faces and the chosen items, then the sheet drawn
+      // (features/turnaround/sheet.ts). The views are already its bodies.
+      await paintSheet(id, cid, options.items, ctx);
     },
     `Making the front view (1/${views.length})`,
   );
@@ -233,7 +238,10 @@ export async function generateView(id: string, rawView: string, rawCid?: unknown
     id,
     charKey(cid, `view:${view}`),
     (ctx) =>
-      makeView(id, view, view === first ? (t.clean ?? source) : anchor!, view === first ? frontPrompt(t.options) : viewPrompt(view, t.options), ctx, `${label(view)} · again`, cid).then(() => {}),
+      // The sheet shows the views, so it is drawn again with the new one.
+      makeView(id, view, view === first ? (t.clean ?? source) : anchor!, view === first ? frontPrompt(t.options) : viewPrompt(view, t.options), ctx, `${label(view)} · again`, cid).then(async (made) => {
+        if (made && charOf(p, cid).sheet) await drawSheet(id, cid);
+      }),
     `Making the ${label(view).toLowerCase()} view again`,
   );
   done(id);
