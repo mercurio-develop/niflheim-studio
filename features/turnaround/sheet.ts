@@ -4,7 +4,7 @@ import { mkdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { runWorkflow } from "@/lib/comfy";
 import type { JobCtx } from "@/lib/jobs";
-import { characterImage, viewImage } from "@/lib/progress";
+import { characterImage, fourLegs, viewImage } from "@/lib/progress";
 import { PYTHON } from "@/lib/python";
 import { charDir, charOf, getProject, projectDir, updateProject, type SheetCell, type SheetRow } from "@/lib/store";
 
@@ -26,6 +26,9 @@ const FACES: [string, string, string][] = [
   ["side", "Face · side", "in side profile"],
 ];
 const face = (from: string) => `A close-up portrait of this same character's face ${from}: head and shoulders filling the frame, a calm expression, the same face, hair, markings and colours, the same art style. Plain light grey background, no text.`;
+// An animal's close-up is of its head alone: "a portrait, head and shoulders" gave the fox a shirt
+// and a man's shoulders, and the views that followed it stood up on two legs.
+const animalFace = (from: string) => `A close-up of this same animal's head ${from}: the head and the top of the neck filling the frame, the same muzzle, ears, eyes, fur, markings and colours, the same art style. It is an animal: no clothes, no human body, no shoulders. Plain light grey background, no text.`;
 const item = (thing: string) => `Show only the character's ${thing} on its own, with no one wearing or holding it, laid out as a clean product shot that shows its shape, colour and details, the same art style. Plain light grey background, nothing else, no text.`;
 
 // An expression of the face, painted from the front close-up so it stays the same person.
@@ -33,14 +36,14 @@ export const expressionCell = (word: string): SheetCell => ({
   id: `expr-${word.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "").slice(0, 16)}`,
   kind: "expression",
   label: word,
-  prompt: `Change only the expression of this face: make it ${word}. Keep the same face, hair, markings, colours, head angle, framing, light and art style. Plain light grey background, no text.`,
+  prompt: `Change only the expression of this face: make it ${word}. Keep the same face, hair, markings, colours, head angle, framing, light and art style, and nothing below the neck that is not already there. Plain light grey background, no text.`,
 });
 
 // The cells the sheet paints itself: the faces and the items, prompts written out so each can be
 // edited and re-rolled.
-export function planCells(items: string[]): SheetCell[] {
+export function planCells(items: string[], animal = false): SheetCell[] {
   return [
-    ...FACES.map(([v, label, from]): SheetCell => ({ id: `face-${v}`, kind: "face", label, prompt: face(from) })),
+    ...FACES.map(([v, label, from]): SheetCell => ({ id: `face-${v}`, kind: "face", label, prompt: (animal ? animalFace : face)(from) })),
     ...items.map((x, i): SheetCell => ({ id: `item-${i + 1}`, kind: "item", label: x, prompt: item(x) })),
   ];
 }
@@ -110,7 +113,8 @@ export async function drawSheet(id: string, cid: string) {
 // A new sheet for the character's turnaround: its faces and items painted side by side (about a
 // minute on Comfy Cloud), then drawn.
 export async function paintSheet(id: string, cid: string, items: string[], ctx: JobCtx) {
-  const cells = planCells(items);
+  const p = await getProject(id);
+  const cells = planCells(items, !!p && fourLegs(charOf(p, cid).turnaround?.options));
   await updateProject(id, (q) => void (charOf(q, cid).sheet = { cells }));
   await ctx.progress(`Painting the sheet: ${cells.length} close-ups and things`);
   await Promise.all(cells.map((c) => paintCell(id, cid, c, ctx)));
