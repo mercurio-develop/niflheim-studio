@@ -126,7 +126,7 @@ export function TurnaroundSections(props: {
         tone="bg-tone-lilac"
         title="Turnaround"
         line={`Every side of ${props.characterLabel}, painted fresh from it, so later shots and the 3D model see one character.`}
-        summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted${props.options ? ` · ${poseLabel(props.options)}` : ""}${props.sheet?.drawn ? " · sheet made" : ""}${props.options?.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}`}
+        summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted${props.options ? ` · ${BODIES.find(([b]) => b === (props.options!.body ?? "person"))![1]} · ${poseLabel(props.options)}` : ""}${props.sheet?.drawn ? " · sheet made" : ""}${props.options?.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}`}
         open={none || running || !props.fresh}
         className="nifl-enter"
         style={{ "--i": 3 } as React.CSSProperties}
