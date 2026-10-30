@@ -10,10 +10,10 @@ import { CameraSection } from "@/features/scene/components/camera-section";
 import { StageViewer } from "@/features/scene/components/stage-viewer";
 import { finishedPoses, fileUrl, urlsOf } from "@/lib/stage-context";
 import { ViewSwitch } from "@/features/scene/components/view-switch";
-import { DEFAULT_MOVE, cardAt, frameCount, inside, momentsOf, placeAt, poses, renderKey, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
+import { DEFAULT_MOVE, cardAt, frameCount, inside, momentsOf, placeAt, poses, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
 import { saveMoments } from "../actions/moments";
 import { MomentsBar } from "./moments-bar";
-import type { Block, CameraRender, CharacterPose, Job, SceneAsset, SetData, StageData } from "@/lib/store";
+import type { Block, CharacterPose, SceneAsset, SetData, StageData } from "@/lib/store";
 
 // Where camera mode's camera is and looks, every frame, for Take shot.
 function CameraProbe(props: { report: (v: { from: Vec; look: Vec }) => void }) {
@@ -31,7 +31,7 @@ const near = (a: Vec, b: Vec) => Math.hypot(a[0] - b[0], a[2] - b[2]);
 // The active shot's camera (decision 0011): the Scene's stage with the character standing where
 // the Scene put them, and this shot's framing, move and walk. Overview shows the path with a gizmo
 // on each end and on the walk; Play flies it. Each shot keeps its own; saved as it is tuned.
-export function ShotCamera(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; cameraRender: CameraRender | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[]; stageJob?: Job }) {
+export function ShotCamera(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[] }) {
   const s = props.set;
   const fill = s?.stage && s.stage.image === s.image ? s.stage.fill : undefined;
   const cam = fill?.camera;
@@ -199,9 +199,6 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
         )
       }
       ready={ready}
-      render={props.cameraRender}
-      renderKey={ready ? renderKey(move, pl!.at!, pl!.height, fill!.mesh, pl!.turn) : null}
-      job={props.stageJob}
     />
   );
 }

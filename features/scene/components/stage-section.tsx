@@ -362,25 +362,6 @@ export function StageSection(props: {
         </More>
       )}
 
-      {fresh && (
-        <More label="How the stage was built" summary="depth and the painted views">
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            <span>Depth</span>
-            <FadeImage src={file(s!.stage!.depth)} alt="Depth map of the set" className="h-14 rounded border" />
-            {!!filled?.views.length && (
-              <>
-                <span className="ml-2">Painted views</span>
-                <div className="flex min-w-0 gap-1.5 overflow-x-auto">
-                  {filled.views.map((v) => (
-                    <FadeImage key={v} src={file(v)} alt="A view painted to fill the stage" className="h-14 shrink-0 rounded border" />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </More>
-      )}
-
       {error && <p className="text-sm text-destructive">{error}</p>}
       {props.setJob?.status === "error" && <p className="text-sm text-destructive">The stage failed: {props.setJob.error}</p>}
       {props.stageJob?.status === "error" && <p className="text-sm text-destructive">The cutout failed: {props.stageJob.error}</p>}

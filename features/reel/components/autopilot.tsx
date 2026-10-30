@@ -21,11 +21,6 @@ import { exportReel, saveReel } from "../actions/reel";
 export type PilotShot = { id: string; name: string; move: CameraMove | null };
 export type SceneCapture = { mesh: string; camera: StageCamera; cutouts: Partial<Record<ViewId, string>>; at: [number, number, number]; height: number; turn: number; blocks: Block[]; assets: SceneAsset[]; poses: { id: string; cutouts: Partial<Record<ViewId, string>> }[] };
 
-const JOINS: { id: Join; label: string }[] = [
-  { id: "cut", label: "Cut" },
-  { id: "fade", label: "Fade" },
-  { id: "dip", label: "Dip to black" },
-];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Wait for a job to leave "running"; throws its error when it fails.
@@ -44,12 +39,13 @@ async function wait(id: string, key: "keyframes" | "shot" | "reel") {
 // Autopilot: per shot what happens and how many takes, then Make the reel runs every step in
 // order (keyframes, takes, the best take, the reel) from this page, which must stay open; the
 // queue is saved, so reopening the page offers Resume from the step it stopped at.
-export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; pilot: Pilot | null; scene: SceneCapture | null }) {
+// joins: the reel's own (Order sets them; a fade where none is chosen). Autopilot keeps them.
+export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; pilot: Pilot | null; scene: SceneCapture | null; joins: Join[] }) {
   const id = props.projectId;
   const [plan, setPlan] = useState<AutopilotShot[]>(() =>
     props.shots.map((s) => props.pilot?.plan.find((p) => p.shot === s.id) ?? { shot: s.id, include: !!s.move, action: "", takes: 2 }),
   );
-  const [join, setJoin] = useState<Join>(props.pilot?.join ?? "fade");
+  const join: Join = props.pilot?.join ?? "fade";
   const [steps, setSteps] = useState(props.pilot?.steps ?? []);
   const [driving, setDriving] = useState(false);
   const [capture, setCapture] = useState<{ poses: StagePose[]; done: (b: Blob[]) => void; fail: (m: string) => void } | null>(null);
@@ -109,7 +105,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
         await pickBest(id, st.shot);
       } else {
         const order = plan.filter((p) => p.include).map((p) => p.shot);
-        await saveReel(id, { order, joins: order.slice(1).map(() => join) });
+        await saveReel(id, { order, joins: order.slice(1).map((_, i) => props.joins[i] ?? "fade") });
         await exportReel(id);
         await wait(id, "reel");
       }
@@ -213,12 +209,7 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
           </div>
         ))}
         <div className="flex flex-wrap items-center gap-1.5 pt-1">
-          <span className="text-xs text-muted-foreground">Between shots</span>
-          {JOINS.map((j) => (
-            <button key={j.id} type="button" disabled={driving} aria-pressed={join === j.id} onClick={() => setJoin(j.id)} className={cn("rounded-full border px-2 py-0.5 text-[11px] transition-colors", join === j.id ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:border-ring/60 hover:text-foreground")}>
-              {j.label}
-            </button>
-          ))}
+          <span className="text-xs text-muted-foreground">Joins between shots: as set in Order below (a fade unless you choose).</span>
           <span className="ml-2 font-mono text-[11px] text-muted-foreground">~{Math.round(plan.filter((p) => p.include).reduce((t, p) => t + 2.5 + p.takes * 2, 0))} min</span>
         </div>
       </div>
