@@ -107,10 +107,18 @@ const cast = (p: Project) => {
     .map((a) => ((x) => (x ? `${a.name}, ${x}` : a.name))(p.cast?.find((m) => m.id === a.cid)?.character.prompt ?? a.prompt))
     .join("; ");
 };
+// A caption that names no one (Florence-2 sometimes sees only the place: "a forest scene, fallen
+// leaves") would tell the take there is nobody there, so only those that name a figure are kept.
+const FIGURE = /\b(man|woman|boy|girl|person|people|child|kid|figure|character|creature|monster|animal|beast|he|she)\b/i;
+function namesSomeone(p: Project, caption: string) {
+  // The character's own noun: the last word before what they have or wear ("troll", "fox", "keeper").
+  const noun = whoOf(p.character.prompt ?? "").name.split(/ (?:with|on|in|of|wearing|holding|carrying) /)[0].split(/\s+/).at(-1);
+  return FIGURE.test(caption) || (!!noun && new RegExp(`\\b${noun}`, "i").test(caption));
+}
 // What the keys show, in order (Florence-2 captions, or the user's edits of them): the frame the take
 // starts on, passes through and ends on. Keys without a caption are skipped.
 function keysPhrase(p: Project) {
-  const c = (p.keyframes?.captions ?? []).map((x) => x?.trim().replace(/[.\s]+$/, "")).filter(Boolean) as string[];
+  const c = (p.keyframes?.captions ?? []).map((x) => x?.trim().replace(/[.\s]+$/, "")).filter((x) => x && namesSomeone(p, x)) as string[];
   if (!c.length) return "";
   const lower = (x: string) => x.charAt(0).toLowerCase() + x.slice(1);
   if (c.length === 1) return `At the start, ${lower(c[0])}.`;
