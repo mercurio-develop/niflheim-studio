@@ -9,7 +9,7 @@ import { z } from "zod";
 import { frameCount } from "@/lib/camera";
 import { startJob } from "@/lib/jobs";
 import { sceneKey } from "@/lib/progress";
-import { CLAY_FRAME_MAX } from "../state";
+import { clayFrameMax } from "../state";
 import { getProject, projectDir, updateProject } from "@/lib/store";
 
 // The shot's camera move as a clay clip: every frame drawn in the browser from the stage in the
@@ -19,7 +19,6 @@ import { getProject, projectDir, updateProject } from "@/lib/store";
 
 const run = promisify(execFile);
 const rel = (id: string, f: string) => path.relative(projectDir(id), f);
-const Frame = z.instanceof(File).refine((f) => f.type === "image/jpeg" && f.size < CLAY_FRAME_MAX, "A clay frame came out too big; draw it again.");
 
 export async function saveClay(id: string, form: FormData) {
   const p = await getProject(id);
@@ -27,6 +26,8 @@ export async function saveClay(id: string, form: FormData) {
   const key = sceneKey(p);
   if (!key) throw new Error("Place the character and choose a camera move first.");
   const frames = frameCount(p.camera!.seconds);
+  const max = clayFrameMax(frames);
+  const Frame = z.instanceof(File).refine((f) => f.type === "image/jpeg" && f.size < max, "A clay frame came out too big to send; shorten the move.");
   const files = Array.from({ length: frames }, (_, i) => Frame.parse(form.get(`f${i}`)));
   const dir = path.join(projectDir(id), `shot/clay/${Date.now().toString(36)}`);
   await mkdir(dir, { recursive: true });

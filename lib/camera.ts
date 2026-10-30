@@ -271,6 +271,23 @@ export function cardAt<C>(m: CameraMove, frame: number, base: C, poses: { id: st
   return poses.find((p) => p.id === id)?.cutouts ?? base;
 }
 
+// The main character moved on the stage by d: their marks in the move's key moments, the camera
+// those moments aim at them and their walk move with them, so the shot keeps its blocking around
+// them instead of filming the spot they left (05_submit: a character moved from 25 m to 14.6 m was
+// still framed at 25 m and the keys painted a stranger). A move with no moments is relative already.
+export function shiftMain(m: CameraMove, d: Vec): CameraMove {
+  const add = (v: Vec): Vec => [v[0] + d[0], v[1] + d[1], v[2] + d[2]];
+  return {
+    ...m,
+    walk: m.walk && { from: add(m.walk.from), to: add(m.walk.to) },
+    moments: m.moments?.map((x) => ({
+      ...x,
+      camera: x.camera && { from: add(x.camera.from), look: add(x.camera.look) },
+      marks: { ...x.marks, ...(x.marks.main?.at ? { main: { ...x.marks.main, at: add(x.marks.main.at) } } : {}) },
+    })),
+  };
+}
+
 // The moments in frame order, each frame snapped to the 8n grid LTX guides sit on and kept inside
 // the shot; two on the same frame keep the later one.
 export function momentsOf(m: CameraMove): Moment[] {
