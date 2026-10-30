@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { KeyCapture } from "@/features/scene/components/key-capture";
+import { saveCamera } from "@/features/scene/actions/camera";
 import { Link2, Link2Off } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
@@ -49,6 +51,7 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
   };
   return (
     <div className="flex flex-col gap-3">
+      <ShootCapturer projectId={props.projectId} move={move} base={base} keys={keyFrames(move).map(poseAt)} clay={Array.from({ length: frameCount(move.seconds) }, (_, f) => poseAt(Math.min(f, path.length - 1)))} keysCurrent={!!props.keyframes && props.keyframes.key === key && props.keyframes.keys.every(Boolean) && props.keyframes.frames.at(-1) === frameCount(move.seconds) - 1} clayCurrent={props.layout?.key === key && props.layout.frames === frameCount(move.seconds)} />
       {props.continuity && <Continue projectId={props.projectId} {...props.continuity} busy={props.job?.status === "running"} />}
       <KeyframesPanel
         projectId={props.projectId}
@@ -56,13 +59,36 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
         current={!!props.keyframes && props.keyframes.key === key}
         frames={keyFrames(move)}
         job={props.job}
-        move={move}
-        // Each key wears the pose the move (or its moments) gives at its frame.
-        capture={{ ...base, poses: keyFrames(move).map(poseAt) }}
       />
-      <ClayClip projectId={props.projectId} layout={props.layout} job={props.layoutJob} current={props.layout?.key === key} capture={{ ...base, poses: Array.from({ length: frameCount(move.seconds) }, (_, f) => poseAt(Math.min(f, path.length - 1))) }} />
+      <ClayClip projectId={props.projectId} layout={props.layout} job={props.layoutJob} current={props.layout?.key === key} />
     </div>
   );
+}
+
+// What One Shoot (shot-step.tsx) asks of the stage: which captures are stale, and the captures
+// themselves, drawn off screen here where the stage's props are. Registered while this panel is mounted.
+export type Capturer = { keysCurrent: boolean; clayCurrent: boolean; capture: (what: "keys" | "clay") => Promise<Blob[]> };
+let capturer: Capturer | null = null;
+export const shootCapturer = () => capturer;
+
+function ShootCapturer(props: { projectId: string; move: CameraMove; base: Omit<React.ComponentProps<typeof KeyCapture>, "projectId" | "poses" | "onDone" | "onError" | "clay" | "onFrame">; keys: React.ComponentProps<typeof KeyCapture>["poses"]; clay: React.ComponentProps<typeof KeyCapture>["poses"]; keysCurrent: boolean; clayCurrent: boolean }) {
+  const [job, setJob] = useState<{ what: "keys" | "clay"; resolve: (b: Blob[]) => void; reject: (e: Error) => void } | null>(null);
+  const { projectId, move } = props;
+  useEffect(() => {
+    capturer = {
+      keysCurrent: props.keysCurrent,
+      clayCurrent: props.clayCurrent,
+      capture: async (what) => {
+        // Saved first, so the server keys the same frames as the browser draws.
+        if (what === "keys") await saveCamera(projectId, move);
+        return new Promise((resolve, reject) => setJob({ what, resolve, reject }));
+      },
+    };
+    return () => void (capturer = null);
+  }, [props.keysCurrent, props.clayCurrent, projectId, move]);
+  if (!job) return null;
+  const end = () => setJob(null);
+  return <KeyCapture {...props.base} projectId={props.projectId} poses={job.what === "clay" ? props.clay : props.keys} clay={job.what === "clay"} onDone={(b) => (end(), job.resolve(b))} onError={(m) => (end(), job.reject(new Error(m)))} />;
 }
 
 // Continue from the shot before: its picked take's last frame becomes key 1 as it is, and the
