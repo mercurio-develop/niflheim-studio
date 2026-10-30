@@ -13,8 +13,9 @@ import { NextBar } from "@/features/wizard/components/next-bar";
 import type { Job, Join } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { exportReel, saveReel } from "../actions/reel";
+import { ClipEffects } from "./clip-effects";
 
-export type ReelRow = { shot: string; name: string; video: string | null }; // video: the picked take
+export type ReelRow = { shot: string; name: string; video: string | null; effects?: { made: string[]; use: string | null } | null; fxJob?: Job }; // video: the picked take
 const JOINS: { id: Join; label: string }[] = [
   { id: "cut", label: "Cut" },
   { id: "fade", label: "Fade" },
@@ -51,7 +52,7 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
 
   return (
     <>
-      <JobPoller running={running} />
+      <JobPoller running={running || props.rows.some((r) => r.fxJob?.status === "running")} />
       <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)]">
         <SectionNav items={[{ id: "autopilot", n: "1", title: "Autopilot", tone: "bg-tone-yellow" }, { id: "order", n: "2", title: "Order", tone: "bg-tone-cyan" }, { id: "reel", n: "3", title: "Reel", tone: "bg-tone-pink" }]} />
         <div className="flex min-w-0 flex-col gap-10">
@@ -89,12 +90,14 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate text-sm">{r.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {r.video ? "Picked take" : (
+                        {r.video ? ((use) => (use ? `Picked take · ${use === "refine" ? "refined to HD" : "at night"}` : "Picked take"))(props.rows.find((x) => x.shot === r.shot)?.effects?.use) : (
                           <>
                             No take picked: <Link href={`/p/${props.projectId}/shot`} className="underline underline-offset-2">pick one in Shot</Link>
                           </>
                         )}
                       </span>
+                      {/* Effects come fresh from the server (the order is kept here). */}
+                      {((fx) => r.video && fx?.effects && <ClipEffects projectId={props.projectId} shot={r.shot} made={fx.effects.made} use={fx.effects.use} job={fx.fxJob} />)(props.rows.find((x) => x.shot === r.shot))}
                     </div>
                     <div className="flex gap-1">
                       <Button size="icon-sm" variant="ghost" aria-label={`Move ${r.name} earlier`} disabled={busy || i === 0} onClick={() => move(i, -1)}>

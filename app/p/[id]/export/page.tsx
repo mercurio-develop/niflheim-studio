@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { reelClips, reelOrder } from "@/features/reel/clips";
+import { clipVideo, effectsOf } from "@/features/reel/effects";
 import { AutopilotPanel } from "@/features/reel/components/autopilot";
 import { ReelStep } from "@/features/reel/components/reel-step";
 import { StepRail } from "@/features/wizard/components/step-rail";
@@ -15,9 +16,10 @@ async function Export({ params }: { params: Promise<{ id: string }> }) {
   const shots = allShots(project);
   const rows = reelOrder(project).map((sid) => {
     const s = shots.find((x) => x.id === sid)!;
-    return { shot: s.id, name: s.name, video: s.shot?.picked !== undefined ? (s.shot.takes[s.shot.picked]?.video ?? null) : null };
+    const video = s.shot?.picked !== undefined ? (s.shot.takes[s.shot.picked]?.video ?? null) : null;
+    return { shot: s.id, name: s.name, video, effects: video ? effectsOf(id, video) : null, fxJob: project.jobs[`fx-${s.id}`] };
   });
-  const clips = reelClips(project);
+  const clips = reelClips(project).map((c) => ({ ...c, video: clipVideo(id, c.video) }));
   const joins = project.reel?.joins ?? [];
   const key = JSON.stringify({ clips: clips.map((c) => c.video), joins: clips.slice(1).map((_, i) => joins[i] ?? "fade") });
   const exp = project.reel?.export;

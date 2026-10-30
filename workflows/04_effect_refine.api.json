@@ -1,0 +1,245 @@
+{
+ "10": {
+  "class_type": "UNETLoader",
+  "inputs": {
+   "unet_name": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+   "weight_dtype": "default"
+  },
+  "_meta": {
+   "title": "Model: LTX-2.5 22B distilled"
+  }
+ },
+ "11": {
+  "class_type": "VAELoader",
+  "inputs": {
+   "vae_name": "ltx-2.5-video-vae-bf16.safetensors"
+  },
+  "_meta": {
+   "title": "VAE: LTX video"
+  }
+ },
+ "13": {
+  "class_type": "CLIPLoader",
+  "inputs": {
+   "clip_name": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+   "type": "ltxv",
+   "device": "default"
+  },
+  "_meta": {
+   "title": "Text encoder: Gemma 4 12B"
+  }
+ },
+ "20": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "clip": [
+    "13",
+    0
+   ],
+   "text": "sharp detail, crisp natural texture, fine surface detail, clean edges, natural film grain, high resolution footage"
+  }
+ },
+ "21": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "clip": [
+    "13",
+    0
+   ],
+   "text": "blurry, soft, plastic, smeared detail, oversharpened halos, warped faces"
+  }
+ },
+ "22": {
+  "class_type": "LTXVConditioning",
+  "inputs": {
+   "positive": [
+    "20",
+    0
+   ],
+   "negative": [
+    "21",
+    0
+   ],
+   "frame_rate": 24
+  }
+ },
+ "400": {
+  "class_type": "LTXICLoRALoaderModelOnly",
+  "inputs": {
+   "model": [
+    "10",
+    0
+   ],
+   "lora_name": "ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors",
+   "strength_model": 1
+  }
+ },
+ "401": {
+  "class_type": "LoadVideo",
+  "inputs": {
+   "file": "take.mp4"
+  }
+ },
+ "402": {
+  "class_type": "GetVideoComponents",
+  "inputs": {
+   "video": [
+    "401",
+    0
+   ]
+  }
+ },
+ "404": {
+  "class_type": "ImageScale",
+  "inputs": {
+   "image": [
+    "402",
+    0
+   ],
+   "upscale_method": "lanczos",
+   "width": 1536,
+   "height": 896,
+   "crop": "disabled"
+  }
+ },
+ "30": {
+  "class_type": "EmptyLTXVLatentVideo",
+  "inputs": {
+   "width": 1536,
+   "height": 896,
+   "length": 97,
+   "batch_size": 1
+  }
+ },
+ "403": {
+  "class_type": "LTXAddVideoICLoRAGuide",
+  "inputs": {
+   "positive": [
+    "22",
+    0
+   ],
+   "negative": [
+    "22",
+    1
+   ],
+   "vae": [
+    "11",
+    0
+   ],
+   "latent": [
+    "30",
+    0
+   ],
+   "image": [
+    "404",
+    0
+   ],
+   "frame_idx": 0,
+   "strength": 1,
+   "latent_downscale_factor": [
+    "400",
+    1
+   ],
+   "crop": "disabled",
+   "use_tiled_encode": true,
+   "tile_size": 512,
+   "tile_overlap": 64
+  }
+ },
+ "42": {
+  "class_type": "KSamplerSelect",
+  "inputs": {
+   "sampler_name": "euler"
+  }
+ },
+ "43": {
+  "class_type": "ManualSigmas",
+  "inputs": {
+   "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+  }
+ },
+ "44": {
+  "class_type": "LTXVTiledFusionSampler",
+  "inputs": {
+   "model": [
+    "400",
+    0
+   ],
+   "positive": [
+    "403",
+    0
+   ],
+   "negative": [
+    "403",
+    1
+   ],
+   "latents": [
+    "403",
+    2
+   ],
+   "sigmas": [
+    "43",
+    0
+   ],
+   "sampler": [
+    "42",
+    0
+   ],
+   "seed": 42,
+   "cfg": 1,
+   "tile_width": 1024,
+   "tile_height": 576,
+   "overlap_frac": 0.5,
+   "blend_var": 0.05,
+   "grid_cycle": 1,
+   "tile_frames": 0,
+   "vae": [
+    "11",
+    0
+   ]
+  }
+ },
+ "52": {
+  "class_type": "VAEDecodeTiled",
+  "inputs": {
+   "samples": [
+    "44",
+    0
+   ],
+   "vae": [
+    "11",
+    0
+   ],
+   "tile_size": 1024,
+   "overlap": 128,
+   "temporal_size": 256,
+   "temporal_overlap": 16
+  }
+ },
+ "54": {
+  "class_type": "CreateVideo",
+  "inputs": {
+   "images": [
+    "52",
+    0
+   ],
+   "audio": [
+    "402",
+    1
+   ],
+   "fps": 24
+  }
+ },
+ "55": {
+  "class_type": "SaveVideo",
+  "inputs": {
+   "video": [
+    "54",
+    0
+   ],
+   "filename_prefix": "niflheim/effect-refine",
+   "format": "auto",
+   "codec": "auto"
+  }
+ }
+}
