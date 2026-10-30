@@ -1,7 +1,7 @@
 "use client";
 
 import { SectionNav } from "@/components/section-nav";
-import { Fragment, useState, useTransition } from "react";
+import { Fragment, useEffect, useRef, useState, useTransition } from "react";
 import { Check, Clapperboard, Download, Repeat } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import { NextBar } from "@/features/wizard/components/next-bar";
 import type { Job, Keyframes, Shot, ShotKind } from "@/lib/store";
 import { goodTake } from "@/lib/score";
 import { cn } from "@/lib/utils";
-import { cancelShot, pickTake, renderTake, setShotKind } from "../actions/shot";
+import { cancelShot, pickTake, renderTake, saveBeats, setShotKind } from "../actions/shot";
 import { drawShotSheet } from "../actions/sheet";
 import { chip } from "@/features/scene/components/chip";
 import { ShotTabs, type ShotTab } from "./shot-tabs";
@@ -49,6 +49,15 @@ const BEATS = [
 export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; keysRunning: boolean; cameraPanel: React.ReactNode; keyPanel: React.ReactNode; shots: ShotTab[]; suggested: ShotKind; sheet: string | null; choices: SheetChoices; faceRef: string | null }) {
   const [beats, setBeats] = useState<{ start: string; then: string; end: string }>({ start: props.shot?.beats?.start ?? props.shot?.action ?? "", then: props.shot?.beats?.then ?? "", end: props.shot?.beats?.end ?? "" });
   const action = [beats.start, beats.then, beats.end].map((x) => x.trim()).filter(Boolean).join(", then ");
+  // Saved a moment after typing: the keyframes paint the later beats, so they must be on the shot first.
+  const typed = useRef(false);
+  useEffect(() => {
+    if (!typed.current) return void (typed.current = true);
+    if (beats.start.trim().length < 3) return;
+    const t = setTimeout(() => void saveBeats(props.projectId, beats).catch(() => {}), 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beats.start, beats.then, beats.end]);
   const kind = props.shot?.kind ?? props.suggested;
   const [expression, setExpression] = useState(props.shot?.expression ?? "");
   const [fromKey, setFromKey] = useState(false);
@@ -102,7 +111,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           {props.keyPanel}
         </Section>
 
-        <Section id="action" n="3" tone="bg-tone-yellow" title="What happens" line="What they do, in three short beats with a verb each: first, as the camera moves, by the end. Only use what the keyframes show; anything they do not show (a lantern, a sword) appears out of nowhere."
+        <Section id="action" n="3" tone="bg-tone-yellow" title="What happens" line="What they do, in three short beats with a verb each: first, as the camera moves, by the end. The later keyframes are painted with the last two (repaint them after a change), so the take does what they show; a thing not in the scene (a lantern, a sword) appears out of nowhere."
           summary={props.shot?.action || "Say what the character does"}
           open={!takes.length || running}
           className="nifl-enter"

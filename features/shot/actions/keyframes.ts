@@ -8,7 +8,7 @@ import { focusPhrase, keyFrames } from "@/lib/camera";
 import { runWorkflow } from "@/lib/comfy";
 import { startJob } from "@/lib/jobs";
 import { sceneKey } from "@/lib/progress";
-import { getProject, projectDir, updateProject, type Project } from "@/lib/store";
+import { getProject, projectDir, updateProject, type Keyframes, type Project } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { faceFixable, faceReference, matchFace } from "../face";
 
@@ -42,10 +42,11 @@ function blocksPhrase(p: Project) {
     : "The plain grey shapes are stand-ins: paint each as a fitting object of the same size and place, in the scene's style.";
 }
 
+const KEEP = "Keep everything in this picture exactly where it is and add nothing new: no new objects, nothing in the hands that is not already there.";
 function keyPrompt(p: Project, note: string) {
   const style = styleById(p.set?.style || p.character.style).phrase;
   return [
-    "Keep everything in this picture exactly where it is and add nothing new: no new objects, nothing in the hands that is not already there.",
+    KEEP,
     `Make it one finished frame, ${style}: light the character so they belong in the scene with a soft shadow on the ground, repaint smeared, jagged or broken patches cleanly, and fill any black holes at the edges with the scene around them. Same camera framing.`,
     // Relighting turned a black cat brown with glowing eyes (06_cast stage-cast proof): the light may
     // change, the characters may not.
@@ -102,6 +103,24 @@ async function caption(image: string, outDir: string, track?: (jobId: string) =>
     .join(" ");
 }
 
+// The beat a later key shows: the beats in order over the keys after the first (with four keys:
+// first, then, by the end), the first key staying as the stage shows. The stage only stands them in
+// place, so without it no key showed the action and neither did the take (the troll never bit the
+// tire: 05_submit troll reel); with only the later beats, key 2 jumped from standing to the tire at
+// its mouth in 1.3 s and the take cut there (pilot C, 32 and 51 frames popping).
+function beatOf(p: Project, i: number, n: number) {
+  const b = p.shot?.beats;
+  if (!b || i === 0) return undefined;
+  const beats = [b.start, b.then, b.end].map((x) => x?.trim()).filter(Boolean) as string[];
+  return beats[Math.min(beats.length - 1, Math.floor(((i - 1) * beats.length) / Math.max(1, n - 1)))];
+}
+const acting = (beat: string) => `Show the moment the character ${beat}: change their pose, hands and expression to show it clearly; things already in the picture may be in their hands or at their mouth. Keep the place, everything else where it is, the camera framing and the light.`;
+const promptFor = (p: Project, k: Keyframes, i: number) => {
+  const beat = beatOf(p, i, k.raw.length);
+  if (!beat) return k.prompt;
+  return k.prompt.includes(KEEP) ? k.prompt.replace(KEEP, acting(beat)) : `${acting(beat)} ${k.prompt}`;
+};
+
 // Later keys see the painted first key as Qwen's picture 2, so every key keeps the same person,
 // clothes and light (without it each key invented its own character and the take swapped people).
 const SAME_AS_FIRST = "Picture 2 is the first frame of this same shot: the character must be the same person as in picture 2 (face, hair, clothes, build and colours) under the same light. Keep the layout of picture 1.";
@@ -131,7 +150,7 @@ async function refine(id: string, which: number[], reroll = false) {
         workflow: "01_edit.api.json",
         onSubmit: ctx.track,
         edit: ref ? withFirst : undefined,
-        set: [["17", "prompt", ref ? `${k.prompt} ${SAME_AS_FIRST}` : k.prompt], ["22", "seed", reroll ? seed() : k.seed]],
+        set: [["17", "prompt", ref ? `${promptFor(p, k, i)} ${SAME_AS_FIRST}` : promptFor(p, k, i)], ["22", "seed", reroll ? seed() : k.seed]],
         images: [["1", abs(id, k.raw[i])], ...(ref ? [["30", ref] as [string, string]] : [])],
         output: "28",
         outDir,

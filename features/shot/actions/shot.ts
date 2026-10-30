@@ -140,6 +140,16 @@ const Input = z
   .refine((x) => x.beats.start.length >= 3, "Say what happens first, in a few words.");
 
 
+// The beats, saved as they are typed: the keyframes paint the later ones (actions/keyframes.ts
+// beatOf), so they have to be on the shot before the keys are made, not only when a take is shot.
+const BeatSet = z.object({ start: Beat, then: Beat.optional(), end: Beat.optional() });
+export async function saveBeats(id: string, raw: unknown) {
+  const beats = BeatSet.parse(raw);
+  if (!(await getProject(id))) throw new Error("Project not found.");
+  const action = [beats.start, beats.then, beats.end].map((s) => s?.trim()).filter(Boolean).join(", then ");
+  await updateProject(id, (q) => void (q.shot = { negative: DEFAULT_NEGATIVE, takes: [], ...q.shot, beats, action }));
+}
+
 // Takes of the shot: LTX-2.5 distilled guided by every keyframe (ends 0.7, middle 0.5), with
 // audio, about 1.5 to 2 minutes each on the 4080 for 97 to 121 frames. With tries > 1 it shoots
 // until one is good (new seed each time), at most `tries`, and picks the best of them.
