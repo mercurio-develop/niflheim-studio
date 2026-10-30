@@ -21,6 +21,20 @@ const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const run = promisify(execFile);
 const SCORE = path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "score_take.py");
 
+// Five frames of a take side by side (0, 30, 60, 90 and 120, or as far as it goes), to see at a
+// glance whether the character stays themselves through it. A take without one is kept as it is.
+async function stripOf(file: string, frames: number): Promise<string | undefined> {
+  const out = path.join(path.dirname(file), "strip.jpg");
+  const at = [0, 30, 60, 90, 120].filter((f) => f < frames);
+  const select = at.map((f) => `eq(n\\,${f})`).join("+");
+  try {
+    await run("ffmpeg", ["-v", "error", "-y", "-i", file, "-vf", `select='${select}',scale=192:-1,tile=${at.length}x1`, "-frames:v", "1", out]);
+    return out;
+  } catch {
+    return undefined;
+  }
+}
+
 // How a take moves and whether things pop in (scripts/score_take.py, a few seconds); a take that
 // cannot be scored is kept without one.
 async function scoreTake(file: string): Promise<TakeScore | undefined> {
@@ -125,14 +139,17 @@ const rank = (s?: TakeScore) => (s ? s.popins * 100 + s.worst : 1e9);
 // audio, about 1.5 to 2 minutes each on the 4080 for 97 to 121 frames. With tries > 1 it shoots
 // until one is good (new seed each time), at most `tries`, and picks the best of them.
 // A character take (kind "character"): the sheet's cells said by place, then the shot.
+// The shot's own sheet when it drew one (an expression, a pose, props), else the character's.
 function sheetFor(p: Project, video: string, expression?: string) {
   const sheet = p.sheet;
-  if (!sheet?.drawn || !sheet.rows) throw new Error("Make the character's sheet first (Character > Turnaround > Sheet).");
+  if (!sheet?.drawn || !sheet.rows) throw new Error("Make the character's sheet first (Character, Turnaround).");
+  const own = p.shot?.sheet;
   const who = whoOf(p.character.prompt ?? "");
   // Numbered as the sheet drew them: the painted ones only (make_sheet.py's item1, item2...).
   const items = sheet.cells.filter((c) => c.kind === "item" && c.image).map((c) => c.label);
+  const props = (own?.props ?? []).map((aid) => p.sceneAssets?.find((a) => a.id === aid)).filter(Boolean).map((a) => ({ name: a!.name, description: a!.prompt, kind: a!.kind }));
   const said = expression ? `${video} Their expression: ${expression}.` : video;
-  return { file: sheet.drawn, prompt: withSheet(sheetPrompt(sheet.rows, who, [], p.set?.prompt, items), said) };
+  return { file: own?.drawn ?? sheet.drawn, prompt: withSheet(sheetPrompt(own?.rows ?? sheet.rows, who, props, p.set?.prompt, items), said) };
 }
 
 export async function renderTake(id: string, raw: unknown) {
@@ -197,10 +214,10 @@ export async function renderTake(id: string, raw: unknown) {
       if (!video) throw new Error("LTX made no video.");
       if (!(await ctx.alive())) return;
       await ctx.progress(tries > 1 ? `Checking take ${n}` : "Checking the take");
-      const score = await scoreTake(video);
+      const [score, strip] = await Promise.all([scoreTake(video), stripOf(video, frames)]);
       let index = 0;
       await updateProject(id, (q) => {
-        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k?.at ?? "", seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind, layout: !!clip };
+        const take = { video: path.relative(projectDir(id), video), action, seed, frames, keys: k?.at ?? "", seconds: Math.round((frames - 1) / 24), at: new Date().toISOString(), score, prompt, kind, layout: !!clip, strip: strip && path.relative(projectDir(id), strip) };
         q.shot = { action, negative, ...q.shot, takes: [...(q.shot?.takes ?? []), take] };
         index = q.shot.takes.length - 1;
       });

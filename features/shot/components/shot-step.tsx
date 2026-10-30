@@ -14,6 +14,7 @@ import { NextBar } from "@/features/wizard/components/next-bar";
 import type { Job, Keyframes, Shot, ShotKind } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { cancelShot, pickTake, renderTake, setShotKind } from "../actions/shot";
+import { drawShotSheet } from "../actions/sheet";
 import { chip } from "@/features/scene/components/chip";
 import { ShotTabs, type ShotTab } from "./shot-tabs";
 
@@ -32,6 +33,9 @@ const KINDS: { id: ShotKind; label: string; line: string }[] = [
   { id: "camera", label: "Camera move", line: "The takes follow the move: with the clay clip drawn (Keyframes), every frame of it, from the first keyframe; without it, the keyframes. For push-ins, arcs and walks through the set." },
   { id: "character", label: "Character", line: "The takes hold the character's face, clothes and things to their sheet, 5 s, from the sheet alone unless you start from the first keyframe: for close-ups and acting." },
 ];
+// What a shot can put in its own sheet: the character's painted expressions and poses, and the
+// scene's assets that have pictures.
+export type SheetChoices = { expressions: { id: string; label: string }[]; poses: { id: string; label: string }[]; props: { id: string; label: string }[] };
 const EXPRESSIONS = ["calm", "smiling", "curious", "worried", "frightened", "angry", "sad", "determined"];
 const BEATS = [
   { id: "start", label: "First", placeholder: "stands still, breathing slowly" },
@@ -41,12 +45,15 @@ const BEATS = [
 
 // Step 03: set the shot's camera and walk (decision 0011), make the keyframes, say what the character does; LTX-2.5 shoots the shot's camera move, guided by its
 // keyframes. Each take is kept; pick the one the sequence uses, or download it.
-export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; keysRunning: boolean; cameraPanel: React.ReactNode; keyPanel: React.ReactNode; shots: ShotTab[]; suggested: ShotKind; sheet: string | null }) {
+export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; keysRunning: boolean; cameraPanel: React.ReactNode; keyPanel: React.ReactNode; shots: ShotTab[]; suggested: ShotKind; sheet: string | null; choices: SheetChoices; faceRef: string | null }) {
   const [beats, setBeats] = useState<{ start: string; then: string; end: string }>({ start: props.shot?.beats?.start ?? props.shot?.action ?? "", then: props.shot?.beats?.then ?? "", end: props.shot?.beats?.end ?? "" });
   const action = [beats.start, beats.then, beats.end].map((x) => x.trim()).filter(Boolean).join(", then ");
   const kind = props.shot?.kind ?? props.suggested;
   const [expression, setExpression] = useState(props.shot?.expression ?? "");
   const [fromKey, setFromKey] = useState(false);
+  const own = props.shot?.sheet;
+  const [pick, setPick] = useState<{ expression?: string; pose?: string; props: string[] }>({ expression: own?.expression, pose: own?.pose, props: own?.props ?? [] });
+  const toggleProp = (id: string) => setPick((x) => ({ ...x, props: x.props.includes(id) ? x.props.filter((p) => p !== id) : x.props.length < 2 ? [...x.props, id] : x.props }));
   const character = kind === "character";
   const shoot = (tries: number) => run(() => renderTake(props.projectId, { beats, tries, expression: character ? expression : undefined, fromKey: character && fromKey }));
   const [error, setError] = useState<string | null>(null);
@@ -121,8 +128,32 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
               {character &&
                 (props.sheet ? (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                    <FadeImage src={file(props.sheet)} alt="The character's sheet" className="aspect-[768/448] w-full max-w-64 shrink-0 rounded border bg-black object-contain" />
+                    <FadeImage src={file(own?.drawn ?? props.sheet)} alt={own ? "This shot's sheet" : "The character's sheet"} className="aspect-[768/448] w-full max-w-64 shrink-0 rounded border bg-black object-contain" />
                     <div className="flex min-w-0 flex-col gap-1.5">
+                      {(props.choices.expressions.length > 0 || props.choices.poses.length > 0 || props.choices.props.length > 0) && (
+                        <div className="flex flex-col gap-1.5 border-b pb-2">
+                          <span className="text-xs text-muted-foreground">This shot&apos;s sheet: {own ? "drawn" : "the character's, unless you draw one"}</span>
+                          {[
+                            { label: "Face", items: props.choices.expressions, on: (id: string) => pick.expression === id, set: (id: string) => (setPick((x) => ({ ...x, expression: x.expression === id ? undefined : id })), setExpression(props.choices.expressions.find((e) => e.id === id)?.label ?? expression)) },
+                            { label: "Pose", items: props.choices.poses, on: (id: string) => pick.pose === id, set: (id: string) => setPick((x) => ({ ...x, pose: x.pose === id ? undefined : id })) },
+                            { label: "Props", items: props.choices.props, on: (id: string) => pick.props.includes(id), set: toggleProp },
+                          ]
+                            .filter((g) => g.items.length)
+                            .map((g) => (
+                              <div key={g.label} className="flex flex-wrap items-center gap-1.5">
+                                <span className="w-12 text-xs text-muted-foreground">{g.label}</span>
+                                {g.items.map((x) => (
+                                  <button key={x.id} type="button" aria-pressed={g.on(x.id)} onClick={() => g.set(x.id)} className={chip(g.on(x.id))}>
+                                    {x.label}
+                                  </button>
+                                ))}
+                              </div>
+                            ))}
+                          <Button type="button" size="sm" variant="outline" className="self-start" disabled={busy} onClick={() => run(() => drawShotSheet(props.projectId, pick))}>
+                            Draw this shot&apos;s sheet
+                          </Button>
+                        </div>
+                      )}
                       <span className="text-xs text-muted-foreground">Their expression (the sheet holds the face, so say it)</span>
                       <div className="flex flex-wrap gap-1.5">
                         {EXPRESSIONS.map((e) => (
@@ -200,6 +231,12 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
             {[...takes.entries()].reverse().map(([i, t]) => (
               <figure key={t.video} className={cn("flex flex-col gap-2 rounded-lg border p-2", props.shot?.picked === i && "border-primary")}>
                 <video src={file(t.video)} controls loop playsInline preload="metadata" className="aspect-[768/448] w-full rounded-md bg-black" />
+                {t.strip && (
+                  <div className="flex items-center gap-1.5" title="Frames 0, 30, 60, 90 and 120 beside the face to keep: does the character stay themselves?">
+                    {props.faceRef && <FadeImage src={file(props.faceRef)} alt="The face to keep" className="h-10 w-10 shrink-0 rounded border object-cover" />}
+                    <FadeImage src={file(t.strip)} alt={`Take ${i + 1}, five frames`} className="h-10 min-w-0 flex-1 rounded border object-cover object-left" />
+                  </div>
+                )}
                 <figcaption className="flex flex-col gap-1 text-xs text-muted-foreground">
                   <span className="flex items-center gap-2">
                     <span className="min-w-0 flex-1">
