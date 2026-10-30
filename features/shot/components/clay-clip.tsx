@@ -5,7 +5,7 @@ import { Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingDots } from "@/components/loading-dots";
 import { KeyCapture } from "@/features/scene/components/key-capture";
-import type { LayoutClip } from "@/lib/store";
+import type { Job, LayoutClip } from "@/lib/store";
 import { saveClay } from "../actions/layout";
 import { clayFrameMax } from "../state";
 
@@ -14,7 +14,7 @@ type Capture = Omit<React.ComponentProps<typeof KeyCapture>, "projectId" | "onDo
 // The camera move drawn as a clay clip, every frame, for Layout-to-Render takes: the takes follow
 // it frame by frame (the camera, where everyone stands and walks), so nothing has to be guessed
 // between keyframes. A few seconds in the browser; out of date when the move or the stage changes.
-export function ClayClip(props: { projectId: string; capture: Capture; layout: LayoutClip | null; current: boolean }) {
+export function ClayClip(props: { projectId: string; capture: Capture; layout: LayoutClip | null; current: boolean; job?: Job }) {
   const [capturing, setCapturing] = useState(false);
   const [n, setN] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +49,9 @@ export function ClayClip(props: { projectId: string; capture: Capture; layout: L
       </div>
       {props.layout && <video src={file(props.layout.clip)} controls loop muted playsInline preload="metadata" className="aspect-[768/448] w-full max-w-md rounded-md border bg-black" />}
       {error && <p className="text-xs text-destructive">{error}</p>}
+      {props.job?.status === "running" && <p className="text-xs text-muted-foreground">Joining the clip…</p>}
+      {props.job?.status === "error" && <p className="text-xs text-destructive">The clay clip failed: {props.job.error}. Until it is drawn, Camera move takes follow the keyframes.</p>}
+      {props.layout && !props.current && <p className="text-xs text-muted-foreground">Out of date: Camera move takes follow the keyframes until it is drawn again.</p>}
       {capturing && <KeyCapture {...props.capture} clay projectId={props.projectId} onFrame={setN} onDone={captured} onError={(m) => (setCapturing(false), setError(m))} />}
     </div>
   );

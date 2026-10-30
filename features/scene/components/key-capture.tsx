@@ -66,7 +66,7 @@ export function KeyCapture(props: {
   };
   return (
     <div aria-hidden className="pointer-events-none fixed top-0 -left-[9999px]" style={{ width: 768, height: 448 }}>
-      <StageViewer mesh={props.mesh} camera={props.camera} filled look={props.clay ? "guide" : "painting"} grid={!props.clay} pose={{ ...props.poses[i], n: i }} onDrawn={drawn} className="size-full">
+      <StageViewer dpr={1} settle={props.clay ? 3 : 6} mesh={props.mesh} camera={props.camera} filled look={props.clay ? "guide" : "painting"} grid={!props.clay} pose={{ ...props.poses[i], n: i }} onDrawn={drawn} className="size-full">
         <StageScene
           projectId={props.projectId}
           blocks={props.blocks}

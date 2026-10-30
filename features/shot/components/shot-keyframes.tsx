@@ -13,7 +13,7 @@ import { KeyframesPanel } from "./keyframes";
 
 // The active shot's keyframes, made here from the Scene's stage, placement and camera move (moved
 // from Scene, decision 0010): the stage is captured off screen at each key pose and painted.
-export function ShotKeyframes(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; keyframes: Keyframes | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[]; job?: Job; continuity: { from: string; hasTake: boolean; seeded: SeededFrom | null } | null; layout: LayoutClip | null }) {
+export function ShotKeyframes(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; keyframes: Keyframes | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[]; job?: Job; continuity: { from: string; hasTake: boolean; seeded: SeededFrom | null } | null; layout: LayoutClip | null; layoutJob?: Job }) {
   const s = props.set;
   const fill = s?.stage && s.stage.image === s.image ? s.stage.fill : undefined;
   const cam = fill?.camera;
@@ -60,7 +60,7 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
         // Each key wears the pose the move (or its moments) gives at its frame.
         capture={{ ...base, poses: keyFrames(move).map(poseAt) }}
       />
-      <ClayClip projectId={props.projectId} layout={props.layout} current={props.layout?.key === key} capture={{ ...base, poses: Array.from({ length: frameCount(move.seconds) }, (_, f) => poseAt(Math.min(f, path.length - 1))) }} />
+      <ClayClip projectId={props.projectId} layout={props.layout} job={props.layoutJob} current={props.layout?.key === key} capture={{ ...base, poses: Array.from({ length: frameCount(move.seconds) }, (_, f) => poseAt(Math.min(f, path.length - 1))) }} />
     </div>
   );
 }

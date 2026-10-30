@@ -71,7 +71,7 @@ export function KeyframesPanel(props: {
         </label>
         <p className="w-full text-xs text-muted-foreground">Only what they hold or wear. Someone else, or an object in the place, goes on the stage as a Scene asset or block: each key is painted on its own, so a note like &ldquo;a human&rdquo; paints a different one in every key.</p>
       </div>
-      {running && props.job && <JobStatus message={props.job.detail ?? "Painting the keyframes"} startedAt={props.job.startedAt} expected={props.frames.length * 42} />}
+      {running && props.job && <JobStatus message={props.job.detail ?? "Painting the keyframes"} startedAt={props.job.startedAt} expected={props.frames.length * 100} />}
       {k && (
         <ol className={cn("grid grid-cols-2 gap-2 sm:grid-cols-4", !props.current && "opacity-50")}>
           {k.raw.map((raw, i) => (

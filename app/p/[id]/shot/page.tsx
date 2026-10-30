@@ -37,7 +37,7 @@ async function Shot({ params }: { params: Promise<{ id: string }> }) {
         }}
         keysRunning={["keyframes", "stage", "layout", "shotsheet"].some((j) => project.jobs[j]?.status === "running")}
         cameraPanel={<ShotCamera projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} cameraRender={project.cameraRender ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} stageJob={project.jobs.stage} />}
-        keyPanel={<ShotKeyframes projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} keyframes={k ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} job={project.jobs.keyframes} continuity={continuity} layout={project.layout ?? null} />}
+        keyPanel={<ShotKeyframes projectId={id} set={project.set ?? null} placement={project.stage ?? null} camera={project.camera ?? null} keyframes={k ?? null} blocks={project.blocks ?? []} assets={project.sceneAssets ?? []} poses={project.poses ?? []} job={project.jobs.keyframes} continuity={continuity} layout={project.layout ?? null} layoutJob={project.jobs.layout} />}
       />
     </main>
   );

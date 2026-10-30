@@ -35,7 +35,7 @@ export async function saveClay(id: string, form: FormData) {
   // Joined into the MP4 as a job (a few seconds, but never inside the request).
   await startJob(id, "layout", async (ctx) => {
     const clip = path.join(dir, "clay.mp4");
-    await run("ffmpeg", ["-loglevel", "error", "-y", "-framerate", "24", "-i", path.join(dir, "%03d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", clip]);
+    await run("ffmpeg", ["-loglevel", "error", "-y", "-framerate", "24", "-i", path.join(dir, "%03d.jpg"), "-vf", "scale=768:448", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", clip]);
     if (await ctx.alive()) await updateProject(id, (q) => void (q.layout = { clip: rel(id, clip), key, frames, at: new Date().toISOString() }));
   }, "Joining the clay clip");
   revalidatePath(`/p/${id}/shot`);

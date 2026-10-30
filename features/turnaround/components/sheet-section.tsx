@@ -8,7 +8,7 @@ import { LoadingDots } from "@/components/loading-dots";
 import { Textarea } from "@/components/ui/textarea";
 import type { CharacterSheet, Job, SheetCell } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { addExpression, cancelSheet, deleteExpression, makeSheet, rerollCell } from "../actions/sheet";
+import { addExpression, addItem, cancelSheet, makeSheet, removeCell, rerollCell } from "../actions/sheet";
 
 // Tags that are a part of the body or hair, not a thing worn or carried: never offered as items.
 // The things offered for the sheet, carried ones first (Set up picks them before Generate).
@@ -29,6 +29,7 @@ const CARRIED = /(bag|satchel|backpack|pouch|lantern|sword|staff|book|hat|helmet
 export function SheetSection(props: { projectId: string; sheet: CharacterSheet | null; items: string[]; jobs: Record<string, Job>; locked: boolean; cid?: string }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [word, setWord] = useState("");
+  const [thing, setThing] = useState("");
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -79,6 +80,17 @@ export function SheetSection(props: { projectId: string; sheet: CharacterSheet |
         </span>
       )}
 
+      {props.sheet?.drawn && (
+        <form className="flex flex-wrap items-center gap-1.5" onSubmit={(e) => (e.preventDefault(), run(() => addItem(props.projectId, thing, props.cid).then(() => setThing(""))))}>
+          <span className="text-xs text-muted-foreground">A thing they wear or carry, in your words:</span>
+          <input aria-label="A thing they wear or carry" value={thing} maxLength={40} placeholder="a truck tire" onChange={(e) => setThing(e.target.value)} className="h-7 w-48 rounded-md border bg-transparent px-2 text-xs" />
+          <Button type="submit" size="sm" variant="ghost" disabled={busy || thing.trim().length < 2 || cells.filter((c) => c.kind === "item").length >= MAX_ITEMS}>
+            <Plus />
+            Add to the sheet
+          </Button>
+        </form>
+      )}
+
       {props.sheet?.cells.some((c) => c.id === "face-front" && c.image) && (
         <div className="flex flex-col gap-1.5">
           <span className="text-xs text-muted-foreground">Expressions: painted from the front close-up, so a shot can hold them to their face with that look</span>
@@ -116,8 +128,8 @@ export function SheetSection(props: { projectId: string; sheet: CharacterSheet |
                   <button type="button" aria-label={`Paint ${c.label} again`} disabled={busy || !c.image} onClick={() => run(() => rerollCell(props.projectId, c.id, null, props.cid))} className="rounded-md border bg-background/80 p-1 text-muted-foreground hover:text-foreground disabled:opacity-50">
                     <RefreshCw className="size-3" />
                   </button>
-                  {c.kind === "expression" && (
-                    <button type="button" aria-label={`Remove ${c.label}`} disabled={busy} onClick={() => run(() => deleteExpression(props.projectId, c.id, props.cid))} className="rounded-md border bg-background/80 p-1 text-muted-foreground hover:text-foreground disabled:opacity-50">
+                  {(c.kind === "expression" || c.kind === "item") && (
+                    <button type="button" aria-label={`Remove ${c.label}`} disabled={busy} onClick={() => run(() => removeCell(props.projectId, c.id, props.cid))} className="rounded-md border bg-background/80 p-1 text-muted-foreground hover:text-foreground disabled:opacity-50">
                       <X className="size-3" />
                     </button>
                   )}

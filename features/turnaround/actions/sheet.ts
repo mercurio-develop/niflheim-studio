@@ -5,7 +5,7 @@ import { z } from "zod";
 import { cancelJob, startJob } from "@/lib/jobs";
 import { viewImage } from "@/lib/progress";
 import { CID, charKey, charOf, getProject, updateProject } from "@/lib/store";
-import { drawSheet, expressionCell, paintCell, paintSheet } from "../sheet";
+import { drawSheet, expressionCell, paintCell, paintSheet, planCells } from "../sheet";
 
 // The character's Ingredients reference sheet (features/turnaround/sheet.ts). Generate in the
 // turnaround makes it with the views; these remake it, or one of its pictures, on their own.
@@ -78,16 +78,51 @@ export async function addExpression(id: string, rawWord: unknown, rawCid?: unkno
   done(id);
 }
 
-// An expression off the list (its picture stays on disk).
-export async function deleteExpression(id: string, rawCell: unknown, rawCid?: unknown) {
-  const cellId = Cell.parse(rawCell);
+// A thing they wear or carry, in the user's words (the tags may miss it: the troll was tagged
+// armor, belt, gun), painted on its own and added to the sheet. Up to 3.
+export async function addItem(id: string, rawWord: unknown, rawCid?: unknown) {
+  const [word] = Items.parse([rawWord]);
   const cid = Cid.parse(rawCid) ?? "c1";
+  const p = await getProject(id);
+  const sheet = p ? charOf(p, cid).sheet : undefined;
+  if (!sheet) throw new Error("Make the sheet first.");
+  const items = sheet.cells.filter((c) => c.kind === "item");
+  if (items.some((c) => c.label === word)) throw new Error(`The ${word} is on the sheet already.`);
+  if (items.length >= 3) throw new Error("Up to 3 things on the sheet: remove one first.");
+  const cell = planCells([word])[3];
+  cell.id = `item-${Date.now().toString(36).slice(-6)}`;
   await updateProject(id, (q) => {
     const s = charOf(q, cid).sheet;
-    if (s) s.cells = s.cells.filter((c) => !(c.id === cellId && c.kind === "expression"));
+    if (s) s.cells = [...s.cells, cell];
   });
+  await startJob(
+    id,
+    jobKey(cid),
+    async (ctx) => {
+      await paintCell(id, cid, cell, ctx);
+      if (await ctx.alive()) await drawSheet(id, cid);
+    },
+    `Painting the ${word}`,
+  );
   done(id);
 }
+
+// A thing or an expression off the sheet (its picture stays on disk); the sheet is drawn again
+// when a thing goes.
+export async function removeCell(id: string, rawCell: unknown, rawCid?: unknown) {
+  const cellId = Cell.parse(rawCell);
+  const cid = Cid.parse(rawCid) ?? "c1";
+  let item = false;
+  await updateProject(id, (q) => {
+    const s = charOf(q, cid).sheet;
+    if (!s) return;
+    item = s.cells.some((c) => c.id === cellId && c.kind === "item");
+    s.cells = s.cells.filter((c) => !(c.id === cellId && (c.kind === "expression" || c.kind === "item")));
+  });
+  if (item) await startJob(id, jobKey(cid), () => drawSheet(id, cid), "Drawing the sheet");
+  done(id);
+}
+
 
 // The sheet drawn again from the views as they are now (after Again or Fix on a view).
 export async function redrawSheet(id: string, rawCid?: unknown) {
