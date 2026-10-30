@@ -13,7 +13,7 @@ import { fixKeyFace, rerollKey, saveCaption } from "../actions/keyframes";
 // each repainted into a finished frame. One Shoot makes them (repainting what is stale, faces
 // fixed); here they are only shown. Under More, any one can be painted again or its face fixed,
 // and Florence-2's caption of it edited (merged into the take prompt in order).
-export function KeyframesPanel(props: { projectId: string; keyframes: Keyframes | null; current: boolean; frames: number[]; job?: Job }) {
+export function KeyframesPanel(props: { projectId: string; keyframes: Keyframes | null; current: boolean; frames: number[]; job?: Job; beatsChanged?: boolean }) {
   const k = props.keyframes;
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -27,7 +27,7 @@ export function KeyframesPanel(props: { projectId: string; keyframes: Keyframes 
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-medium">Keyframes</span>
         <span className="font-mono text-[11px] text-muted-foreground">
-          frames {props.frames.join(", ")} · the shot follows them · {k ? (props.current ? "up to date" : "out of date: One Shoot paints them again") : "made by One Shoot"}
+          frames {props.frames.join(", ")} · the shot follows them · {k ? (props.current ? "up to date" : props.beatsChanged ? "painted before What happens changed: One Shoot paints them again" : "out of date: One Shoot paints them again") : "made by One Shoot"}
         </span>
       </div>
       {running && props.job && <JobStatus message={props.job.detail ?? "Painting the keyframes"} startedAt={props.job.startedAt} expected={props.frames.length * 100} />}

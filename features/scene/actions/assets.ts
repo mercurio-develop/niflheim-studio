@@ -11,7 +11,7 @@ import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { CID, getProject, projectDir, updateProject, type SceneAsset } from "@/lib/store";
 import { defaultHeight, viewImage } from "@/lib/progress";
-import { mediumOf, styleById } from "@/lib/styles";
+import { mediumOf, STYLES, styleById } from "@/lib/styles";
 
 const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 
@@ -25,6 +25,9 @@ const done = (id: string) => {
 const jobKey = (aid: string) => `scene-asset:${aid}`;
 
 const Name = z.string().trim().min(2).max(40);
+const Style = z.enum(["keep", ...STYLES.map((s) => s.id)]).optional();
+// The scene's style: the set's, else the character's. A new asset is painted in it unless changed.
+const sceneStyle = (p: { set?: { style?: string }; character: { style: string } }) => p.set?.style || p.character.style;
 const Aid = z.string().regex(/^[a-z0-9]{1,16}$/);
 const Source = z.discriminatedUnion("from", [
   z.object({ from: z.literal("prompt"), name: Name, prompt: z.string().trim().min(3).max(300) }),
@@ -54,13 +57,14 @@ async function build(id: string, aid: string, ctx: JobCtx) {
       const x = q.sceneAssets?.find((y) => y.id === aid);
       if (x) Object.assign(x, patch);
     });
+  const style = a.style && a.style !== "keep" ? a.style : sceneStyle(p);
   let image = a.image;
   if (!image && a.prompt) {
     await ctx.progress(`Painting the ${a.name}`);
     const [file] = await runWorkflow({
       workflow: "01_concept.api.json",
       onSubmit: ctx.track,
-      set: [["5", "text", (a.kind === "character" ? castPrompt : conceptPrompt)(a.prompt, p.set?.style || p.character.style)], ["8", "seed", Math.floor(Math.random() * 2 ** 31)], ["7", "batch_size", 1]],
+      set: [["5", "text", (a.kind === "character" ? castPrompt : conceptPrompt)(a.prompt, style)], ["8", "seed", Math.floor(Math.random() * 2 ** 31)], ["7", "batch_size", 1]],
       output: "10",
       outDir: abs(id, `${dir}/concept`),
     });
@@ -74,7 +78,9 @@ async function build(id: string, aid: string, ctx: JobCtx) {
   const cast = a.kind === "character";
   if (!views.front || !views.side || !views.back) {
     const whole = a.from === "character";
-    const ok = await paintViews(id, a.name, image, whole, `${dir}/views`, ctx, (v, f) => ((views[v] = f), set({ views: { ...views } })), cast);
+    // An upload is repainted in the chosen style; a described one was painted in it already.
+    const look = a.from === "upload" && a.style !== "keep" ? styleById(style).phrase : undefined;
+    const ok = await paintViews(id, a.name, image, whole, `${dir}/views`, ctx, (v, f) => ((views[v] = f), set({ views: { ...views } })), cast, look);
     if (!ok) return;
   }
   if (cast) {
@@ -105,6 +111,8 @@ export async function makeAsset(id: string, form: FormData) {
   // An object starts in proportion to the main character (a 1 m lantern towered over a 0.55 m fox).
   const near = Math.min(1, Math.max(0.3, (p.stage?.height ?? 1.7) * 0.6));
   const asset: SceneAsset = { id: aid, name: src.name, kind: "object", from: src.from, height: near, turn: 0 };
+  const style = Style.parse(form.get("style") || undefined);
+  if (style && src.from !== "character") asset.style = style === "keep" && src.from !== "upload" ? undefined : style;
   if (form.get("edit") === "1") asset.hold = true;
   if (src.from === "prompt") asset.prompt = src.prompt;
   if (src.from === "upload") {

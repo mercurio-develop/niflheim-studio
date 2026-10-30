@@ -82,7 +82,8 @@ export type Block = { id: string; kind: "box" | "cylinder" | "ramp"; at: [number
 export type SheetCell = { id: string; kind: "view" | "face" | "item" | "expression"; label: string; prompt: string; image?: string; cutout?: string };
 // rows: what scripts/make_sheet.py drew, top to bottom, so a take's prompt can say each cell by its place.
 export type SheetRow = { kind: "faces+items" | "bodies" | "set"; cells: string[] };
-export type CharacterSheet = { cells: SheetCell[]; drawn?: string; rows?: SheetRow[]; at?: string };
+// source: the character image the sheet was painted from; a new edit makes it out of date.
+export type CharacterSheet = { cells: SheetCell[]; drawn?: string; rows?: SheetRow[]; at?: string; source?: string };
 export type CharacterPose = { id: string; label: string; prompt: string; views: Partial<Record<AssetView, string>>; cutouts: Partial<Record<AssetView, string>> };
 
 // An object made for the scene, from a prompt (its concept painted first), an uploaded picture or
@@ -96,6 +97,7 @@ export type SceneAsset = {
   from: "prompt" | "upload" | "character" | "cast";
   cid?: string; // from "cast": a character made in the Character step (CastMember), standing here
   prompt?: string;
+  style?: string; // lib/styles.ts id it is painted in ("keep": an upload as it is); unset: the scene's
   image?: string; // the picture its views are made from
   hold?: boolean; // the picture is kept for editing: no 3D until "Make 3D"
   before?: string[]; // earlier pictures of the object (each edit pushes one), for Undo
@@ -127,7 +129,7 @@ export type CameraRender = { depth: string; preview: string; holes: number[]; ke
 // null until done). One prompt and seed for all, so they share a look; note: what the user asked
 // to see in the frame. key: the camera render key (lib/camera.ts renderKey) they were made from.
 // detail: each painted key also gets the face and hand pass (03_key_detail).
-export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)[]; prompt: string; note: string; seed: number; key: string; at: string; detail?: boolean; captions?: (string | null)[] };
+export type Keyframes = { frames: number[]; raw: string[]; keys: (string | null)[]; prompt: string; note: string; seed: number; key: string; at: string; detail?: boolean; captions?: (string | null)[]; beats?: string };
 
 // The shot: what happens, and the LTX-2.5 takes of it (MP4 with audio, 768x448, the camera move's
 // 8n+1 frames at 24 fps), each guided by the keyframes it was made from (keys: Keyframes.at).
@@ -143,7 +145,8 @@ export type ShotKind = "camera" | "character";
 // sheet: the shot's own reference sheet for Character takes: the character's, with a painted
 // expression in the front close-up's place, a pose's views, and up to two props (scene assets).
 export type ShotSheet = { expression?: string; pose?: string; props: string[]; drawn: string; rows: SheetRow[] };
-export type Shot = { action: string; beats?: { start: string; then?: string; end?: string }; negative: string; takes: Take[]; picked?: number; kind?: ShotKind; expression?: string; sheet?: ShotSheet };
+// pickedBy: One Shoot picked the steadiest take (auto), or you did.
+export type Shot = { action: string; beats?: { start: string; then?: string; end?: string }; negative: string; takes: Take[]; picked?: number; pickedBy?: "auto" | "you"; kind?: ShotKind; expression?: string; sheet?: ShotSheet };
 
 // One shot of the scene: its name, and (while not active) its move, render, keyframes and takes.
 export type ShotRef = { id: string; name: string };
@@ -221,6 +224,7 @@ export type Project = {
     sets?: ConceptSet[]; // earlier sets, oldest first; a new set never replaces them
     versions: Version[];
     current: number | null; // index into versions
+    accepted?: string; // Looks good: this image may feed the turnaround (Generate paints it)
     doneAt?: string; // the user pressed Next with this version
   };
   turnaround?: {

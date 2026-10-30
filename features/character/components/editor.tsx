@@ -14,8 +14,8 @@ import type { Job, Version } from "@/lib/store";
 import { STYLES, styleById } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { KIND_DOT, versionKind } from "@/lib/versions";
-import { addSelection, cancel, maskPart, redo, removeSelection, repaintSelection, rebuildStyle, restyleCurrent, retryEdit, savePart, undo } from "../actions/character";
-import { Section } from "@/components/section";
+import { acceptEdit, addSelection, cancel, maskPart, redo, removeSelection, repaintSelection, rebuildStyle, restyleCurrent, retryEdit, savePart, undo } from "../actions/character";
+import { Section, SectionFire } from "@/components/section";
 import { SelectionCanvas, type SelectionHandle } from "./selection-canvas";
 
 const FALLBACK = ["hair", "face", "coat", "pants", "boots"];
@@ -38,6 +38,7 @@ export function Editor(props: {
   title?: { n: string; title: string; line: string };
   id?: string; // anchor for the step's section nav
   open?: boolean; // where work is due; the Character step folds Edit once the turnaround exists
+  fresh?: boolean; // turnaround already painted from this version
   version: Version;
   parentImage: string | null;
   moves: { undo: number | null; redo: number | null };
@@ -65,11 +66,12 @@ export function Editor(props: {
   const target = props.target ?? "character";
 
   const is = (j?: Job) => j?.status === "running";
-  const running = (["mask", "swap", "brush", "restyle"] as const).find((k) => is(props.jobs[k]));
-  const tagging = is(props.jobs.tags) && !props.version.tags;
+  const running = (["mask", "swap", "brush", "restyle", "tags"] as const).find((k) => is(props.jobs[k]));
+  const naming = is(props.jobs.tags) && !props.version.tags;
+  const filling = is(props.jobs.tags);
   const busy = pending || !!running;
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
-  const chips = props.version.tags?.length ? props.version.tags : tagging ? [] : FALLBACK;
+  const chips = props.version.tags?.length ? props.version.tags : naming ? [] : FALLBACK;
   const baseMask = part && props.version.parts[part] ? file(props.version.parts[part]) : undefined;
   const named = part && !edited ? part : null; // the selection is exactly a known part
   const current = ACTIONS.find((a) => a.id === action)!;
@@ -89,7 +91,7 @@ export function Editor(props: {
     setPart(name);
     setEdited(false);
     setTool("part");
-    if (!props.version.parts[name]) act(() => maskPart(props.projectId, name, target, props.cid));
+    if (!props.version.parts[name] && !filling) act(() => maskPart(props.projectId, name, target, props.cid));
   };
 
   // Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z walk the history, except while typing.
@@ -188,6 +190,12 @@ export function Editor(props: {
   if (job && job !== held) setHeld(job);
   const loading = shown !== props.version.image;
   const loader = job || (loading ? held : null);
+  const partsLeft = (props.version.tags ?? []).filter((t) => !props.version.parts[t]).length;
+  const loaderMessage =
+    running === "mask"
+      ? `Finding the ${part ?? "part"}`
+      : loader?.detail ?? (running === "tags" ? (naming ? "Naming the parts" : "Finding the parts") : "Repainting");
+  const loaderExpected = running === "mask" ? 8 : running === "brush" ? 30 : running === "tags" ? (naming ? 15 : 8 * Math.max(1, partsLeft)) : 45;
   const rail: [Tool, string, typeof Brush, string][] = [
     ["part", "Part", ScanSearch, "Select a part by name"],
     ["paint", "Paint", Brush, "Paint the selection (X switches add / erase)"],
@@ -201,7 +209,7 @@ export function Editor(props: {
       n={props.title?.n ?? "2"}
       tone="bg-primary"
       title={props.title?.title ?? "Edit"}
-      line={props.title?.line ?? "Pick a tool on the left, then set it and act in the card on the right."}
+      line={props.title?.line ?? "Pick a tool on the left, then set it and act in the card on the right. Looks good unlocks the turnaround."}
       summary={`${props.version.label} · open to change a part`}
       open={props.open}
     >
@@ -301,9 +309,9 @@ export function Editor(props: {
               <FogLoader
                 className="absolute inset-0"
                 compact={running === "mask"}
-                message={running === "mask" ? `Finding the ${part ?? "part"}` : (loader.detail ?? "Repainting")}
+                message={loaderMessage}
                 startedAt={loader.startedAt}
-                expected={running === "mask" ? 8 : running === "brush" ? 30 : 45}
+                expected={loaderExpected}
                 onCancel={running ? () => cancel(props.projectId, running, target, props.cid) : undefined}
               />
             )}
@@ -405,7 +413,7 @@ export function Editor(props: {
                   )}
                   {tool === "part" ? (
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {tagging ? (
+                      {naming ? (
                         <span className="flex items-center gap-2 text-sm text-muted-foreground">
                           Naming the parts <LoadingDots className="text-primary" />
                         </span>
@@ -422,7 +430,7 @@ export function Editor(props: {
                             )}
                           >
                             {name}
-                            {running === "mask" && part === name && <LoadingDots />}
+                            {((running === "mask" && part === name) || (filling && !props.version.parts[name])) && <LoadingDots />}
                           </button>
                         ))
                       )}
@@ -575,6 +583,15 @@ export function Editor(props: {
           )}
         </div>
       </div>
+      {target === "character" && !props.fresh && (
+        <SectionFire hint={naming ? "Wait for the parts to be read" : filling ? "Wait for the part regions" : "Unlocks the turnaround. Generate there paints every side."}>
+          <Button type="button" size="lg" disabled={busy || filling} onClick={() => act(() => acceptEdit(props.projectId, props.cid))}>
+            {pending && !running ? <LoadingDots /> : null}
+            Looks good
+            <ArrowRight data-icon="inline-end" />
+          </Button>
+        </SectionFire>
+      )}
     </Section>
   );
 }

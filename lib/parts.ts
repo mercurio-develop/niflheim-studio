@@ -12,6 +12,17 @@ const ORDER = [
 const RANK = new Map<string, number>(ORDER.map((p, i) => [p, i]));
 const ALIAS: Record<string, string> = { boot: "boots", glove: "gloves", gauntlet: "gauntlets", shoe: "shoes", wing: "wings", armour: "armor", trousers: "pants" };
 
+// Other words SAM may know an object by, tried when its own name finds nothing.
+const SYNONYMS: Record<string, string[]> = { bag: ["satchel", "backpack"], cape: ["cloak"], cloak: ["cape"], sword: ["blade"], hat: ["cap"], helmet: ["helm"], shield: ["buckler"], staff: ["stick", "pole"] };
+
+// The words and confidence thresholds to try, most exact first. SAM 3.1 missed "shoulder bag" at
+// 0.5 and found it at 0.3, and as "bag" (2026-10-27); each try is about half a second.
+export function partSearches(name: string): [string, number][] {
+  const last = name.split(" ").at(-1)!;
+  const words = [...new Set([last, ...(SYNONYMS[last] ?? [])])].filter((w) => w !== name);
+  return [[name, 0.5], [name, 0.3], ...words.map((w): [string, number] => [w, 0.3])];
+}
+
 // Keep the parts a version already had (a repaint rarely removes one), new names win.
 export function mergeParts(next: string[], prev: string[] = [], max = 10): string[] {
   const head = (t: string) => ALIAS[t.split(" ").at(-1)!] ?? t.split(" ").at(-1)!;

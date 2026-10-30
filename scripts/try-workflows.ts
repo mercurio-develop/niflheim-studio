@@ -74,7 +74,7 @@ if (set) await sh("magick", [set, setMask, "-alpha", "off", "-negate", "-compose
 const [[filled]] = await Promise.all([
   run("02_set_fill", { set: [["17", "prompt", "Fill the empty area with more misty pine forest, same painterly style."], ["22", "seed", 7]], images: [["1", set ? holed : setImg], ["2", setMask]], output: "28" }),
   run("02_moge", { images: [["1", setImg]], output: "5", ext: "glb" }),
-  run("02_turnaround_mesh", { set: [["3", "seed", 7]], images: [["56", concept], ["85", side ?? concept], ["82", concept]], output: "67", ext: "glb" }),
+  run("02_turnaround_mesh", { set: [["3", "seed", 7]], images: [["56", concept], ["85", side ?? concept], ["82", concept], ["87", side ?? concept]], output: "67", ext: "glb" }),
 ]);
 
 // Wave 3: a two-key shot (the app's shapeShot only adds middle keys).

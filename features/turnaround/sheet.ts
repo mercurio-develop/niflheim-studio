@@ -110,19 +110,31 @@ export async function drawSheet(id: string, cid: string) {
   if (!r) return;
   await updateProject(id, (q) => {
     const s = charOf(q, cid).sheet;
-    if (s) Object.assign(s, { ...r, at: new Date().toISOString() });
+    if (s) Object.assign(s, { ...r, at: new Date().toISOString(), source: characterImage(q, cid) ?? s.source });
   });
 }
 
-// A new sheet for the character's turnaround: its faces and items painted side by side (about a
-// minute on Comfy Cloud), then drawn.
-export async function paintSheet(id: string, cid: string, items: string[], ctx: JobCtx) {
+// A new sheet for the character's turnaround: faces and items first, then any expressions that
+// have no picture yet (they need the front close-up), then drawn. Earlier expression pictures stay.
+export async function paintSheet(id: string, cid: string, items: string[], ctx: JobCtx, expressions: string[] = []) {
   const p = await getProject(id);
-  const cells = planCells(items, !!p && fourLegs(charOf(p, cid).turnaround?.options));
-  await updateProject(id, (q) => void (charOf(q, cid).sheet = { cells }));
-  await ctx.progress(`Painting the sheet: ${cells.length} close-ups and things`);
-  await Promise.all(cells.map((c) => paintCell(id, cid, c, ctx)));
+  const prev = p ? (charOf(p, cid).sheet?.cells.filter((c) => c.kind === "expression") ?? []) : [];
+  const expr = expressions.length ? expressions.map((w) => prev.find((c) => c.label === w) ?? expressionCell(w)) : prev;
+  const cells = [...planCells(items, !!p && fourLegs(charOf(p, cid).turnaround?.options)), ...expr];
+  await updateProject(id, (q) => {
+    const s = charOf(q, cid).sheet;
+    charOf(q, cid).sheet = { cells, drawn: s?.drawn, rows: s?.rows };
+  });
+  const first = cells.filter((c) => c.kind !== "expression");
+  await ctx.progress(`Painting the sheet: ${first.length} close-ups and things`);
+  await Promise.all(first.map((c) => paintCell(id, cid, c, ctx)));
   if (!(await ctx.alive())) return;
+  for (const c of expr) {
+    if (c.image) continue;
+    await ctx.progress(`Painting ${c.label}`);
+    await paintCell(id, cid, c, ctx);
+    if (!(await ctx.alive())) return;
+  }
   await ctx.progress("Drawing the sheet");
   await drawSheet(id, cid);
 }

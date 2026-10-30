@@ -1,26 +1,20 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { ImageUp, TriangleAlert } from "lucide-react";
+import { ArrowRight, ImageUp, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
 import { SectionTitle } from "@/components/section-title";
-import { Section } from "@/components/section";
+import { Section, SectionFire } from "@/components/section";
 import type { Job, SetData } from "@/lib/store";
 import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { paintSet, pickSet, uploadSet } from "../actions/scene";
 import { composeSetPrompt } from "../prompt";
+import { SCENE_TEMPLATES } from "../templates";
 import { chip } from "./chip";
-
-// Each example names the ground, then near, middle and far: what makes a good stage.
-const EXAMPLES = [
-  { label: "ruined courtyard", text: "a misty ruined stone courtyard at dusk: cracked flagstones with moss in front, broken columns and arches along the sides, an arched gateway far away in the fog" },
-  { label: "rainy alley", text: "a narrow rainy alley at night: wet cobbles and puddles in front, shuttered shops and pipes along the walls, a glowing street far down the alley" },
-  { label: "dark forest path", text: "a dark forest at night: a dirt path with roots and ferns in front, huge pine trunks on both sides, the path fading into mist far away" },
-];
 
 
 // Describe the place (or upload your own painting), then pick one of 2 or 4 paintings; picking
@@ -86,15 +80,23 @@ export function DescribeSection(props: { projectId: string; set: SetData | null;
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) e.currentTarget.form?.requestSubmit();
           }}
         />
-        {!prompt && (
-          <div className="-mt-1 flex flex-wrap gap-1.5">
-            {EXAMPLES.map((x) => (
-              <button key={x.label} type="button" className={chip(false)} onClick={() => setPrompt(x.text)}>
-                {x.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="-mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Try a place</span>
+          {SCENE_TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={prompt === t.prompt && style === t.style}
+              className={chip(prompt === t.prompt && style === t.style)}
+              onClick={() => {
+                setPrompt(t.prompt);
+                setStyle(t.style);
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
         {/* Options: one label column, one control column, as in the character's Describe. */}
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 pt-1">
@@ -160,13 +162,13 @@ export function DescribeSection(props: { projectId: string; set: SetData | null;
           </div>
         )}
 
-        <div className="flex items-center gap-3 border-t pt-3">
-          <span className="font-mono text-[11px] text-muted-foreground">~{10 + count * 5} s for {count} options · pick one to build its stage · earlier paintings are kept</span>
-          <Button type="submit" size="lg" className="ml-auto" disabled={busy || prompt.trim().length < 3}>
+        <SectionFire hint={`~${10 + count * 5} s for ${count} options · pick one to build its stage · earlier paintings are kept`}>
+          <Button type="submit" size="lg" disabled={busy || prompt.trim().length < 3}>
             {pending && !running ? <LoadingDots /> : null}
             Paint the set
+            <ArrowRight data-icon="inline-end" />
           </Button>
-        </div>
+        </SectionFire>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </form>
 

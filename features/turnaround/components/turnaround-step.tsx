@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ChevronLeft, ChevronRight, Maximize2, Pencil, RefreshCw, X } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Maximize2, Pencil, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
 import { ImageViewer } from "@/components/image-viewer";
 import { LoadingDots } from "@/components/loading-dots";
 import { ParticleField } from "@/components/particle-field";
-import { More, Section } from "@/components/section";
+import { More, Section, SectionFire } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import { Editor } from "@/features/character/components/editor";
@@ -15,7 +15,7 @@ import { stackMoves } from "@/lib/history";
 import { suggestedBody, VIEWS, viewsFor } from "@/lib/progress";
 import type { Asset, CharacterPose, CharacterSheet, Job, Mesh, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
 import { PosesPanel } from "./poses-panel";
-import { itemChoices, MAX_ITEMS, SheetSection } from "./sheet-section";
+import { itemChoices, SheetSection } from "./sheet-section";
 import { cn } from "@/lib/utils";
 import { cancelTurnaround, findMasks, generateTurnaround, generateView } from "../actions/turnaround";
 import { AssetsShelf } from "./assets-shelf";
@@ -32,8 +32,8 @@ const poseLabel = (o: TurnaroundOptions) => (o.body === "animal" ? "on four legs
 const BODIES = [["person", "Person · two legs"], ["animal", "Animal · four legs"], ["creature", "Creature"]] as const;
 const EDIT_JOBS = ["mask", "swap", "tags", "brush"] as const; // the editor's jobs, per view: "view:side:brush"
 
-// Sections 3-5 of the Character step: the turnaround (set up, views, fixing a view), the 3D model and
-// the assets. The Character step polls the jobs and owns the Next bar.
+// Sections 3-6 of the Character step: the turnaround (set up, views, Generate), poses, the sheet,
+// then the 3D model last (optional; Next does not wait). The Character step polls jobs and owns Next.
 export function TurnaroundSections(props: {
   projectId: string;
   character: string; // current character image
@@ -50,10 +50,12 @@ export function TurnaroundSections(props: {
   sheet: CharacterSheet | null; // the Ingredients reference sheet's pictures
   jobs: Record<string, Job>;
   cid?: string; // which character (default c1)
+  locked?: boolean; // Looks good in Edit has not fired this version yet: Generate stays off
+  busy?: boolean; // any GPU job on the project: Generate and Again stay off
 }) {
   const [options, setOptions] = useState<TurnaroundOptions>(props.options ?? { pose: suggestedBody(props.description ?? "") === "animal" ? "designed" : "relaxed", hide: [], keep: [], extras: [], items: itemChoices(props.tags).slice(0, 2), body: suggestedBody(props.description ?? "") });
-  // A Generate that started on the server (picking a concept paints the turnaround by itself)
-  // brings its options here once; what the user changes in between is kept until the next one.
+  // A Generate that started on the server brings its options here once; what the user changes
+  // in between is kept until the next one.
   const painted0 = JSON.stringify(props.options);
   const [seenOptions, setSeenOptions] = useState(painted0);
   if (painted0 !== seenOptions) {
@@ -61,8 +63,6 @@ export function TurnaroundSections(props: {
     if (props.options) setOptions(props.options);
   }
   const items = options.items ?? [];
-  const [thing, setThing] = useState("");
-  const offered = itemChoices(props.tags);
   const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);
   const [editing, setEditing] = useState<ViewId | null>(null);
   const [seeing, setSeeing] = useState<ViewId | null>(null); // the view shown full screen
@@ -91,22 +91,21 @@ export function TurnaroundSections(props: {
   const painting = running ? Number(job?.detail?.match(/\((\d+)\/\d+\)/)?.[1] ?? 1) - 1 : -1;
   const waiting = (i: number) => (starting && !running) || (running && i >= painting);
   const changed = JSON.stringify(props.options) !== JSON.stringify(options);
-  // The concept was just picked: its parts are read, then the views and the sheet start by themselves.
-  const queued = !props.options && !running && props.jobs.tags?.status === "running";
   const bodyChanged = !!props.options && (props.options.body ?? "person") !== (options.body ?? "person");
   const chips = [...props.tags].sort((a, b) => Number(HELD.test(b)) - Number(HELD.test(a)));
   const fail = (e: Error) => setError(e.message);
+  const blocked = !!props.busy || pending || starting;
 
   // Find the mask of every hidden object that has none yet, one SAM job at a time, each name once.
   const finding = props.jobs["hide-masks"]?.status === "running";
   const asked = useRef(new Set<string>());
   useEffect(() => {
-    if (finding) return;
+    if (finding || props.busy) return;
     const missing = options.hide.filter((n) => !Object.hasOwn(props.parts, n) && !asked.current.has(n));
     if (!missing.length) return;
     missing.forEach((n) => asked.current.add(n));
     findMasks(props.projectId, missing, props.cid).catch((e: Error) => setError(e.message));
-  }, [finding, options.hide, props.parts, props.projectId, props.cid]);
+  }, [finding, options.hide, props.parts, props.projectId, props.cid, props.busy]);
   const findingName = finding ? (props.jobs["hide-masks"]?.detail?.replace(/^Finding the /, "") ?? null) : null;
   const setHidden = (name: string, on: boolean) =>
     setOptions((o) => ({ ...o, hide: on ? [...o.hide, name] : o.hide.filter((x) => x !== name), keep: on && ASSETS ? [...o.keep, name] : o.keep.filter((x) => x !== name) }));
@@ -125,13 +124,13 @@ export function TurnaroundSections(props: {
         n="3"
         tone="bg-tone-lilac"
         title="Turnaround"
-        line={`Every side of ${props.characterLabel}, painted fresh from it, so later shots and the 3D model see one character.`}
-        summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted${props.options ? ` · ${BODIES.find(([b]) => b === (props.options!.body ?? "person"))![1]} · ${poseLabel(props.options)}` : ""}${props.sheet?.drawn ? " · sheet made" : ""}${props.options?.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}`}
+        line={`Every side of ${props.characterLabel}, painted fresh from it. Generate here; the sheet is next, the 3D model last and optional.`}
+        summary={`${shown.filter((v) => image(v.id)).length} of ${shown.length} views painted${props.options ? ` · ${BODIES.find(([b]) => b === (props.options!.body ?? "person"))![1]} · ${poseLabel(props.options)}` : ""}${props.options?.hide.length ? ` · without ${props.options.hide.join(", ")}` : ""}`}
         open={none || running || !props.fresh}
         className="nifl-enter"
         style={{ "--i": 3 } as React.CSSProperties}
       >
-        <More label="Set up" summary={`${poseLabel(options)}${items.length ? ` · with ${items.join(", ")}` : ""}${options.hide.length ? ` · without ${options.hide.join(", ")}` : ""}${options.extras.length ? ` · + ${options.extras.join(", ")}` : ""}`} open={none}>
+        <More label="Set up" summary={`${poseLabel(options)}${options.hide.length ? ` · without ${options.hide.join(", ")}` : ""}${options.extras.length ? ` · + ${options.extras.join(", ")}` : ""}`} open={none}>
           <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
             <span className="text-xs text-muted-foreground">Pose</span>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Pose">
@@ -140,34 +139,6 @@ export function TurnaroundSections(props: {
                   {p === "relaxed" ? "Relaxed" : "As designed"}
                 </button>
               ))}
-            </div>
-
-            <span className="self-start pt-0.5 text-xs text-muted-foreground">Props for the sheet</span>
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {[...new Set([...offered, ...items])].map((t) => (
-                  <button key={t} type="button" aria-pressed={items.includes(t)} disabled={!items.includes(t) && items.length >= MAX_ITEMS} onClick={() => setOptions((o) => ({ ...o, items: items.includes(t) ? items.filter((x) => x !== t) : [...items, t] }))} className={chip(items.includes(t))}>
-                    {t}
-                  </button>
-                ))}
-                <input
-                  aria-label="Add a thing in your own words"
-                  value={thing}
-                  maxLength={40}
-                  placeholder="+ a thing: a truck tire"
-                  disabled={items.length >= MAX_ITEMS}
-                  onChange={(e) => setThing(e.target.value)}
-                  onKeyDown={(e) => {
-                    const t = thing.trim().toLowerCase();
-                    if (e.key !== "Enter" || !/^[a-z][a-z \-]{1,39}$/.test(t)) return;
-                    e.preventDefault();
-                    setOptions((o) => ({ ...o, items: [...new Set([...(o.items ?? []), t])].slice(0, MAX_ITEMS) }));
-                    setThing("");
-                  }}
-                  className="h-7 w-44 rounded-full border bg-transparent px-2.5 text-xs disabled:opacity-50"
-                />
-              </div>
-              <span className="text-xs text-muted-foreground">Up to {MAX_ITEMS} things they wear or carry, painted alone for the sheet: pick from the tags or type one (Enter).</span>
             </div>
 
             <span className="self-start pt-0.5 text-xs text-muted-foreground">Hide</span>
@@ -220,32 +191,15 @@ export function TurnaroundSections(props: {
                 </button>
               ))}
             </div>
-            <span className="font-mono text-[11px] text-muted-foreground">
-              {wanted.length} views · ~{Math.round((wanted.length * PER_VIEW) / 10) * 10} s
-              {props.options && changed ? " · settings changed" : ""}
-            </span>
-            <Button
-              size="lg"
-              className="ml-auto"
-              disabled={anyRunning || pending || starting || queued}
-              onClick={() => {
-                setError(null);
-                startGenerate(() => generateTurnaround(props.projectId, options, props.cid).catch(fail));
-              }}
-            >
-              {starting && !running ? <LoadingDots /> : null}
-              {props.options ? "Generate again" : "Generate turnaround"}
-            </Button>
           </div>
-          {queued && <p className="text-xs text-muted-foreground">Reading the parts; the views and the sheet start by themselves in a moment.</p>}
-          {bodyChanged && !anyRunning && <p className="text-xs text-muted-foreground">Painted as {BODIES.find(([b]) => b === (props.options!.body ?? "person"))![1].toLowerCase()}: Generate again repaints every view and the sheet with the new body.</p>}
+          {bodyChanged && !anyRunning && !props.locked && <p className="text-xs text-muted-foreground">Painted as {BODIES.find(([b]) => b === (props.options!.body ?? "person"))![1].toLowerCase()}: Generate again repaints every view with the new body.</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
           {running && job && <JobStatus message={job.detail ?? "Painting the views"} startedAt={job.startedAt} expected={shown.length * PER_VIEW} onCancel={() => cancelTurnaround(props.projectId, "turnaround", props.cid)} />}
           {/* Turnarounds from before views were painted fresh have no options and no front. */}
           {Object.keys(props.views).length > 0 && (!props.options || !image("front")) ? (
-            <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made with an older version. Generate again to paint every view fresh, the front included.</p>
+            <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made with an older version. {props.locked ? "Looks good in Edit first, then Generate." : "Generate again to paint every view fresh, the front included."}</p>
           ) : !props.fresh && Object.keys(props.views).length > 0 && (
-            <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made from an older version of the character. Generate again to update them.</p>
+            <p className="rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">These views were made from an older version of the character. {props.locked ? "Looks good in Edit first, then Generate." : "Generate again to update them."}</p>
           )}
           <ol className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {shown.map((v, i) => {
@@ -287,11 +241,11 @@ export function TurnaroundSections(props: {
                       {stack && stack.versions.length > 1 && <span className="font-mono text-[11px] text-muted-foreground">v{stack.current + 1}/{stack.versions.length}</span>}
                     </span>
                     <span className="-ml-2 flex flex-wrap items-center">
-                      <Button variant="ghost" size="sm" disabled={busy || fixing || running || pending || starting || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id, props.cid).catch(fail))}>
+                      <Button variant="ghost" size="sm" disabled={props.locked || blocked || busy || fixing || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id, props.cid).catch(fail))}>
                         <RefreshCw data-icon="inline-start" />
                         Again
                       </Button>
-                      <Button variant={editing === v.id ? "secondary" : "ghost"} size="sm" disabled={!img || busy || running} aria-pressed={editing === v.id} onClick={() => setEditing(editing === v.id ? null : v.id)}>
+                      <Button variant={editing === v.id ? "secondary" : "ghost"} size="sm" disabled={props.locked || blocked || !img || busy} aria-pressed={editing === v.id} onClick={() => setEditing(editing === v.id ? null : v.id)}>
                         <Pencil data-icon="inline-start" />
                         Fix
                       </Button>
@@ -348,23 +302,56 @@ export function TurnaroundSections(props: {
                   edit={stack.versions[stack.current].edit!}
                   others={shown.filter((v) => v.id !== editing && image(v.id)).map((v) => ({ id: v.id, label: v.label }))}
                   job={props.jobs.replicate}
-                  locked={editBusy(editing)}
+                  locked={editBusy(editing) || blocked}
                 />
               )}
             </div>
           );
         })()}
-        {image("front") && (
-          <More
-            label="Poses"
-            summary={props.poses.length ? props.poses.map((p) => p.label).join(", ") : "running, angry, happy: the character in other poses for shots"}
-            open={props.poses.some((p) => props.jobs[`pose:${p.id}`]?.status === "running")}
+        <SectionFire hint={props.locked ? "Looks good in Edit first" : `${wanted.length} views · ~${Math.round((wanted.length * PER_VIEW) / 10) * 10} s${props.options && changed ? " · settings changed" : ""}`}>
+          <Button
+            size="lg"
+            disabled={props.locked || blocked || anyRunning}
+            onClick={() => {
+              setError(null);
+              startGenerate(() => generateTurnaround(props.projectId, options, props.cid).catch(fail));
+            }}
           >
-            <PosesPanel cid={props.cid} projectId={props.projectId} poses={props.poses} jobs={props.jobs} locked={running} />
-          </More>
-        )}
-        {image("front") && <SheetSection cid={props.cid} projectId={props.projectId} sheet={props.sheet} items={items} jobs={props.jobs} locked={running} />}
+            {starting && !running ? <LoadingDots /> : null}
+            {props.options ? "Generate again" : "Generate turnaround"}
+            <ArrowRight data-icon="inline-end" />
+          </Button>
+        </SectionFire>
       </Section>
+
+      <Section
+        id="poses"
+        n="4"
+        tone="bg-tone-green"
+        title="Poses"
+        line="The same character in other poses, each with four views. A shot can use one, and switch to another halfway."
+        summary={props.poses.length ? props.poses.map((p) => p.label).join(", ") : "None yet"}
+        open={props.poses.some((p) => props.jobs[`pose:${p.id}`]?.status === "running")}
+        className="nifl-enter"
+        style={{ "--i": 4 } as React.CSSProperties}
+      >
+        <PosesPanel cid={props.cid} projectId={props.projectId} poses={props.poses} jobs={props.jobs} locked={!!props.locked || !image("front")} busy={blocked} />
+      </Section>
+
+        {ASSETS && <AssetsShelf cid={props.cid} projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={blocked} onView={(src, label) => setViewing({ src, label })} />}
+
+      <SheetSection
+        cid={props.cid}
+        projectId={props.projectId}
+        sheet={props.sheet}
+        items={items}
+        tags={props.tags}
+        jobs={props.jobs}
+        locked={!!props.locked}
+        busy={blocked}
+        ready={!!image("front")}
+        source={props.character}
+      />
 
         <MeshSection
           cid={props.cid}
@@ -372,11 +359,11 @@ export function TurnaroundSections(props: {
           mesh={props.mesh}
           views={Object.fromEntries((["front", "side", "back", "threequarter"] as const).flatMap((v) => (image(v) ? [[v, image(v)!]] : [])))}
           ready={(["front", "side", "back"] as const).every((v) => image(v))}
-          locked={running || starting}
+          locked={!!props.locked}
+          busy={blocked}
           job={props.jobs.mesh}
         />
 
-        {ASSETS && <AssetsShelf cid={props.cid} projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={running} onView={(src, label) => setViewing({ src, label })} />}
       {viewing && <ImageViewer src={viewing.src} label={viewing.label} onClose={() => setViewing(null)} />}
       {seeing && image(seeing) && (() => {
         const stack = props.views[seeing]!;

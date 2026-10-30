@@ -15,7 +15,7 @@ const t0 = performance.now();
 const [result] = await runWorkflow({
   workflow: "01_change.api.json",
   set: [
-    ["17", "prompt", `The flat grey shape is where what was there was: replace all of it. Paint ${change} there, whole, solid and attached naturally, filling the shape; the rest of the grey becomes what is around it. No grey left. The pose stays; everything else and the background stay exactly the same.`],
+    ["17", "prompt", `This is a close-up of a character. Match this picture's own art style exactly: the same shapes, level of detail, line work, shading and palette, nothing more detailed or realistic than the rest of it. The flat grey shape is where what was there was: replace all of it. Paint ${change} there, whole, solid and attached naturally. The rest of the grey becomes what is around it. No grey left. The pose stays; Do not paint extra eyes, a second face, or another head unless that is what was asked. Everything else and the background stay exactly the same.`],
     ["22", "seed", +seed],
     ...crop("4"), ...crop("5"),
     ["27", "x", box.x], ["27", "y", box.y],

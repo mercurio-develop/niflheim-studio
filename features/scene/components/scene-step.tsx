@@ -33,7 +33,8 @@ export function SceneStep(props: {
   const at = props.placement?.at;
   const fresh = !!props.set?.stage && props.set.stage.image === props.set.image;
   const cam = fresh ? props.set!.stage!.fill?.camera : undefined;
-  const ready = !!cam?.floor && !!at;
+  const oldCut = !!props.placement && !!props.front && props.placement.source !== props.front;
+  const ready = !!cam?.floor && !!at && !props.moved && !oldCut;
   const making = Object.values(props.assetJobs).some((j) => j.status === "running");
   return (
     <>
@@ -52,6 +53,7 @@ export function SceneStep(props: {
         <StageSection
           projectId={props.projectId}
           set={props.set}
+          style={props.set?.style || props.style}
           placement={props.placement}
           blocks={props.blocks}
           assets={props.assets}
@@ -67,8 +69,8 @@ export function SceneStep(props: {
       </div>
       <NextBar
         back={{ href: `/p/${props.projectId}/character`, label: "Character" }}
-        summary={building || cutting ? ((building ? props.setJob : props.stageJob)?.detail ?? "Working...") : at && !props.moved ? `Standing in the set, ${props.placement!.height.toFixed(2)} m tall.` : fresh ? "Stand the character on the stage to continue." : "Paint or upload a set to continue."}
-        next={{ label: "Shots", href: `/p/${props.projectId}/shot`, disabled: !ready }}
+        summary={building || cutting ? ((building ? props.setJob : props.stageJob)?.detail ?? "Working...") : oldCut ? "Cut out the new turnaround to continue." : props.moved ? "Place them on the new set to continue." : at ? `Standing in the set, ${props.placement!.height.toFixed(2)} m tall.` : fresh ? "Stand the character on the stage to continue." : "Paint or upload a set to continue."}
+        next={{ label: "Shots", href: `/p/${props.projectId}/shot`, disabled: !ready, hint: oldCut ? "Cut out the new turnaround first" : props.moved ? "Place them on the new set first" : undefined }}
       />
     </>
   );

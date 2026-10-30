@@ -221,6 +221,15 @@
       "title": "Encode: left"
     }
   },
+  "87": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "right.png"
+    },
+    "_meta": {
+      "title": "Right view (side mirrored)"
+    }
+  },
   "88": {
     "class_type": "CLIPVisionEncode",
     "inputs": {
@@ -229,26 +238,13 @@
         1
       ],
       "image": [
-        "89",
+        "87",
         0
       ],
       "crop": "none"
     },
     "_meta": {
       "title": "Encode: right"
-    }
-  },
-  "89": {
-    "class_type": "ImageFlip",
-    "inputs": {
-      "image": [
-        "85",
-        0
-      ],
-      "flip_method": "y-axis: horizontally"
-    },
-    "_meta": {
-      "title": "Right = side mirrored"
     }
   }
 }

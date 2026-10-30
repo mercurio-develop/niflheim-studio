@@ -35,8 +35,8 @@ compared, swapped or undone, and re-running a step marks the later ones stale.
 1. **Character**: describe someone (or sketch or upload one) and get concepts. Pick one, point
    at a part by name or paint it, and **Change**, **Add**, **Remove** or **Restyle** it. Then
    **Generate** the turnaround: front, three-quarter, side and back in a relaxed pose (Body:
-   person, animal on four legs, or creature), and with them the sheet. Poses and a 3D model are
-   optional. A project can hold several characters.
+   person, animal on four legs, or creature), and with them the sheet. Poses are optional. A 3D
+   model is last and optional. A project can hold several characters.
 2. **Scene**: paint a place or drop in a painting; it becomes a 3D stage (MoGe depth, filled
    behind the edges). Stand the characters in it and add objects.
 3. **Shots**: per shot, a framing, a camera move and where the characters walk, blocked in the
@@ -67,6 +67,7 @@ uv venv .pyenv && uv pip install --python .pyenv/bin/python -r scripts/requireme
 echo "NIFL_PYTHON=$PWD/.pyenv/bin/python" >> .env   # the helper scripts' Python
 # Local ComfyUI only:
 ~/ComfyUI/run.sh --port 8188                        # or however you start ComfyUI
+./scripts/install-comfy-workflows.sh                # copies graphs into ~/ComfyUI/user/default/workflows/niflheim
 ./scripts/comfy-proxy.sh                            # Comfy API v2 proxy on :8189 (the SDK talks to it)
 node scripts/comfy-check.ts http://127.0.0.1:8188   # has it every node and model the graphs use?
 npm run dev                                         # http://localhost:4800 (or: npm run build && npm start)
@@ -110,7 +111,7 @@ files the project uses, not every version it kept).
 app/          routes and layouts
 features/     one folder per wizard step: actions, queries, components
 lib/comfy.ts  every ComfyUI call (Comfy SDK, local or Cloud)
-workflows/    API-format graphs, one small graph per job
+workflows/    API-format graphs the app POSTs, plus ui/ graphs for a local ComfyUI clone
 scripts/      proxy launcher, proofs, Python helpers (stage fill, scoring, reel)
 data/         your projects (gitignored)
 ```

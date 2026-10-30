@@ -56,8 +56,9 @@ function Card(props: { projectId: string; asset: SceneAsset; picked?: boolean; o
 }
 
 // The gizmo on whatever is picked on the stage: arrows move it along the floor (its height stays),
-// the ring turns it about y. turn in degrees, as SceneAsset and Placement keep it.
-export function FloorGizmo(props: { at: [number, number, number]; turn: number; onMove: (at: [number, number, number], turn: number) => void }) {
+// the ring turns it about y. lift: an up arrow too, for an object off the ground (a butterfly, a
+// lamp hung in the air). turn in degrees, as SceneAsset and Placement keep it.
+export function FloorGizmo(props: { at: [number, number, number]; turn: number; lift?: boolean; onMove: (at: [number, number, number], turn: number) => void }) {
   const matrix = new THREE.Matrix4().compose(new THREE.Vector3(...props.at), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (props.turn * Math.PI) / 180), new THREE.Vector3(1, 1, 1));
   return (
     <PivotControls
@@ -65,7 +66,7 @@ export function FloorGizmo(props: { at: [number, number, number]; turn: number; 
       autoTransform={false}
       disableScaling
       disableSliders
-      activeAxes={[true, false, true]}
+      activeAxes={[true, !!props.lift, true]}
       depthTest={false}
       fixed
       scale={80}
@@ -73,7 +74,7 @@ export function FloorGizmo(props: { at: [number, number, number]; turn: number; 
       onDrag={(_l, _dl, w) => {
         const p = new THREE.Vector3().setFromMatrixPosition(w);
         const y = new THREE.Euler().setFromRotationMatrix(w, "YXZ").y;
-        props.onMove([p.x, props.at[1], p.z], Math.round((y * 180) / Math.PI));
+        props.onMove([p.x, props.lift ? p.y : props.at[1], p.z], Math.round((y * 180) / Math.PI));
       }}
     />
   );
@@ -106,7 +107,7 @@ export function SceneAssets(props: { projectId: string; assets: SceneAsset[]; wa
                 <Model url={`/api/files/${props.projectId}/${a.glb}`} asset={a} picked={a.id === props.picked} onPick={props.onPick && (() => props.onPick!(a.id))} />
               </Suspense>
             )}
-            {a.id === props.picked && props.onMove && <FloorGizmo at={a.at} turn={a.turn} onMove={(at, turn) => props.onMove!(a.id, at, turn)} />}
+            {a.id === props.picked && props.onMove && <FloorGizmo at={a.at} turn={a.turn} lift={a.kind !== "character"} onMove={(at, turn) => props.onMove!(a.id, at, turn)} />}
           </group>
         ) : null,
       )}

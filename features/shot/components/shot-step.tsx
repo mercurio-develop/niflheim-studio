@@ -2,7 +2,7 @@
 
 import { SectionNav } from "@/components/section-nav";
 import { Fragment, useEffect, useRef, useState, useTransition } from "react";
-import { Check, Clapperboard, Download, Repeat } from "lucide-react";
+import { Check, Clapperboard, Dices, Download, Repeat } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FadeImage } from "@/components/fade-image";
@@ -20,6 +20,7 @@ import { shootCapturer } from "./shot-keyframes";
 import { drawShotSheet } from "../actions/sheet";
 import { chip } from "@/features/scene/components/chip";
 import { ShotTabs, type ShotTab } from "./shot-tabs";
+import { ReelStrip, type ReelSlot } from "./reel-strip";
 
 // Actions that only use what is in the keyframes: a prop the keys do not show makes LTX conjure it
 // mid-take (04_shot ACCEPT proof 6). Props go into the keyframes through the In the frame note.
@@ -48,7 +49,7 @@ const BEATS = [
 
 // Step 03: set the shot's camera and walk (decision 0011), make the keyframes, say what the character does; LTX-2.5 shoots the shot's camera move, guided by its
 // keyframes. Each take is kept; pick the one the sequence uses, or download it.
-export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; keysRunning: boolean; cameraPanel: React.ReactNode; keyPanel: React.ReactNode; shots: ShotTab[]; suggested: ShotKind; sheet: string | null; choices: SheetChoices; faceRef: string | null }) {
+export function ShotStep(props: { projectId: string; keyframes: Keyframes | null; ready: boolean; seconds: number; shot: Shot | null; job?: Job; keysRunning: boolean; cameraPanel: React.ReactNode; keyPanel: React.ReactNode; shots: ShotTab[]; suggested: ShotKind; sheet: string | null; choices: SheetChoices; faceRef: string | null; reel: ReelSlot[] }) {
   const [beats, setBeats] = useState<{ start: string; then: string; end: string }>({ start: props.shot?.beats?.start ?? props.shot?.action ?? "", then: props.shot?.beats?.then ?? "", end: props.shot?.beats?.end ?? "" });
   const action = [beats.start, beats.then, beats.end].map((x) => x.trim()).filter(Boolean).join(", then ");
   // Saved a moment after typing: the keyframes paint the later beats, so they must be on the shot first.
@@ -67,7 +68,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
   const [pick, setPick] = useState<{ expression?: string; pose?: string; props: string[] }>({ expression: own?.expression, pose: own?.pose, props: own?.props ?? [] });
   const toggleProp = (id: string) => setPick((x) => ({ ...x, props: x.props.includes(id) ? x.props.filter((p) => p !== id) : x.props.length < 2 ? [...x.props, id] : x.props }));
   const character = kind === "character";
-  const shoot = (tries: number) => run(() => renderTake(props.projectId, { beats, tries, expression: character ? expression : undefined, fromKey: character && fromKey }));
+  const shoot = (tries: number, seed?: number) => run(() => renderTake(props.projectId, { beats, tries, expression: character ? expression : undefined, fromKey: character && fromKey, seed }));
   // One Shoot: whatever is stale is drawn in the browser (keys, then the clay clip for a Camera
   // move), then the server paints, shoots up to 3 takes and picks the steadiest.
   const [phase, setPhase] = useState<string | null>(null);
@@ -110,7 +111,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
     <>
       <JobPoller running={running || props.keysRunning} />
       <div className="grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)]">
-        <SectionNav items={[{ id: "camera", n: "1", title: "Camera", tone: "bg-tone-pink" }, { id: "keyframes", n: "2", title: "Keyframes", tone: "bg-tone-lilac" }, { id: "action", n: "3", title: "What happens", tone: "bg-tone-yellow" }, { id: "takes", n: "4", title: "Takes", tone: "bg-tone-cyan" }]} />
+        <SectionNav items={[{ id: "camera", n: "1", title: "Camera", tone: "bg-tone-pink" }, { id: "action", n: "2", title: "What happens", tone: "bg-tone-yellow" }, { id: "keyframes", n: "3", title: "Keyframes", tone: "bg-tone-lilac" }, { id: "takes", n: "4", title: "Takes", tone: "bg-tone-cyan" }]} />
         <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
           <span className="font-mono text-xs text-muted-foreground">03 · Shots</span>
@@ -119,38 +120,15 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
         <ShotTabs projectId={props.projectId} shots={props.shots} locked={running} />
         {props.cameraPanel}
 
-        <Section id="keyframes" n="2" tone="bg-tone-lilac" title="Keyframes" line="This shot's camera move, painted at its key frames. LTX follows them, so the set, the character and the camera stay put. Say what should be in the frame (a held prop) in the note."
-          summary={
-            props.ready ? (
-              <>
-                {props.keyframes!.keys.map((k) => (
-                  <FadeImage key={k} src={file(k!)} alt="" className="h-8 w-14 rounded-sm border object-cover" />
-                ))}
-                <span className="text-xs">{props.keyframes!.keys.length} keyframes from the scene&apos;s camera move</span>
-              </>
-            ) : (
-              "Make the keyframes"
-            )
-          }
-          open={!props.ready || !takes.length || props.keysRunning}
+        <Section id="action" n="2" tone="bg-tone-yellow" title="What happens" line="What they do, in three short beats with a verb each: first, as the camera moves, by the end. The keyframes after the first are painted with them (One Shoot paints them again after a change), so the take does what they show; a thing not in the scene (a lantern, a sword) appears out of nowhere."
+          summary={props.shot?.action || "Say what the character does"}
+          open={!takes.length}
           className="nifl-enter"
           style={{ "--i": 1 } as React.CSSProperties}
         >
-          {props.keyPanel}
-        </Section>
-
-        <Section id="action" n="3" tone="bg-tone-yellow" title="What happens" line="What they do, in three short beats with a verb each: first, as the camera moves, by the end. The later keyframes are painted with the last two (repaint them after a change), so the take does what they show; a thing not in the scene (a lantern, a sword) appears out of nowhere."
-          summary={props.shot?.action || "Say what the character does"}
-          open={!takes.length || running}
-          className="nifl-enter"
-          style={{ "--i": 2 } as React.CSSProperties}
-        >
           <form
             className="flex flex-col gap-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              shoot(1);
-            }}
+            onSubmit={(e) => e.preventDefault()}
           >
             <div className="flex flex-col gap-2 border-b pb-3">
               <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="What guides the takes">
@@ -230,36 +208,50 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-3 border-t pt-3">
-              <span className="font-mono text-[11px] text-muted-foreground">
-                ~{Math.round(expected / 10) * 10} s a take · {seconds} s of video with sound · every take is kept
-              </span>
-              <Button type="submit" variant="outline" className="ml-auto" disabled={!canShoot}>
-                <Clapperboard data-icon="inline-start" />
-                One take
-              </Button>
-              <Button type="button" size="lg" disabled={busy || beats.start.trim().length < 3 || (character && !props.sheet)} onClick={oneShoot} title="Repaints the keyframes if they are stale (faces fixed), draws the motion guide for a Camera move, shoots up to 3 takes and picks the steadiest">
-                {pending && !running ? <LoadingDots /> : <Repeat data-icon="inline-start" />}
-                {phase ?? "One Shoot"}
-              </Button>
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
           </form>
         </Section>
 
-        <Section id="takes" n="4" tone="bg-tone-cyan" title="Takes" line={takes.length ? "Pick the take the sequence uses. Every take stays here." : "Your takes appear here."}
-          summary={takes.length ? `${takes.length} take${takes.length === 1 ? "" : "s"}${props.shot?.picked != null ? " · one picked" : ""}` : "No takes yet"}
-          actions={
-            takes.length > 0 && (
-              <Button size="sm" variant="outline" disabled={!canShoot} onClick={() => shoot(1)} title={`Another take of: ${action}`}>
-                {pending && !running ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
-                Another take
-              </Button>
+        <Section id="keyframes" n="3" tone="bg-tone-lilac" title={character && !fromKey ? "Keyframes (optional)" : "Keyframes"}
+          line={character && !fromKey ? "A Character shot is guided by the character's sheet, so it needs no keyframes. Tick “Start from the first keyframe” in What happens to use the first one." : "This shot's camera move, painted at its key frames. LTX follows them, so the set, the character and the camera stay put. The keys after the first show What happens: when it changes, One Shoot paints them again."}
+          summary={
+            props.ready ? (
+              <>
+                {props.keyframes!.keys.filter((k): k is string => !!k).map((k) => (
+                  <FadeImage key={k} src={file(k)} alt="" className="h-8 w-14 rounded-sm border object-cover" />
+                ))}
+                <span className="text-xs">{props.keyframes!.keys.length} keyframes from the scene&apos;s camera move</span>
+              </>
+            ) : (
+              character && !fromKey ? "Not needed: the sheet guides this shot" : "Make the keyframes"
             )
           }
+          open={(character && !fromKey ? false : !props.ready || !takes.length) || props.keysRunning}
+          className="nifl-enter"
+          style={{ "--i": 2 } as React.CSSProperties}
+        >
+          {props.keyPanel}
+        </Section>
+
+        <Section id="takes" n="4" tone="bg-tone-cyan" title="Takes" line="Each take is a new video of this shot with a new random seed, so takes differ. Every take is checked for things that pop in or melt. One Shoot shoots up to 3, stops at the first steady one and picks the steadiest. Same seed shoots a take again with what is written now, to change only a word or the expression. The picked take is this shot's clip in the reel."
+          summary={takes.length ? `${takes.length} take${takes.length === 1 ? "" : "s"}${props.shot?.picked != null ? " · one picked" : ""}` : "No takes yet"}
           className="nifl-enter"
           style={{ "--i": 3 } as React.CSSProperties}
         >
+          <div className="flex items-center gap-3 border-b pb-3">
+            <span className="font-mono text-[11px] text-muted-foreground">
+              ~{Math.round(expected / 10) * 10} s a take · {seconds} s of video with sound · every take is kept
+            </span>
+            <Button type="button" variant="outline" className="ml-auto" disabled={!canShoot} onClick={() => shoot(1)} title={action ? `A take of: ${action}` : undefined}>
+              <Clapperboard data-icon="inline-start" />
+              {takes.length ? "Another take" : "One take"}
+            </Button>
+            <Button type="button" size="lg" disabled={busy || beats.start.trim().length < 3 || (character && !props.sheet)} onClick={oneShoot} title="Repaints the keyframes if they are stale (faces fixed), draws the motion guide for a Camera move, shoots up to 3 takes and picks the steadiest">
+              {pending && !running ? <LoadingDots /> : <Repeat data-icon="inline-start" />}
+              {phase ?? "One Shoot"}
+            </Button>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <ReelStrip projectId={props.projectId} slots={props.reel} locked={busy} />
           <div className="grid gap-4 sm:grid-cols-2">
             {running && props.job && (
               <div className="relative aspect-[768/448] overflow-hidden rounded-lg border">
@@ -281,11 +273,16 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                       <span className="font-mono text-foreground">Take {i + 1}</span>
                       {t.layout ? " · follows the motion guide" : t.kind === "character" ? " · held to the sheet" : ""}
                       {t.score && (
-                        <span title={`Camera travel ${t.score.travel.toFixed(0)} px of flow; frames where something pops in: ${t.score.popins} (scripts/score_take.py)`}>
-                          {" "}· {goodTake(t.score, t.frames) ? (t.score.popins === 0 ? "steady, nothing pops in" : "steady") : `${t.score.popins} frames pop in`}
+                        <span title={`Camera travel ${t.score.travel.toFixed(0)} px of flow; frames where something pops in: ${t.score.popins} of ${t.frames}, worst spike ${t.score.worst.toFixed(1)} (steady: at most 10% and under 15; scripts/score_take.py)`}>
+                          {" "}· {goodTake(t.score, t.frames) ? (t.score.popins === 0 ? "steady, nothing pops in" : "steady") : `${t.score.popins} of ${t.frames} frames pop in`}
                         </span>
                       )}
+                      {props.shot?.picked === i && <span className="text-foreground"> · {props.shot.pickedBy === "auto" ? "picked by One Shoot, the steadiest" : props.shot.pickedBy === "you" ? "picked by you" : "picked"}</span>}
                     </span>
+                    <Button size="sm" variant="ghost" disabled={!canShoot} onClick={() => shoot(1, t.seed)} title={`Shoot again with seed ${t.seed} and what is written now`}>
+                      <Dices data-icon="inline-start" />
+                      Same seed
+                    </Button>
                     <a href={file(t.video)} download={`take-${i + 1}.mp4`} className={buttonVariants({ variant: "ghost", size: "sm" })} aria-label={`Download take ${i + 1}`}>
                       <Download className="size-3.5" />
                     </a>
@@ -297,6 +294,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                   <span className="line-clamp-2" title={t.prompt ?? t.action}>
                     {t.action}
                   </span>
+                  <span className="font-mono text-[10px]">seed {t.seed}</span>
                 </figcaption>
               </figure>
             ))}

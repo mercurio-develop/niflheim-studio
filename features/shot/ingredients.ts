@@ -5,7 +5,7 @@
 // who and what they are. On Comfy Cloud only the 2.3 file exists; Lightricks' 2.5 graph runs it
 // on the 2.5 distilled model too.
 
-import type { SheetRow } from "@/lib/store";
+import type { Project, SheetRow } from "@/lib/store";
 
 type Graph = Record<string, { class_type: string; inputs: Record<string, unknown>; _meta?: { title: string } }>;
 
@@ -46,6 +46,35 @@ export function whoOf(prompt: string): SheetElement {
   const [first, ...rest] = prompt.split(",");
   const [name, wearing] = first.split(/ in (?=a |an |the )/);
   return { name: name.trim().replace(/^(a|an) /, "the ") || "the character", description: [wearing && `in ${wearing}`, ...rest].filter(Boolean).join(",").trim() };
+}
+
+// Florence-2 names the character by what it looks like ("a small blue dinosaur" for a cyan dragon),
+// and the take then plays that. When the caption does not say the character's own noun, its first
+// guess becomes the character's name and later mentions their noun. others: names on the stage
+// (props, cast) that are never swapped.
+const GUESS = "dinosaur|dragon|lizard|reptile|creature|monster|animal|beast|cartoon character|character|figure|toy|doll|mascot|alien|troll|ogre|giant|robot|knight|man|woman|boy|girl|person|kid|child";
+export function nameInCaption(caption: string, prompt: string, others: string[] = []) {
+  const full = whoOf(prompt).name.split(/ (?:with|wearing|holding|carrying|in|on|of|who|that) /)[0];
+  const noun = full.split(/\s+/).at(-1)?.toLowerCase();
+  if (!noun || noun === "character" || new RegExp(`\\b${noun}s?\\b`, "i").test(caption)) return caption;
+  const keep = new Set(others.map((x) => x.toLowerCase()));
+  const guesses = GUESS.split("|").filter((g) => !keep.has(g));
+  const first = new RegExp(`\\b(?:a|an|the)\\s+(?:[\\w-]+\\s+){0,3}?(?:${guesses.join("|")})(s?)\\b`, "i");
+  if (!first.test(caption)) return caption;
+  const out = caption.replace(first, (m, s: string) => {
+    const said = s ? `the ${noun}s` : full;
+    return /^[A-Z]/.test(m) ? said.charAt(0).toUpperCase() + said.slice(1) : said;
+  });
+  return out.replace(new RegExp(`\\b(${guesses.join("|")})(s?)\\b`, "gi"), (_m, _g, s: string) => noun + s);
+}
+
+// The keys' captions with the main character named; left as said when another character stands on
+// the stage (the creature in a caption may be them).
+export function namedCaptions(p: Pick<Project, "character" | "sceneAssets" | "keyframes">) {
+  const caps = p.keyframes?.captions ?? [];
+  const assets = p.sceneAssets ?? [];
+  if (assets.some((a) => a.kind === "character" && a.at)) return caps;
+  return caps.map((x) => (x ? nameInCaption(x, p.character.prompt ?? "", assets.map((a) => a.name)) : x));
 }
 
 const sentence = (x: string) => x.trim().replace(/[.\s]+$/, "");

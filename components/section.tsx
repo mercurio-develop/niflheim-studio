@@ -64,6 +64,16 @@ export function Section(props: {
   );
 }
 
+// The step's one run: hint on the left, primary button bottom-right, at the end of the section.
+export function SectionFire(props: { hint?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="mt-1 flex flex-wrap items-center justify-end gap-3 border-t pt-3">
+      {props.hint ? <span className="mr-auto font-mono text-[11px] text-muted-foreground">{props.hint}</span> : null}
+      {props.children}
+    </div>
+  );
+}
+
 // SectionNav asks a section to open with this window event (detail: the section's id).
 export const OPEN_SECTION = "nifl:open-section";
 

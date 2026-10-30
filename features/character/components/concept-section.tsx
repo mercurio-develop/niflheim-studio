@@ -11,6 +11,7 @@ import { STYLES } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { cancel, clearReference, generateConcepts, pickConcept, setReference } from "../actions/character";
 import { Composer, type ComposerValues } from "@/components/composer";
+import { CHARACTER_TEMPLATES } from "@/features/character/templates";
 import { SectionTitle } from "@/components/section-title";
 import { Section } from "@/components/section";
 
@@ -89,6 +90,7 @@ export function ConceptSection(props: {
         busy={busy}
         pending={pending && !running}
         error={error}
+        templates={CHARACTER_TEMPLATES}
       />
 
       {/* Results */}

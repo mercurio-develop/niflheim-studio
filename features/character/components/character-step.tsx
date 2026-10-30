@@ -1,6 +1,6 @@
 import { allCharacters, charOf, type Job, type Project } from "@/lib/store";
 import { historyMoves } from "@/lib/history";
-import { characterImage, viewsFor } from "@/lib/progress";
+import { characterFresh, characterImage, viewsFor } from "@/lib/progress";
 import { TurnaroundSections } from "@/features/turnaround/components/turnaround-step";
 import { SectionNav } from "@/components/section-nav";
 import { JobPoller } from "@/features/wizard/components/job-poller";
@@ -18,14 +18,16 @@ function jobsOf(all: Record<string, Job>, cid: string): Record<string, Job> {
   return Object.fromEntries(Object.entries(all).flatMap(([k, j]) => (k.startsWith(`${cid}:`) ? [[k.slice(cid.length + 1), j]] : [])));
 }
 // Next waits only for this step's own jobs (part tags aside): a Scene or Shots job leaves it free.
-const own = (k: string) => ["concepts", "mask", "brush", "swap", "restyle", "turnaround", "mesh", "hide-masks", "assets", "replicate"].includes(k) || /^(view|asset|pose):/.test(k);
+const own = (k: string) => ["concepts", "mask", "brush", "swap", "restyle", "turnaround", "sheet", "mesh", "hide-masks", "assets", "replicate"].includes(k) || /^(view|asset|pose):/.test(k);
 const ownJobOf = (jobs: Record<string, Job>) => Object.entries(jobs).find(([k, j]) => own(k) && !k.endsWith(":tags") && j.status === "running")?.[1];
 // Every side of the turnaround painted from the version in use.
 function completeOf(p: Project, cid: string) {
   const image = characterImage(p, cid);
-  const t = charOf(p, cid).turnaround;
+  const data = charOf(p, cid);
+  const t = data.turnaround;
   const fresh = !!image && t?.source === image;
-  return { image, t, fresh, complete: fresh && !!t && viewsFor(t.options).every((v) => t.views[v.id]?.versions.length) };
+  const accepted = !!image && (data.character.accepted === image || t?.source === image);
+  return { image, t, fresh, accepted, complete: characterFresh(p, cid) };
 }
 
 // The cast, each character a card; the selected one (cid, from ?c=) is open below with every
@@ -50,18 +52,19 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
   });
   // The history only waits for the jobs that add a character version (each makes its result the
   // current one); a turnaround, a 3D model or a Scene job leaves it free to browse.
-  const editing = ["concepts", "mask", "brush", "swap", "restyle"].some((k) => jobs[k]?.status === "running");
+  const editing = ["concepts", "mask", "brush", "swap", "restyle", "tags"].some((k) => jobs[k]?.status === "running");
   // The turnaround is part of this step: Next waits for every view, painted from this version.
-  const { image, t, fresh } = completeOf(project, cid);
+  const { image, t, fresh, accepted } = completeOf(project, cid);
   const views = t?.views ?? {};
   const data = charOf(project, cid);
   // Next is c1's: its version, its turnaround, its jobs, whichever character is open.
   const c1 = project.character;
   const v1 = c1.current === null ? null : c1.versions[c1.current];
   const { t: t1, fresh: fresh1, complete } = completeOf(project, "c1");
+  const sheet1 = project.sheet;
   const ownJob = ownJobOf(jobsOf(project.jobs, "c1"));
-  // Why Next is off, in words: the turnaround belongs to another version (picked in History), a
-  // view is missing, or a job of this step is still running.
+  // Why Next is off, in words: Edit is still the work, the turnaround belongs to another version,
+  // a view or the sheet is missing, or a job of this step is still running.
   const from = t1 ? c1.versions.findIndex((v) => v.image === t1.source) : -1;
   const hint = !v1
     ? undefined
@@ -69,11 +72,15 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
       ? `Wait: ${ownJob.detail ?? "a job is running"}`
       : t1 && !fresh1
         ? from >= 0
-          ? `The turnaround is from v${from + 1}: pick it in History, or paint the turnaround again`
-          : "The turnaround is from another version: paint it again"
-        : !complete
-          ? "Paint every view of the turnaround first"
-          : undefined;
+          ? `The turnaround is from v${from + 1}: Looks good on this version, then Generate, or pick v${from + 1} in History`
+          : "This version has no turnaround yet: Looks good, then Generate"
+        : !t1
+          ? "Looks good, then Generate the turnaround"
+          : !viewsFor(t1.options).every((v) => t1.views[v.id]?.versions.length)
+            ? "Paint every view of the turnaround first"
+            : !sheet1?.drawn || sheet1.source !== v1.image
+              ? "Generate the sheet from the views"
+              : undefined;
 
   return (
     <>
@@ -86,7 +93,9 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
               ? [
                   { id: "edit", n: "2", title: "Edit", tone: "bg-primary" },
                   { id: "turnaround", n: "3", title: "Turnaround", tone: "bg-tone-lilac" },
-                  { id: "model", n: "4", title: "3D model", tone: "bg-tone-cyan" },
+                  { id: "poses", n: "4", title: "Poses", tone: "bg-tone-green" },
+                  { id: "sheet", n: "5", title: "Sheet", tone: "bg-tone-lilac" },
+                  { id: "model", n: "6", title: "3D model", tone: "bg-tone-cyan" },
                 ]
               : []),
           ]}
@@ -123,14 +132,15 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
                 key={`${cid}-${c.current}`}
                 id="edit"
                 cid={cid}
-                // Folded: picking a concept goes straight on to the turnaround; Edit opens by hand.
-                open={false}
+                // Open until Looks good on this version; a later edit opens it again.
+                open={!accepted || editing}
                 projectId={project.id}
                 version={version}
                 parentImage={moves.parent === null ? null : c.versions[moves.parent].image}
                 moves={moves}
                 style={c.style ?? "painterly"}
                 jobs={{ mask: jobs.mask, swap: jobs.swap, tags: jobs.tags, brush: jobs.brush, restyle: jobs.restyle }}
+                fresh={accepted}
               />
             </div>
           )}
@@ -148,6 +158,8 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
               options={t?.options ?? null}
               views={views}
               fresh={fresh}
+              locked={!accepted}
+              busy={polling}
               assets={data.assets ?? []}
               poses={data.poses ?? []}
               mesh={data.mesh ?? null}
@@ -160,7 +172,7 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
         <VersionsSidebar key={cid} projectId={project.id} cid={cid} versions={c.versions} current={c.current} busy={editing} />
       </div>
       <NextBar
-        summary={!v1 ? `Pick a concept for ${cards[0].name} to continue` : complete ? <><span className="font-mono text-xs">v{c1.current! + 1}</span> · {v1.label} · every side painted</> : t1 && !fresh1 ? "This version has no turnaround yet" : "The turnaround paints by itself; Scene opens when every view is in"}
+        summary={!v1 ? `Pick a concept for ${cards[0].name} to continue` : complete ? <><span className="font-mono text-xs">v{c1.current! + 1}</span> · {v1.label} · every side and the sheet</> : t1 && !fresh1 ? "Looks good, then Generate the turnaround from this version" : !t1 ? "Edit, then Looks good, then Generate the turnaround" : "Generate the sheet from the views"}
         next={{ label: "Scene", disabled: !complete || !!ownJob, hint, onNext: finishCharacter.bind(null, project.id) }}
       />
     </>

@@ -1,5 +1,5 @@
 import { frameCount } from "@/lib/camera";
-import { sceneKey } from "@/lib/progress";
+import { placementStale, sceneKey } from "@/lib/progress";
 import type { ShotPreset } from "@/lib/camera";
 import type { Project, ShotKind } from "@/lib/store";
 
@@ -14,11 +14,21 @@ export const clayFrameMax = (frames: number) => Math.floor((10.5 * 1024 * 1024) 
 // Why the keyframes cannot guide a take, or null when they can: every key painted, covering today's
 // move, and drawn from today's stage (a key of a stage that has changed since, say with someone
 // who has left it, paints them into the take: the cat-headed walker, 05_submit 2026-10-29).
+// The beats the keys were painted with (keyframes.ts beatOf): typed after the keys, or changed
+// since, they are not in the picture until the keys are painted again.
+export const beatsKey = (p: Project) => {
+  const b = p.shot?.beats;
+  return b ? JSON.stringify([b.start, b.then, b.end].map((x) => x?.trim() ?? "")) : "";
+};
+export const beatsStale = (p: Project) => !!p.keyframes && (p.keyframes.beats ?? "") !== beatsKey(p);
+
 export function keysProblem(p: Project): string | null {
   const k = p.keyframes;
   if (!p.camera || !k?.keys.length || !k.keys.every(Boolean)) return "Make the keyframes first.";
   if (k.frames.at(-1) !== frameCount(p.camera.seconds) - 1) return "The camera move changed since the keyframes were made: make them again.";
-  if (k.key !== sceneKey(p)) return "The stage changed since the keyframes were made (someone moved, came or left): make them again.";
+  if (placementStale(p) === "turnaround") return "Cut out the new turnaround on Scene first, then make the keyframes.";
+  if (k.key !== sceneKey(p)) return "The stage changed since the keyframes were made (someone moved, came or left, or the character was recut): make them again.";
+  if (beatsStale(p)) return "What happens changed since the keyframes were painted: paint them again.";
   return null;
 }
 

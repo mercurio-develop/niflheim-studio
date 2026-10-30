@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ImageUp, PenLine, X } from "lucide-react";
+import { ArrowRight, ImageUp, PenLine, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SectionFire } from "@/components/section";
 import { Textarea } from "@/components/ui/textarea";
 import { LoadingDots } from "@/components/loading-dots";
 import { STYLES } from "@/lib/styles";
@@ -26,7 +27,7 @@ export function Composer(props: {
   busy: boolean;
   pending: boolean;
   error?: string | null;
-  examples?: string[];
+  templates?: readonly { id: string; label: string; prompt: string; style: string }[]; // always-on chips: fill prompt + style
   large?: boolean; // the home page: a taller field and bigger text, no box around it
 }) {
   const [prompt, setPrompt] = useState(props.defaults.prompt);
@@ -59,11 +60,21 @@ export function Composer(props: {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) e.currentTarget.form?.requestSubmit();
         }}
       />
-      {props.examples && !prompt && (
-        <div className="-mt-1 flex flex-wrap gap-1.5">
-          {props.examples.map((ex) => (
-            <button key={ex} type="button" onClick={() => setPrompt(ex)} className={chip(false)}>
-              {ex.length > 40 ? `${ex.slice(0, 40)}…` : ex}
+      {props.templates && (
+        <div className="-mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Try the app</span>
+          {props.templates.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={prompt === t.prompt && style === t.style}
+              onClick={() => {
+                setPrompt(t.prompt);
+                setStyle(t.style);
+              }}
+              className={chip(prompt === t.prompt && style === t.style)}
+            >
+              {t.label}
             </button>
           ))}
         </div>
@@ -130,15 +141,13 @@ export function Composer(props: {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 border-t pt-3">
-        <span className="font-mono text-[11px] text-muted-foreground">
-          ~{Math.max(1, Math.round((10 + count * perImage) / 10) * 10)} s · earlier sets are kept
-        </span>
-        <Button type="submit" size="lg" className="ml-auto" disabled={props.busy || prompt.trim().length < 3}>
+      <SectionFire hint={`~${Math.max(1, Math.round((10 + count * perImage) / 10) * 10)} s · earlier sets are kept`}>
+        <Button type="submit" size="lg" disabled={props.busy || prompt.trim().length < 3}>
           {props.pending ? <LoadingDots /> : null}
           Generate
+          <ArrowRight data-icon="inline-end" />
         </Button>
-      </div>
+      </SectionFire>
       {props.error && <p className="text-sm text-destructive">{props.error}</p>}
 
       {sketching && (

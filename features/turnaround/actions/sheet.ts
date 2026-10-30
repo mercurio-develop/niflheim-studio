@@ -7,8 +7,8 @@ import { viewImage } from "@/lib/progress";
 import { CID, charKey, charOf, getProject, updateProject } from "@/lib/store";
 import { drawSheet, expressionCell, paintCell, paintSheet, planCells } from "../sheet";
 
-// The character's Ingredients reference sheet (features/turnaround/sheet.ts). Generate in the
-// turnaround makes it with the views; these remake it, or one of its pictures, on their own.
+// The character's Ingredients reference sheet (features/turnaround/sheet.ts). Generate on the
+// sheet paints it from the views, poses and expressions; these remake it, or one picture, on its own.
 
 const done = (id: string) => {
   revalidatePath(`/p/${id}/character`);
@@ -22,14 +22,17 @@ const Word = z.string().trim().toLowerCase().min(3).max(40).regex(/^[a-z][a-z ,'
 const MAX_EXPRESSIONS = 6;
 const Prompt = z.string().trim().min(10).max(600);
 
-// The faces and items painted again from today's turnaround, then the sheet drawn.
-export async function makeSheet(id: string, rawItems: unknown, rawCid?: unknown) {
+const Expressions = z.array(Word).max(MAX_EXPRESSIONS);
+
+// Faces, items and chosen expressions from today's turnaround, then the sheet drawn.
+export async function makeSheet(id: string, rawItems: unknown, rawCid?: unknown, rawExpressions?: unknown) {
   const items = Items.parse(rawItems);
   const cid = Cid.parse(rawCid) ?? "c1";
+  const expressions = rawExpressions === undefined || rawExpressions === null ? [] : Expressions.parse(rawExpressions);
   const p = await getProject(id);
   if (!p) throw new Error("Project not found.");
-  if (!viewImage(p, "front", cid)) throw new Error("Generate the turnaround first: the sheet is painted from its front.");
-  await startJob(id, jobKey(cid), (ctx) => paintSheet(id, cid, items, ctx), "Painting the sheet");
+  if (!viewImage(p, "front", cid)) throw new Error("Generate the turnaround first: the sheet is painted from its views.");
+  await startJob(id, jobKey(cid), (ctx) => paintSheet(id, cid, items, ctx, expressions), "Painting the sheet");
   done(id);
 }
 

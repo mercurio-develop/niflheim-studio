@@ -22,9 +22,9 @@ function colourViews(p: Project, cid = "c1") {
   return views as ColourViews;
 }
 
-// The character in 3D: Hunyuan3D-2 MV turbo from the current front, side and back views (the
-// graph pads each to a square and mirrors the side for the missing right view), then coloured
-// from the views. About 50 s on the 4080.
+// The character in 3D: each view padded to a square, Hunyuan3D-2 MV turbo from front, side, back
+// and the side mirrored as right, then coloured from the views. About 50 s on the 4080. Optional:
+// Next does not wait for it.
 export async function generateMesh(id: string, rawCid?: unknown) {
   const cid = Cid.parse(rawCid) ?? "c1";
   const p = await getProject(id);

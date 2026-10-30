@@ -6,18 +6,17 @@ import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { focusPhrase, frameCount, keyFrames, momentsOf, poses, sees } from "@/lib/camera";
-import { currentFill } from "@/lib/progress";
+import { characterImage, currentFill, sceneKey } from "@/lib/progress";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob } from "@/lib/jobs";
 import { allShots, getProject, projectDir, updateProject, type Project, type TakeScore } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { DEFAULT_NEGATIVE, END_NEW_POSE_STRENGTH, END_STRENGTH, middleImageNode, shapeShot } from "../graph";
-import { sceneKey } from "@/lib/progress";
-import { keysProblem, suggestedKind } from "../state";
-import { addIngredients, firstKeyOnly, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, whoOf, withSheet } from "../ingredients";
+import { beatsStale, keysProblem, suggestedKind } from "../state";
+import { addIngredients, firstKeyOnly, namedCaptions, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, whoOf, withSheet } from "../ingredients";
 import { PYTHON } from "@/lib/python";
 import { goodTake, takeRank } from "@/lib/score";
-import { saveKeys } from "./keyframes";
+import { repaintKeys, saveKeys } from "./keyframes";
 import { saveClay } from "./layout";
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
@@ -96,8 +95,8 @@ function shotPrompt(p: Project, b: Beats) {
   ];
   return lines.filter(Boolean).join(" ");
 }
-// The cast members the shot's keys can see, by name and description. One out of frame is left
-// unsaid: named, LTX paints them in between the keys and they fade out at the next one.
+// The cast members and objects (props) the shot's keys can see, by name and description. One out
+// of frame is left unsaid: named, LTX paints it in between the keys and it fades out at the next one.
 const cast = (p: Project) => {
   const cam = currentFill(p)?.camera;
   const m = p.camera;
@@ -105,8 +104,11 @@ const cast = (p: Project) => {
   const path = cam && m && st?.at ? poses(cam, { at: st.at, height: st.height, turn: st.turn }, m, p.sceneAssets ?? []) : null;
   const keys = path && m ? keyFrames(m).map((f) => path[f]) : [];
   return (p.sceneAssets ?? [])
-    .filter((a) => a.kind === "character" && a.at && keys.some((k) => sees(k, [a.at![0], a.at![1] + a.height * 0.6, a.at![2]], cam!.fov, 768 / 448)))
-    .map((a) => ((x) => (x ? `${a.name}, ${x}` : a.name))(p.cast?.find((m) => m.id === a.cid)?.character.prompt ?? a.prompt))
+    .filter((a) => a.at && keys.some((k) => sees(k, [a.at![0], a.at![1] + a.height * 0.6, a.at![2]], cam!.fov, 768 / 448)))
+    .map((a) => {
+      const about = a.kind === "character" ? (p.cast?.find((m) => m.id === a.cid)?.character.prompt ?? a.prompt) : a.prompt;
+      return about && about.toLowerCase() !== a.name.toLowerCase() ? `${a.name}, ${about}` : a.name;
+    })
     .join("; ");
 };
 // A caption that names no one (Florence-2 sometimes sees only the place: "a forest scene, fallen
@@ -120,7 +122,7 @@ function namesSomeone(p: Project, caption: string) {
 // What the keys show, in order (Florence-2 captions, or the user's edits of them): the frame the take
 // starts on, passes through and ends on. Keys without a caption are skipped.
 function keysPhrase(p: Project) {
-  const c = (p.keyframes?.captions ?? []).map((x) => x?.trim().replace(/[.\s]+$/, "")).filter((x) => x && namesSomeone(p, x)) as string[];
+  const c = namedCaptions(p).map((x) => x?.trim().replace(/[.\s]+$/, "")).filter((x) => x && namesSomeone(p, x)) as string[];
   if (!c.length) return "";
   const lower = (x: string) => x.charAt(0).toLowerCase() + x.slice(1);
   if (c.length === 1) return `At the start, ${lower(c[0])}.`;
@@ -134,10 +136,10 @@ const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 // effect (04_shot ACCEPT proof 3: take D = take B frame for frame). The graph keeps a default.
 const Beat = z.string().trim().max(300);
 const Input = z
-  .object({ action: z.string().trim().max(500).optional(), beats: z.object({ start: Beat, then: Beat.optional(), end: Beat.optional() }).optional(), tries: z.number().int().min(1).max(4).optional(), expression: z.string().trim().max(60).optional(), fromKey: z.boolean().optional() })
+  .object({ action: z.string().trim().max(500).optional(), beats: z.object({ start: Beat, then: Beat.optional(), end: Beat.optional() }).optional(), tries: z.number().int().min(1).max(4).optional(), expression: z.string().trim().max(60).optional(), fromKey: z.boolean().optional(), seed: z.number().int().min(0).max(2 ** 31).optional() })
   .transform((x) => {
     const beats: Beats = x.beats ?? { start: x.action ?? "" };
-    return { beats, action: [beats.start, beats.then, beats.end].map((s) => s?.trim()).filter(Boolean).join(", then "), tries: x.tries ?? 1, expression: x.expression || undefined, fromKey: x.fromKey ?? false };
+    return { beats, action: [beats.start, beats.then, beats.end].map((s) => s?.trim()).filter(Boolean).join(", then "), tries: x.tries ?? 1, expression: x.expression || undefined, fromKey: x.fromKey ?? false, seed: x.seed };
   })
   .refine((x) => x.beats.start.length >= 3, "Say what happens first, in a few words.");
 
@@ -167,6 +169,8 @@ export async function saveBeats(id: string, raw: unknown) {
 function sheetFor(p: Project, video: string, expression?: string) {
   const sheet = p.sheet;
   if (!sheet?.drawn || !sheet.rows) throw new Error("Make the character's sheet first (Character, Turnaround).");
+  const image = characterImage(p);
+  if (sheet.source && image && sheet.source !== image) throw new Error("The character changed: Looks good on Character paints a new sheet, then recut on Scene.");
   const own = p.shot?.sheet;
   const who = whoOf(p.character.prompt ?? "");
   // Numbered as the sheet drew them: the painted ones only (make_sheet.py's item1, item2...).
@@ -192,6 +196,8 @@ export async function oneShoot(id: string, form: FormData, raw: unknown) {
   await updateProject(id, (q) => void (q.shot = { negative: DEFAULT_NEGATIVE, takes: [], ...q.shot, beats: input.beats, action: input.action }));
   if (form.has("key0")) await saveKeys(id, form, p.keyframes?.note ?? "", true);
   if (form.has("f0")) await saveClay(id, form);
+  const q = form.has("key0") ? null : await getProject(id);
+  if (q && beatsStale(q) && ((q.shot?.kind ?? suggestedKind(q)) === "camera" || input.fromKey)) await repaintKeys(id);
   await shoot(id, input, true);
 }
 
@@ -246,7 +252,8 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
     const made: { index: number; score?: TakeScore }[] = [];
     for (let n = 1; n <= tries; n++) {
       if (tries > 1) await ctx.progress(`Shooting take ${n} of up to ${tries}`);
-      const seed = Math.floor(Math.random() * 2 ** 31);
+      // A take's own seed with new words or a new expression varies only those (Same seed).
+      const seed = n === 1 && input.seed !== undefined ? input.seed : Math.floor(Math.random() * 2 ** 31);
       const [video] = await runWorkflow({
         workflow: clip ? "03_shot_layout.api.json" : "03_shot.api.json",
         onSubmit: ctx.track,
@@ -289,7 +296,7 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
     }
     if (tries > 1) {
       const best = made.reduce((a, b) => (takeRank(b.score, frames) < takeRank(a.score, frames) ? b : a));
-      await updateProject(id, (q) => void (q.shot && (q.shot.picked = best.index)));
+      await updateProject(id, (q) => void (q.shot && ((q.shot.picked = best.index), (q.shot.pickedBy = "auto"))));
     }
   }, tries > 1 ? `Shooting up to ${tries} takes` : "Shooting the take");
   done(id);
@@ -307,6 +314,7 @@ export async function pickTake(id: string, raw: unknown) {
   await updateProject(id, (q) => {
     if (!q.shot?.takes[i]) throw new Error("No such take.");
     q.shot.picked = i;
+    q.shot.pickedBy = "you";
   });
   done(id);
 }

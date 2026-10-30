@@ -7,7 +7,8 @@ import { Link2, Link2Off } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
-import { DEFAULT_MOVE, cardAt, frameCount, keyFrames, placeAt, propsKey, poses, renderKey, type CameraMove } from "@/lib/camera";
+import { DEFAULT_MOVE, cardAt, frameCount, keyFrames, placeAt, poses, type CameraMove } from "@/lib/camera";
+import { sceneKeyFrom } from "@/lib/progress";
 import type { Block, CharacterPose, Job, Keyframes, LayoutClip, SceneAsset, SeededFrom, SetData, StageData } from "@/lib/store";
 import { continueFromPrevious, stopContinuing } from "../actions/continuity";
 import { ClayClip } from "./clay-clip";
@@ -15,7 +16,7 @@ import { KeyframesPanel } from "./keyframes";
 
 // The active shot's keyframes, made here from the Scene's stage, placement and camera move (moved
 // from Scene, decision 0010): the stage is captured off screen at each key pose and painted.
-export function ShotKeyframes(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; keyframes: Keyframes | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[]; job?: Job; continuity: { from: string; hasTake: boolean; seeded: SeededFrom | null } | null; layout: LayoutClip | null; layoutJob?: Job }) {
+export function ShotKeyframes(props: { projectId: string; set: SetData | null; placement: StageData | null; camera: CameraMove | null; keyframes: Keyframes | null; blocks: Block[]; assets: SceneAsset[]; poses: CharacterPose[]; job?: Job; continuity: { from: string; hasTake: boolean; seeded: SeededFrom | null } | null; layout: LayoutClip | null; layoutJob?: Job; beatsChanged?: boolean }) {
   const s = props.set;
   const fill = s?.stage && s.stage.image === s.image ? s.stage.fill : undefined;
   const cam = fill?.camera;
@@ -30,7 +31,7 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
   }
   const urls = (c: Partial<Record<string, string>>) => Object.fromEntries(Object.entries(c).map(([v, f]) => [v, `/api/files/${props.projectId}/${f}`]));
   const cards = props.poses.map((p) => ({ id: p.id, cutouts: urls(p.cutouts) }));
-  const key = renderKey(move, at, props.placement.height, fill.mesh, props.placement.turn) + propsKey(props.blocks, props.assets);
+  const key = sceneKeyFrom(move, at, props.placement.height, fill.mesh, props.placement.turn, props.blocks, props.assets, props.placement.source);
   // The stage at frame f of the move: the camera, the character's pose and turn, every object's spot
   // (with key moments, the moment's).
   const poseAt = (f: number) => ({
@@ -56,7 +57,8 @@ export function ShotKeyframes(props: { projectId: string; set: SetData | null; p
       <KeyframesPanel
         projectId={props.projectId}
         keyframes={props.keyframes}
-        current={!!props.keyframes && props.keyframes.key === key}
+        current={!!props.keyframes && props.keyframes.key === key && !props.beatsChanged}
+        beatsChanged={props.beatsChanged}
         frames={keyFrames(move)}
         job={props.job}
       />

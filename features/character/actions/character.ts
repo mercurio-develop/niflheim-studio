@@ -8,11 +8,11 @@ import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { cropBox, maskBox, pngSize, removePrompt, type Box } from "@/lib/brush";
 import { parentIn, stackMoves } from "@/lib/history";
-import { mergeParts, partsFromTags } from "@/lib/parts";
+import { mergeParts, partsFromTags, partSearches } from "@/lib/parts";
 import { CID, charDir, charKey, charOf, getProject, projectDir, updateProject, type Edit, type Project, type Version, type ViewId } from "@/lib/store";
 import { mediumOf, styleById } from "@/lib/styles";
-import { suggestedBody } from "@/lib/progress";
-import { generateTurnaround } from "@/features/turnaround/actions/turnaround";
+import { characterFresh, characterImage, viewsFor } from "@/lib/progress";
+import { drawSheet } from "@/features/turnaround/sheet";
 import { Count, Index, Prompt, REFERENCE_TYPES, StyleId, referenceError } from "../schemas";
 
 const rel = (id: string, files: string[]) => files.map((f) => path.relative(projectDir(id), f));
@@ -115,6 +115,11 @@ export async function generateConcepts(id: string, options: { reseed?: boolean; 
       c.style = style;
       c.concepts = rel(id, files);
     });
+    // One concept: pick it so Edit opens without a second click.
+    if (files.length === 1) {
+      const now = await getProject(id);
+      if (now && charOf(now, cid).character.current === null) await pickConcept(id, 0, undefined, cid);
+    }
   }, style);
   if (count !== c0.count) await updateProject(id, (q) => void (charOf(q, cid).character.count = count));
   done(id);
@@ -155,19 +160,72 @@ async function readTags(id: string, image: string, ctx?: JobCtx, target = "chara
   return partsFromTags(await readFile(file, "utf8"));
 }
 
-// Florence only names parts from a fixed list; what has a mask, or was just added, always stays.
+const HEADWEAR = /^(hat|helmet|hood|crown|cap|helm)s?$/i;
+const FACEISH = /\b(face|head|hair|eyes?|nose|mouth|lips|expression)\b/i;
+const noun = (t: string) => t.trim().split(/\s+/).at(-1) ?? t;
+
+// Florence names what is in this picture. Old chips it no longer sees are dropped: a helmet
+// chip survived a head change that already took the helmet off (clockwork knight, 2026-10-30).
+// A Remove always drops that name, even if Florence still thinks it sees it.
 function mergeTags(found: string[], v: Pick<Version, "parts" | "tags" | "edit">) {
-  const pinned = [...Object.keys(v.parts), ...(v.edit?.kind === "add" && v.tags?.length ? [v.tags.at(-1)!] : [])];
-  const merged = mergeParts(found, v.tags);
-  return [...new Set([...merged, ...pinned])];
+  const dropped = new Set<string>();
+  const what = v.edit?.what?.trim() ?? "";
+  if (v.edit?.kind === "remove" && what) dropped.add(noun(what));
+  if (v.edit?.kind === "change" && FACEISH.test(`${v.edit.what ?? ""} ${v.edit.change ?? ""}`)) {
+    for (const t of [...found, ...(v.tags ?? [])]) if (HEADWEAR.test(noun(t))) dropped.add(noun(t));
+  }
+  const keep = (t: string) => !dropped.has(noun(t));
+  const pinned = Object.keys(v.parts).filter(keep);
+  const extra = v.edit?.kind === "add" && v.tags?.length ? [v.tags.at(-1)!] : [];
+  return [...new Set([...mergeParts(found.filter(keep), []), ...pinned, ...extra.filter(keep)])];
 }
 
 async function tagVersion(id: string, at: number, image: string, ctx?: JobCtx, target = "character", cid = "c1") {
+  if (ctx) await ctx.progress("Naming the parts");
   const found = await readTags(id, image, ctx, target, cid);
   await updateProject(id, (q) => {
     const v = stackOf(q, target, cid).versions[at];
     if (v) v.tags = mergeTags(found, v);
   });
+  const p = await getProject(id);
+  const tags = p ? stackOf(p, target, cid).versions[at]?.tags : found;
+  if (ctx && tags?.length) await saveNamedMasks(id, target, cid, at, image, tags, ctx);
+}
+
+// SAM 3 finds each named part on this picture and stores the mask on the version. A later click
+// (Edit chips, Hide, Refine) reuses that region; it does not run SAM again.
+async function saveNamedMask(id: string, target: string, cid: string, at: number, image: string, name: string, ctx: JobCtx) {
+  const p = await getProject(id);
+  const saved = p ? stackOf(p, target, cid).versions[at]?.parts[name] : undefined;
+  if (saved && (await maskBox(abs(id, saved)))) return saved;
+  let m = "";
+  for (const [word, threshold] of partSearches(name)) {
+    [m] = await runWorkflow({
+      onSubmit: ctx.track,
+      workflow: "01_parts.api.json",
+      set: [["2", "prompt", word], ["2", "confidence_threshold", threshold]],
+      images: [["1", abs(id, image)]],
+      output: "4",
+      outDir: abs(id, `${dirOf(target, cid)}/masks/${stamp()}-${name.replace(/ /g, "-")}`),
+    });
+    if (!(await ctx.alive())) return null;
+    if (await maskBox(m)) break;
+  }
+  if (!m || !(await maskBox(m))) return null;
+  const relMask = rel(id, [m])[0];
+  await updateProject(id, (q) => {
+    const v = stackOf(q, target, cid).versions[at];
+    if (v) v.parts[name] = relMask;
+  });
+  return relMask;
+}
+
+async function saveNamedMasks(id: string, target: string, cid: string, at: number, image: string, names: string[], ctx: JobCtx) {
+  for (const name of names) {
+    if (!(await ctx.alive())) return;
+    await ctx.progress(`Finding the ${name}`);
+    await saveNamedMask(id, target, cid, at, image, name, ctx);
+  }
 }
 
 // set: index into character.sets for an earlier set; omitted = the set on screen.
@@ -192,42 +250,38 @@ export async function pickConcept(id: string, rawIndex: number, rawSet?: number,
   const c = charOf(p, cid).character;
   const at = c.current!;
   const image = c.versions[at].image;
-  // On rails: the turnaround and its sheet start by themselves. A new version's parts are read
-  // first, so the sheet gets the things they carry; without that job the painting starts now.
-  const tagging = !c.versions[at].tags
-    ? await startJob(id, charKey(cid, "tags"), async (ctx) => {
-        try {
-          await tagVersion(id, at, image, ctx, "character", cid);
-        } finally {
-          await paintTurnaround(id, cid, image);
-        }
-      }).then(() => true, () => false)
-    : false;
-  if (!tagging) await paintTurnaround(id, cid, image);
+  // Parts are read so Edit has chips, then SAM finds each region once and stores it on the version.
+  const v = c.versions[at];
+  const missing = (v.tags ?? []).some((t) => !v.parts[t]);
+  if (!v.tags || missing) {
+    const first = v.tags?.find((t) => !v.parts[t]);
+    await startJob(
+      id,
+      charKey(cid, "tags"),
+      (ctx) => (v.tags ? saveNamedMasks(id, "character", cid, at, image, v.tags ?? [], ctx) : tagVersion(id, at, image, ctx, "character", cid)),
+      first ? `Finding the ${first}` : "Naming the parts",
+    ).catch(() => {});
+  }
   done(id);
 }
 
-// Things worn or carried, the ones offered for the sheet: the rule of itemChoices in
-// features/turnaround/components/sheet-section.tsx, a client module this file cannot import.
-const BODY_PART = /(hair|eyes?|skin|face|beard|ears?|tail|fur|paws?|legs?|arms?|hands?)$/;
-const CARRIED = /(bag|satchel|backpack|pouch|lantern|sword|staff|book|hat|helmet|cape|cloak|coat|scarf)$/;
-const carried = (tags: string[]) => [...new Set(tags.filter((t) => !BODY_PART.test(t)))].sort((a, b) => Number(CARRIED.test(b)) - Number(CARRIED.test(a)));
-
-// Paint the picked version's turnaround and sheet (the Turnaround's own Generate) unless it has
-// one or another version was picked meanwhile. The Body is guessed from the description (an
-// animal stands on four legs) or kept from the last Generate; the chip beside the views corrects
-// it. A turnaround already running is left alone: Generate again is there for this version.
-async function paintTurnaround(id: string, cid: string, image: string) {
-  const p = await getProject(id);
-  if (!p) return;
-  const data = charOf(p, cid);
-  const c = data.character;
-  const v = c.current === null ? undefined : c.versions[c.current];
-  if (v?.image !== image || data.turnaround?.source === image) return;
-  const was = data.turnaround?.options;
-  const body = was?.body ?? suggestedBody(c.prompt ?? "");
-  const options = { pose: body === "animal" ? ("designed" as const) : (was?.pose ?? "relaxed"), hide: [], keep: [], extras: was?.extras ?? [], body, items: carried(v.tags ?? []).slice(0, 2) };
-  await generateTurnaround(id, options, cid).catch(() => {});
+// Edit is done: this version may feed the turnaround. Generate there paints the sides; Generate
+// on the sheet paints the reference from those sides, poses and expressions.
+export async function acceptEdit(id: string, rawCid?: unknown) {
+  const cid = Cid.parse(rawCid) ?? "c1";
+  const p = await load(id);
+  const image = characterImage(p, cid);
+  if (!image) throw new Error("Pick a concept first.");
+  const at = charOf(p, cid).character.current!;
+  const v = charOf(p, cid).character.versions[at];
+  if (!v.tags && p.jobs[charKey(cid, "tags")]?.status === "running") throw new Error("Wait for the parts to be read.");
+  await updateProject(id, (q) => {
+    charOf(q, cid).character.accepted = image;
+  });
+  if (!v.tags) {
+    await startJob(id, charKey(cid, "tags"), (ctx) => tagVersion(id, at, image, ctx, "character", cid)).catch(() => {});
+  }
+  done(id);
 }
 
 export async function selectVersion(id: string, rawIndex: number, rawTarget = "character", rawCid?: unknown) {
@@ -251,21 +305,8 @@ export async function maskPart(id: string, rawPart: string, rawTarget = "charact
   const stack = stackOf(await load(id), target, cid);
   const at = stack.current!;
   const version = currentVersion(stack);
-  if (Object.hasOwn(version.parts, part)) return;
-  await startJob(id, keyOf(target, "mask", cid), async ({ track, alive }) => {
-    const [mask] = await runWorkflow({
-      onSubmit: track,
-      workflow: "01_parts.api.json",
-      set: [["2", "prompt", part]],
-      images: [["1", abs(id, version.image)]],
-      output: "4",
-      outDir: abs(id, `${dirOf(target, cid)}/masks/${stamp()}-${part.replace(/ /g, "-")}`),
-    });
-    if (!(await alive())) return; // cancelled after ComfyUI had already finished
-    await updateProject(id, (q) => {
-      stackOf(q, target, cid).versions[at].parts[part] = rel(id, [mask])[0];
-    });
-  });
+  if (version.parts[part] && (await maskBox(abs(id, version.parts[part])))) return;
+  await startJob(id, keyOf(target, "mask", cid), (ctx) => saveNamedMask(id, target, cid, at, version.image, part, ctx).then(() => undefined));
   done(id);
 }
 
@@ -291,37 +332,46 @@ async function finish(r: Run, image: string, v: Omit<Version, "image" | "parts" 
   const parts: Record<string, string> = {};
   // An added thing becomes a part at once: SAM 3 finds it on the new image.
   if (extra) {
+    await r.ctx.progress(`Finding the ${extra.name}`);
     const [m] = await runWorkflow({ onSubmit: r.ctx.track, workflow: "01_parts.api.json", set: [["2", "prompt", extra.name]], images: [["1", abs(r.id, image)]], output: "4", outDir: abs(r.id, `${dirOf(r.target, r.cid)}/masks/${stamp()}-${extra.name.replace(/ /g, "-")}`) });
     if (await maskBox(m)) parts[extra.name] = rel(r.id, [m])[0];
   }
+  await r.ctx.progress("Naming the parts");
   const found = await readTags(r.id, image, r.ctx, r.target, r.cid);
   if (!(await r.ctx.alive())) return;
-  await updateProject(r.id, (q) => {
-    const version = { image, parts, parent: r.at, ...v };
-    pushVersion(q, r.target, { ...version, tags: mergeTags(found, version) }, r.cid);
+  const tags = mergeTags(found, { parts, tags: v.tags, edit: v.edit });
+  // Push first so saveNamedMasks can write each region onto this version as it finds it.
+  const q = await updateProject(r.id, (p) => {
+    pushVersion(p, r.target, { image, parts, parent: r.at, ...v, tags }, r.cid);
   });
+  const at = stackOf(q, r.target, r.cid).current!;
+  const rest = tags.filter((t) => !parts[t]);
+  if (rest.length) await saveNamedMasks(r.id, r.target, r.cid, at, image, rest, r.ctx);
+  if (r.target.startsWith("view:") && charOf(q, r.cid).sheet?.drawn) await drawSheet(r.id, r.cid);
 }
 
 // Add inside the painted shape (01_fill): the shape is blanked grey inside a crop, Qwen paints the
 // thing filling it, and the shape plus a soft 40 px margin is pasted back, so what is added is
 // drawn whole where you painted and is not cut at its edges. "Placeholder ... no grey left" stops a
 // grey ring staying around it (2026-10-27, a skull in a hand). Edits made before there was a mask
-// fall back to the whole-crop paste (01_brush).
+// fall back to the whole-crop paste (01_brush). Do not tell it to fill most of the grey: a small
+// forehead stroke then becomes a blob the size of an eye (2026-10-29, kids-3D dragon).
 const addPrompt = (thing: string, about: string) =>
-  `${about} The flat grey shape is a placeholder: replace all of it. Paint ${thing} inside it, whole and sized to fill most of it, nothing cut off; the rest of the grey becomes what is around it, continuing the background and the character. No grey left. Same art style, lighting and colours as the rest of the picture; ${keepFace(thing)}everything outside the shape stays exactly the same.`;
+  `${about} The flat grey shape is a placeholder for ${thing}, not a face: replace all of it. Paint ${thing} there, whole, nothing cut off, at a natural size for this character. The rest of the grey becomes what is around it, continuing the background and the character. No grey left. Same art style, lighting and colours as the rest of the picture; ${keepFace(thing)}${noExtraFace}everything outside the shape stays exactly the same.`;
 
-// Add and Change edit a close-up crop, so Qwen does not see the whole character: it is told what
-// the picture is and to keep to the picture's own look, or it paints in its own (2026-10-27: a face
-// added to a flat, blocky pixel-art elf came back as a smooth, detailed cartoon face). The style
-// chip is not named: the picture is what counts, and the chip can disagree with the prompt
-// ("pixal art lady elf" made with Painterly).
+// Add and Change edit a close-up crop, so Qwen does not see the whole character: it is told to
+// match this picture's own look, or it paints in its own (2026-10-27: a face added to a flat,
+// blocky pixel-art elf came back as a smooth, detailed cartoon face). The concept prompt and
+// style chip are not named: a kids-3D dragon prompt that says "big sparkling eyes" plus a face
+// crop made Add/Change paint extra eyes on the forehead (2026-10-29). The picture is what counts.
 async function about(id: string, cid = "c1") {
-  const c = charOf(await load(id), cid).character;
-  return `This is a close-up of a character: ${c.prompt}, ${styleById(c.style).phrase}. Match this picture's own art style exactly: the same shapes, level of detail, line work, shading and palette, nothing more detailed or realistic than the rest of it.`;
+  charOf(await load(id), cid);
+  return `This is a close-up of a character. Match this picture's own art style exactly: the same shapes, level of detail, line work, shading and palette, nothing more detailed or realistic than the rest of it.`;
 }
 // The face stays (eyes, nose, mouth), unless the edit is about the face itself.
 const FACE = /\b(face|head|eyes?|nose|mouth|lips|expression|glasses|mask|makeup|beard)\b/i;
 const keepFace = (...words: string[]) => (FACE.test(words.join(" ")) ? "" : "the face keeps its eyes, nose and mouth exactly as they are; ");
+const noExtraFace = "Do not paint extra eyes, a second face, or another head unless that is what was asked. ";
 
 async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
   const source = abs(r.id, r.version.image);
@@ -366,7 +416,7 @@ async function runAdd(r: Run, thing: string, strokes: Box, mask?: string) {
 // The selection plus 64 px with a 6 px edge is pasted back, so a bigger new part is not faded out.
 async function runChange(r: Run, what: string, change: string, mask: string) {
   const old = what === "selection" ? "what was there" : `the ${what}`;
-  const prompt = `${await about(r.id, r.cid)} The flat grey shape is where ${old} was: replace all of it. Paint ${change} there, whole, solid and attached naturally, filling the shape; the rest of the grey becomes what is around it. No grey left. The pose stays; ${keepFace(what, change)}${what === "selection" ? "everything else" : "every other part"} and the background stay exactly the same.`;
+  const prompt = `${await about(r.id, r.cid)} The flat grey shape is where ${old} was: replace all of it. Paint ${change} there, whole, solid and attached naturally. The rest of the grey becomes what is around it. No grey left. The pose stays; ${keepFace(what, change)}${noExtraFace}${what === "selection" ? "everything else" : "every other part"} and the background stay exactly the same.`;
   const source = abs(r.id, r.version.image);
   const strokes = await maskBox(abs(r.id, mask));
   if (!strokes) throw new Error("The selection is empty; paint or pick a part first.");
@@ -388,7 +438,7 @@ async function runChange(r: Run, what: string, change: string, mask: string) {
 // only the selection's pixels are pasted back (01_remove).
 async function runRemove(r: Run, what: string, strokes: Box, mask: string) {
   const source = abs(r.id, r.version.image);
-  const box = cropBox(strokes, await pngSize(source));
+  const box = cropBox(strokes, await pngSize(source), { grow: 2.0, min: 448 });
   const crop = (n: string): [string, string, number][] => [[n, "x", box.x], [n, "y", box.y], [n, "width", box.width], [n, "height", box.height]];
   const [image] = await runWorkflow({
     onSubmit: r.ctx.track,
@@ -399,7 +449,7 @@ async function runRemove(r: Run, what: string, strokes: Box, mask: string) {
     outDir: abs(r.id, `${dirOf(r.target, r.cid)}/removes/${stamp()}`),
   });
   if (!(await r.ctx.alive())) return;
-  await finish(r, rel(r.id, [image])[0], { label: `− ${what || "selection"}`, tags: r.version.tags?.filter((t) => t !== what), edit: { kind: "remove", what, mask, box: strokes } });
+  await finish(r, rel(r.id, [image])[0], { label: `− ${what || "selection"}`, tags: r.version.tags?.filter((t) => noun(t) !== noun(what)), edit: { kind: "remove", what, mask, box: strokes } });
 }
 
 // The browser's selection (a part's mask plus/minus brush strokes) saved beside the stack.
@@ -548,12 +598,15 @@ async function repaintWhole(id: string, cid: string, style: ReturnType<typeof st
         outDir: abs(id, charDir(cid, `character/restyles/${stamp()}-${style.id}`)),
       });
       if (!(await ctx.alive())) return;
-      await updateProject(id, (q) => {
-        const c = charOf(q, cid).character;
-        c.versions.push({ image: rel(id, [image])[0], label, parts: {}, tags: version.tags, parent: at });
+      const file = rel(id, [image])[0];
+      const q = await updateProject(id, (p) => {
+        const c = charOf(p, cid).character;
+        c.versions.push({ image: file, label, parts: {}, tags: version.tags, parent: at });
         c.current = c.versions.length - 1;
         c.style = style.id; // later edits and the style chips follow the new look
       });
+      const next = charOf(q, cid).character.current!;
+      if (version.tags?.length) await saveNamedMasks(id, "character", cid, next, file, version.tags, ctx);
     },
     detail,
   );
@@ -596,8 +649,15 @@ export async function cancel(id: string, key: string, rawTarget = "character", r
 export async function finishCharacter(id: string, rawCid?: unknown) {
   const cid = Cid.parse(rawCid) ?? "c1";
   await updateProject(id, (p) => {
-    const c = charOf(p, cid).character;
+    const data = charOf(p, cid);
+    const c = data.character;
     if (c.current === null) throw new Error("Pick a concept first.");
+    const image = c.versions[c.current].image;
+    const t = data.turnaround;
+    if (!t || t.source !== image) throw new Error("Generate the turnaround from this version first.");
+    if (!viewsFor(t.options).every((v) => t.views[v.id]?.versions.length)) throw new Error("Paint every view of the turnaround first.");
+    if (!data.sheet?.drawn || data.sheet.source !== image) throw new Error("Generate the sheet from this version first.");
+    if (!characterFresh(p, cid)) throw new Error("Generate the turnaround and the sheet from this version first.");
     c.doneAt = new Date().toISOString();
   });
   return `/p/${id}/scene`;

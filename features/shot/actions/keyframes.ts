@@ -10,7 +10,12 @@ import { startJob } from "@/lib/jobs";
 import { sceneKey } from "@/lib/progress";
 import { getProject, projectDir, updateProject, type Keyframes, type Project } from "@/lib/store";
 import { styleById } from "@/lib/styles";
+import { beatsKey } from "../state";
 import { faceFixable, faceReference, matchFace } from "../face";
+import { nameInCaption, whoOf } from "../ingredients";
+
+// Another character stands on the stage: a caption's creature may be them, so it is left as said.
+const alongside = (p: Project) => (p.sceneAssets ?? []).some((a) => a.kind === "character" && a.at);
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const rel = (id: string, f: string) => path.relative(projectDir(id), f);
@@ -51,6 +56,8 @@ function keyPrompt(p: Project, note: string) {
     // Relighting turned a black cat brown with glowing eyes (06_cast stage-cast proof): the light may
     // change, the characters may not.
     "Every character keeps their own colours, markings, fur, skin and clothes exactly as they are; only the light on them changes.",
+    // Named, so the repaint keeps what they are (a cyan dragon stayed a dragon, not a dinosaur).
+    p.character.prompt ? `The main character is ${whoOf(p.character.prompt).name.replace(/^the /, "a ")}, exactly as in the picture.` : "",
     blocksPhrase(p),
     focusPhrase(p.camera),
     note,
@@ -138,7 +145,9 @@ async function refine(id: string, which: number[], reroll = false) {
   const p = await load(id);
   const k = p.keyframes;
   if (!k) throw new Error("Make the keyframes first.");
+  const all = which.length === k.raw.length;
   await startJob(id, "keyframes", async (ctx) => {
+    if (all) await updateProject(id, (q) => void (q.keyframes?.raw[0] === k.raw[0] && (q.keyframes.beats = beatsKey(q))));
     let first = !which.includes(0) && k.keys[0] ? abs(id, k.keys[0]) : null;
     for (const [n, i] of which.entries()) {
       await ctx.progress(`Painting key ${n + 1} of ${which.length}`);
@@ -186,7 +195,8 @@ async function refine(id: string, which: number[], reroll = false) {
       if (i === 0) first = image;
       // A caption that fails leaves the key without one; the take is still made from the context.
       await ctx.progress(`Describing key ${n + 1} of ${which.length}`);
-      const text = await caption(image, `${outDir}-caption`, ctx.track).catch(() => null);
+      const said = await caption(image, `${outDir}-caption`, ctx.track).catch(() => null);
+      const text = said && !alongside(p) ? nameInCaption(said, p.character.prompt ?? "", (p.sceneAssets ?? []).map((a) => a.name)) : said;
       if (!(await ctx.alive())) return;
       await updateProject(id, (q) => {
         if (q.keyframes?.raw[i] !== k.raw[i]) return;
@@ -195,6 +205,15 @@ async function refine(id: string, which: number[], reroll = false) {
       });
     }
   }, "Painting the keyframes");
+}
+
+// Every key painted again from the same captures, with today's beats (One Shoot, when only the beats changed).
+export async function repaintKeys(id: string) {
+  const p = await load(id);
+  if (!p.keyframes?.raw.length) throw new Error("Make the keyframes first.");
+  if (p.jobs.keyframes?.status === "running") throw new Error("A key is still being painted; wait for it or cancel it first.");
+  await refine(id, p.keyframes.raw.map((_, i) => i));
+  done(id);
 }
 
 export async function rerollKey(id: string, rawIndex: unknown) {

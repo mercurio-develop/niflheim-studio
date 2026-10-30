@@ -53,8 +53,15 @@ export async function maskBox(file: string): Promise<Box | null> {
 
 // For 01_remove (the selection is a flat grey shape by then). Naming the object and forbidding
 // clothing matters: "fill with the body and clothing" made Qwen paint a new shirt where one was removed.
-export const removePrompt = (what: string) =>
-  `Remove the flat grey shape completely${what ? `; it was the ${what}` : ""}. Fill the space with what is underneath it on this character, continuing the surrounding skin, fur, body or material, and the plain background, in the same art style. Do not paint ${what ? `any ${what}, ` : ""}clothing or any new object in its place.`;
+const HEADWEAR = /^(hat|helmet|hood|crown|cap|helm)s?$/i;
+
+export const removePrompt = (what: string) => {
+  const noun = what.trim().split(/\s+/).at(-1) ?? "";
+  if (HEADWEAR.test(noun)) {
+    return `Remove the flat grey shape completely; it was the ${what}. Paint the character's own hair and head as if the ${what} was never worn: no visor, brim, straps or visor slit. Fill with hair, skin or the plain background, in the same art style. Do not paint any ${noun} or other headwear in its place.`;
+  }
+  return `Remove the flat grey shape completely${what ? `; it was the ${what}` : ""}. Fill the space with what is underneath it on this character, continuing the surrounding skin, fur, body or material, and the plain background, in the same art style. Do not paint ${what ? `any ${what}, ` : ""}clothing or any new object in its place.`;
+};
 
 // A square-ish box around the strokes with room for the new thing (at least `min` px), inside the image.
 // grow/min: more room for Add, so the new thing is drawn whole inside the crop.

@@ -8,6 +8,7 @@ import { LoadingDots } from "@/components/loading-dots";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Textarea } from "@/components/ui/textarea";
 import type { Job, SceneAsset } from "@/lib/store";
+import { STYLES, styleById } from "@/lib/styles";
 import { cancelAsset, deleteAsset, makeAsset, remakeAsset } from "../actions/assets";
 import { AssetEditor } from "./asset-editor";
 import { chip } from "./chip";
@@ -27,6 +28,7 @@ const FROM: { id: From; label: string }[] = [
 // height and facing are set here.
 export function AssetsPanel(props: {
   projectId: string;
+  style: string; // the scene's style (the set's, else the character's): a new asset's default
   assets: SceneAsset[];
   jobs: Record<string, Job>;
   characterAssets: string[]; // names of the character's assets
@@ -42,6 +44,8 @@ export function AssetsPanel(props: {
   const [prompt, setPrompt] = useState("");
   const [shelf, setShelf] = useState(props.characterAssets[0] ?? "");
   const [editFirst, setEditFirst] = useState(false); // keep the picture for editing before the 3D
+  const [look, setLook] = useState(""); // "" the scene's style, else a style id or "keep"
+  const [styling, setStyling] = useState(false); // the other styles shown
   const [editing, setEditing] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +60,7 @@ export function AssetsPanel(props: {
       form.set("from", from);
       form.set("name", from === "character" ? shelf : name);
       if (editFirst) form.set("edit", "1");
+      if (look && !(look === "keep" && from !== "upload")) form.set("style", look);
       if (from === "prompt") form.set("prompt", prompt);
       if (from === "upload") {
         const f = fileRef.current?.files?.[0];
@@ -71,7 +76,7 @@ export function AssetsPanel(props: {
   return (
     <div className="flex flex-col gap-3">
       <CastPicker projectId={props.projectId} cast={props.cast} jobs={props.jobs} />
-      <p className="text-xs text-muted-foreground">An object for the scene in 3D, standing on the stage. It shows in every shot, and the keyframes paint it in the scene&apos;s style. Other characters are made in the Character step.</p>
+      <p className="text-xs text-muted-foreground">An object for the scene in 3D, standing on the stage. It shows in every shot. It is painted in the scene&apos;s style unless you change it. Other characters are made in the Character step.</p>
       <div className="flex flex-wrap items-center gap-1.5">
         {FROM.map((x) => (
           <button key={x.id} type="button" aria-pressed={from === x.id} className={chip(from === x.id)} disabled={x.id === "character" && !props.characterAssets.length} title={x.id === "character" && !props.characterAssets.length ? "Nothing yet: in Character, hide an object from the turnaround and keep it, and it shows up here" : undefined} onClick={() => setFrom(x.id)}>
@@ -93,6 +98,39 @@ export function AssetsPanel(props: {
         )}
         {from === "prompt" && <Textarea aria-label="Describe it" value={prompt} maxLength={300} rows={2} placeholder={"a weathered wooden hand cart with one broken wheel"} onChange={(e) => setPrompt(e.target.value)} />}
         {from === "upload" && <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" aria-label="Its picture" className="text-sm" />}
+        {from !== "character" && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Its style">
+              <span className="text-xs text-muted-foreground">Style</span>
+              <button type="button" role="radio" aria-checked={!look} className={chip(!look)} onClick={() => setLook("")}>
+                Same as the scene · {styleById(props.style).label}
+              </button>
+              {from === "upload" && (
+                <button type="button" role="radio" aria-checked={look === "keep"} className={chip(look === "keep")} onClick={() => setLook("keep")}>
+                  As in the picture
+                </button>
+              )}
+              {look && look !== "keep" && !styling && (
+                <button type="button" role="radio" aria-checked className={chip(true)} onClick={() => setStyling(true)}>
+                  {styleById(look).label}
+                </button>
+              )}
+              <button type="button" aria-expanded={styling} className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setStyling(!styling)}>
+                {styling ? "Fewer" : "Change style"}
+              </button>
+            </div>
+            {styling && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {STYLES.filter((x) => x.id !== props.style).map((x) => (
+                  <button key={x.id} type="button" role="radio" aria-checked={look === x.id} className={chip(look === x.id)} onClick={() => setLook(x.id)}>
+                    {x.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <span className="text-xs text-muted-foreground">{from === "upload" ? "The picture is repainted in this style so it sits in the scene." : "Painted in this style, like the character and the set."}</span>
+          </div>
+        )}
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <input type="checkbox" checked={editFirst} onChange={(e) => setEditFirst(e.target.checked)} className="accent-primary" />
           Edit the picture first (brush, change, remove, parts), then make the 3D
@@ -194,6 +232,7 @@ export function AssetsPanel(props: {
             <input id="asset-turn" type="range" min={-180} max={180} step={5} value={picked.turn} onChange={(e) => props.onChange(picked.id, { height: picked.height, turn: Number(e.target.value) })} className="w-full accent-primary" />
             <span className="w-14 text-right font-mono text-xs text-muted-foreground">{picked.turn}°</span>
           </div>
+          {picked.kind !== "character" && <p className="col-span-2 text-xs text-muted-foreground">Drag the gizmo&apos;s up arrow to lift it off the ground: a butterfly in the air, a lamp on a wall.</p>}
         </div>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}

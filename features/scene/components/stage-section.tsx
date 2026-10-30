@@ -28,6 +28,7 @@ const SIZES: Record<Block["kind"], Block["size"]> = { box: [1, 1, 1], cylinder: 
 export function StageSection(props: {
   projectId: string;
   set: SetData | null;
+  style: string; // the scene's style: the set's, else the character's
   placement: StageData | null;
   blocks: Block[]; // greybox shapes on the stage
   assets: SceneAsset[]; // objects made for the scene in 3D
@@ -173,7 +174,7 @@ export function StageSection(props: {
         s?.image && !building && !cutting && (
           <>
             {(oldCut || props.stageJob?.status === "error") && floor && (
-              <Button variant="ghost" size="sm" onClick={() => run(() => cutOutCharacter(props.projectId))}>
+              <Button variant={oldCut ? "default" : "ghost"} size="sm" onClick={() => run(() => cutOutCharacter(props.projectId))}>
                 <Scissors data-icon="inline-start" />
                 {oldCut ? "Cut out the new turnaround" : "Cut out again"}
               </Button>
@@ -305,6 +306,7 @@ export function StageSection(props: {
         >
           <AssetsPanel
             projectId={props.projectId}
+            style={props.style}
             assets={assets}
             jobs={props.assetJobs}
             characterAssets={props.characterAssets}

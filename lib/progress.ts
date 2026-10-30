@@ -1,6 +1,6 @@
 import type { CharacterData, Project, TurnaroundOptions, ViewId } from "./store";
 import type { StepSlug } from "./steps";
-import { propsKey, renderKey } from "./camera";
+import { frameCount, propsKey, renderKey, type CameraMove, type Vec } from "./camera";
 
 // lib/store.ts charOf, without importing it: store pulls in node:fs and this file reaches the browser.
 export function charIn(p: Project, cid = "c1"): CharacterData {
@@ -117,6 +117,18 @@ export const characterImage = (p: Project, cid = "c1") => {
   return c.current === null ? null : c.versions[c.current].image;
 };
 
+// This version has every turnaround view and a sheet painted from it: Scene and Shots read these,
+// not an in-progress edit. Generate on the turnaround and on the sheet is what makes them.
+export function characterFresh(p: Project, cid = "c1"): boolean {
+  const image = characterImage(p, cid);
+  const c = charIn(p, cid);
+  const t = c.turnaround;
+  if (!image || !t || t.source !== image) return false;
+  if (!viewsFor(t.options).every((v) => t.views[v.id]?.versions.length)) return false;
+  const sheet = c.sheet;
+  return !!sheet?.drawn && sheet.source === image;
+}
+
 // done = finished and still matches what came before it; stale = made from an older character.
 export type StepState = "done" | "stale" | "todo";
 
@@ -124,12 +136,17 @@ export type StepState = "done" | "stale" | "todo";
 export const currentFill = (p: Project) => (p.set?.stage && p.set.stage.image === p.set.image ? p.set.stage.fill : undefined);
 
 // The stage a shot is drawn from (the move, where the character stands, the filled set, the blocks
-// and objects): keyframes and the clay clip keep the key they were made from, and are out of date
-// when it changes. null until the character stands on a filled stage with a move.
+// and objects, and which turnaround front the cards were cut from): keyframes and the clay clip
+// keep the key they were made from, and are out of date when it changes. A new Looks good makes
+// a new front, so the keys stay tied to the character that was standing when they were painted.
+export function sceneKeyFrom(camera: CameraMove, at: Vec, height: number, mesh: string, turn: number, blocks: Parameters<typeof propsKey>[0], assets: Parameters<typeof propsKey>[1], source: string) {
+  return renderKey(camera, at, height, mesh, turn) + propsKey(blocks, assets) + `|${source}`;
+}
+
 export function sceneKey(p: Project) {
   const fill = currentFill(p);
   if (!fill?.camera?.floor || !p.stage?.at || !p.camera) return null;
-  return renderKey(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn) + propsKey(p.blocks, p.sceneAssets);
+  return sceneKeyFrom(p.camera, p.stage.at, p.stage.height, fill.mesh, p.stage.turn, p.blocks, p.sceneAssets, p.stage.source);
 }
 
 // Why a placement no longer fits: the turnaround front changed (cut out again) or the set was
@@ -150,13 +167,25 @@ function sceneState(p: Project): StepState {
   return p.set.stage.image !== p.set.image || placementStale(p) ? "stale" : "done";
 }
 
+// Keyframes (and so takes) are from the character that was standing when they were painted.
+function shotState(p: Project): StepState {
+  const k = p.keyframes;
+  const hasTakes = !!p.shot?.takes.length;
+  if (!hasTakes && !k?.keys.length) return "todo";
+  const key = sceneKey(p);
+  const keysOld = !k?.keys.length || !k.keys.every(Boolean) || !key || k.key !== key || (!!p.camera && k.frames.at(-1) !== frameCount(p.camera.seconds) - 1);
+  const sheetOld = !!p.sheet?.source && p.sheet.source !== characterImage(p);
+  if (sceneState(p) !== "done" || keysOld || sheetOld) return "stale";
+  return p.shot?.picked !== undefined ? "done" : "todo";
+}
+
 export function stepStates(p: Project, cid = "c1"): Partial<Record<StepSlug, StepState>> {
   const c = charIn(p, cid);
-  const t = c.turnaround;
-  const allViews = !!t && viewsFor(t.options).every((v) => t.views[v.id]?.versions.length);
   return {
-    // The turnaround is part of Character: done once it is finished and every view is from the current version.
-    character: !c.character.doneAt || !allViews ? "todo" : t!.source === characterImage(p, cid) ? "done" : "stale",
+    // Character is done once Scene was entered from this version (doneAt) and the turnaround plus
+    // sheet still match it. An edit without Generate, or a sheet from an older picture, is stale.
+    character: !c.character.doneAt ? "todo" : characterFresh(p, cid) ? "done" : "stale",
     scene: sceneState(p),
+    shot: shotState(p),
   };
 }

@@ -2,15 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Composer } from "@/components/composer";
+import { CHARACTER_TEMPLATES } from "@/features/character/templates";
 import { startCharacter } from "../actions/start-character";
 
-const EXAMPLES = [
-  // The demo shot's character ("The Discovery").
-  "a hulking forest troll with mossy grey-green skin, tusked underbite, bark-like shoulders, tattered hide loincloth, twigs in a shaggy mane",
-  "a young lantern keeper in a hooded wool coat, leather satchel, tall boots",
-  "a desert courier with a patched glider strapped to her back",
-  "a clockwork knight with moss growing through the armour",
-];
+const first = CHARACTER_TEMPLATES[0];
 
 // The same composer as step 01. Before a project exists the sketch stays in the browser and
 // goes up with the first Generate.
@@ -35,7 +30,7 @@ export function StartForm() {
       <Composer
         id="prompt"
         large
-        defaults={{ prompt: EXAMPLES[0], style: "painterly", count: 4 }} // starts on the demo's troll; clear it for the examples
+        defaults={{ prompt: first.prompt, style: first.style, count: 1 }} // one concept: Generate then Edit opens
         reference={preview}
         onReference={(f) => choose(f)}
         onClearReference={() => choose(null)}
@@ -54,7 +49,7 @@ export function StartForm() {
         busy={pending}
         pending={pending}
         error={error}
-        examples={EXAMPLES}
+        templates={CHARACTER_TEMPLATES}
       />
     </div>
   );

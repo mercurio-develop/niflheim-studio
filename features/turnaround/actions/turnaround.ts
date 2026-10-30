@@ -8,7 +8,8 @@ import { ASSETS } from "../flags";
 import { paintViews } from "@/lib/asset-3d";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
-import { drawSheet, paintSheet } from "../sheet";
+import { drawSheet } from "../sheet";
+import { partSearches } from "@/lib/parts";
 import { characterImage, firstView, frontPrompt, viewImage, viewPrompt, VIEWS, viewsFor } from "@/lib/progress";
 import { CID, charDir, charKey, charOf, getProject, projectDir, updateProject, type Edit, type TurnaroundOptions, type ViewId } from "@/lib/store";
 
@@ -55,17 +56,6 @@ async function makeView(id: string, view: ViewId, from: string, prompt: string, 
   return rel(id, image);
 }
 
-// Other words SAM may know an object by, tried when its own name finds nothing.
-const SYNONYMS: Record<string, string[]> = { bag: ["satchel", "backpack"], cape: ["cloak"], cloak: ["cape"], sword: ["blade"], hat: ["cap"], helmet: ["helm"], shield: ["buckler"], staff: ["stick", "pole"] };
-
-// The words and confidence thresholds to try, most exact first. SAM 3.1 missed "shoulder bag" at
-// 0.5 and found it at 0.3, and as "bag" (2026-10-27); each try is about half a second.
-function searches(name: string): [string, number][] {
-  const last = name.split(" ").at(-1)!;
-  const words = [...new Set([last, ...(SYNONYMS[last] ?? [])])].filter((w) => w !== name);
-  return [[name, 0.5], [name, 0.3], ...words.map((w): [string, number] => [w, 0.3])];
-}
-
 // A hidden object's mask on the character version, found with SAM (01_parts) if it has none yet.
 // It is saved as a part of that version, so the Character editor and Refine see the same mask.
 // An empty mask saved earlier counts as none, so it is searched for again.
@@ -78,7 +68,7 @@ async function ensureMask(id: string, name: string, ctx: JobCtx, cid = "c1") {
   const saved = version.parts[name];
   if (saved && (await maskBox(abs(id, saved)))) return saved;
   let m = "";
-  for (const [word, threshold] of searches(name)) {
+  for (const [word, threshold] of partSearches(name)) {
     [m] = await runWorkflow({ workflow: "01_parts.api.json", onSubmit: ctx.track, set: [["2", "prompt", word], ["2", "confidence_threshold", threshold]], images: [["1", abs(id, version.image)]], output: "4", outDir: abs(id, charDir(cid, `character/masks/${stamp()}-${slug(name)}`)) });
     if (!(await ctx.alive())) return null;
     if (await maskBox(m)) break;
@@ -175,15 +165,20 @@ export async function generateTurnaround(id: string, rawOptions: z.input<typeof 
   const p = await getProject(id);
   const source = p && characterImage(p, cid);
   if (!source) throw new Error("Finish the character first.");
+  const data = charOf(p, cid);
+  // Generate paints this version only after Looks good, or again for the same source.
+  if (data.character.accepted !== source && data.turnaround?.source !== source) throw new Error("Looks good in Edit first.");
   const views = viewsFor(options);
   await startJob(
     id,
     charKey(cid, "turnaround"),
     async (ctx) => {
       // A new set starts from this character with these options; earlier views stay in each stack.
+      // The sheet is left as it is (stale) until Generate on the sheet; never deleted.
       await updateProject(id, (q) => {
         const c = charOf(q, cid);
         c.turnaround = { source, options, views: c.turnaround?.source === source ? c.turnaround.views : {} };
+        if (c.sheet) c.sheet.source = undefined;
       });
       let clean = source;
       for (const name of options.hide) {
@@ -212,9 +207,6 @@ export async function generateTurnaround(id: string, rawOptions: z.input<typeof 
         await ctx.progress(`Making the ${label(v.id).toLowerCase()} view (${i + 2}/${views.length})`);
         if (!(await makeView(id, v.id, anchor, viewPrompt(v.id, options), ctx, `${label(v.id)} · from the ${label(first).toLowerCase()}`, cid))) return;
       }
-      // The sheet comes with the views: the faces and the chosen items, then the sheet drawn
-      // (features/turnaround/sheet.ts). The views are already its bodies.
-      await paintSheet(id, cid, options.items, ctx);
     },
     `Making the front view (1/${views.length})`,
   );
@@ -364,6 +356,8 @@ export async function replicateEdit(id: string, rawFrom: string, rawTo: string[]
         await repeatEdit(id, v, e, from, ctx, cid);
         if (!(await ctx.alive())) return;
       }
+      const q = await getProject(id);
+      if (q && charOf(q, cid).sheet?.drawn) await drawSheet(id, cid);
     },
     `Repeating on ${to.length} view${to.length === 1 ? "" : "s"}`,
   );
