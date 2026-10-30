@@ -7,6 +7,7 @@ import { z } from "zod";
 import { runWorkflow } from "@/lib/comfy";
 import { fillStage } from "@/lib/stage-fill";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
+import { shiftMain } from "@/lib/camera";
 import { currentFill } from "@/lib/progress";
 import { getProject, projectDir, updateProject, type Project, type ViewId } from "@/lib/store";
 import { REFERENCE_TYPES, StyleId, referenceError } from "@/features/character/schemas";
@@ -191,6 +192,13 @@ export async function placeCharacter(id: string, raw: unknown) {
     if (!q.stage) throw new Error("Cut out the character first.");
     // A new spot is placed on today's set; a height or turn change alone keeps the set it was placed on.
     const spot = !q.stage.fill || !q.stage.at || place.at.some((x, i) => x !== q.stage!.at![i]);
+    // Every shot's blocking moves with the character (lib/camera.ts shiftMain).
+    const was = q.stage.at;
+    if (was && spot) {
+      const d: [number, number, number] = [place.at[0] - was[0], place.at[1] - was[1], place.at[2] - was[2]];
+      if (q.camera) q.camera = shiftMain(q.camera, d);
+      for (const s of Object.values(q.stash ?? {})) if (s?.camera) s.camera = shiftMain(s.camera, d);
+    }
     Object.assign(q.stage, place, spot ? { fill: currentFill(q)?.mesh } : {});
   });
   done(id);

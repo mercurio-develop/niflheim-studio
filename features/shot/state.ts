@@ -5,8 +5,10 @@ import type { Project, ShotKind } from "@/lib/store";
 // What the Shots page and the take action both need to know about the active shot. Plain helpers
 // (not server actions), shared by app/p/[id]/shot/page.tsx and features/shot/actions/shot.ts.
 
-// A grey clay frame is about 25 KB; the cap keeps a 10 s move (241 frames) under the 11 MB body limit.
-export const CLAY_FRAME_MAX = 44 * 1024;
+// The clay clip's frames share one upload under the 11 MB body limit (next.config.ts): each frame
+// may take its share of 10.5 MB (108 KB at 4 s, 44 KB at 10 s). A detailed stage made a fixed
+// 44 KB cap refuse every 4 s clip (05_submit demo).
+export const clayFrameMax = (frames: number) => Math.floor((10.5 * 1024 * 1024) / Math.max(1, frames));
 
 // Why the keyframes cannot guide a take, or null when they can: every key painted, covering today's
 // move, and drawn from today's stage (a key of a stage that has changed since, say with someone
