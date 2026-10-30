@@ -12,6 +12,10 @@ import { chip } from "./chip";
 // or Free: dragged in Overview, its height set here), a move, how far and how long; the path shows in the stage above (from above), Play flies it, and frames that leave the
 // space the stage holds are counted. Saved a moment after the last change. (The depth-video Render
 // is gone: no take used it; the clay clip in Keyframes is the move's guide now.)
+// Without More, only the presets that cannot fail show; one already picked stays.
+const EXPERT_FRAMINGS = ["free", "pov"];
+const EXPERT_MOVES = ["crane", "track"];
+
 export function CameraSection(props: {
   projectId: string;
   move: CameraMove;
@@ -27,6 +31,8 @@ export function CameraSection(props: {
   ready: boolean; // a character stands on the stage
   n?: string; // its number on the page
   top?: React.ReactNode; // above the controls: the stage viewer the path is shown in
+  more: boolean; // the expert controls shown: Free, Height, Crane, Track, poses, Around, Focus, Ease
+  onMore: (on: boolean) => void;
 }) {
   const m = props.move;
   const spec = MOVES.find((x) => x.id === m.move)!;
@@ -35,6 +41,7 @@ export function CameraSection(props: {
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
   const set = (patch: Partial<CameraMove>) => props.onMove({ ...m, ...patch });
+  const more = props.more;
 
   const first = useRef(true);
   useEffect(() => {
@@ -69,7 +76,7 @@ export function CameraSection(props: {
       {props.top}
       {props.ready && (
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:max-w-xl">
-          {!!props.subjects && props.subjects.length > 2 && (
+          {more && !!props.subjects && props.subjects.length > 2 && (
             <>
               <span className="text-xs text-muted-foreground">Around</span>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -83,7 +90,7 @@ export function CameraSection(props: {
           )}
           <span className="text-xs text-muted-foreground">Framing</span>
           <div className="flex flex-wrap items-center gap-1.5">
-            {FRAMINGS.map((x) => (
+            {FRAMINGS.filter((x) => more || !EXPERT_FRAMINGS.includes(x.id) || x.id === framing.id).map((x) => (
               <button key={x.id} type="button" aria-pressed={framing.id === x.id} className={chip(framing.id === x.id)} onClick={() => set({ framing: x.id, from: x.id === "free" ? (m.from ?? props.start ?? undefined) : m.from })}>
                 {x.label}
               </button>
@@ -92,7 +99,7 @@ export function CameraSection(props: {
           <span />
           <p className="-mt-1 text-xs text-muted-foreground">{framing.line}</p>
 
-          {props.start && (
+          {more && props.start && (
             <>
               <label htmlFor="cam-height" className="text-xs text-muted-foreground">
                 Height
@@ -115,7 +122,7 @@ export function CameraSection(props: {
 
           <span className="text-xs text-muted-foreground">Move</span>
           <div className="flex flex-wrap items-center gap-1.5">
-            {MOVES.map((x) => (
+            {MOVES.filter((x) => more || !EXPERT_MOVES.includes(x.id) || x.id === m.move).map((x) => (
               <button key={x.id} type="button" aria-pressed={m.move === x.id} className={chip(m.move === x.id)} onClick={() => set({ move: x.id, amount: x.value, to: undefined })}>
                 {x.label}
               </button>
@@ -133,7 +140,7 @@ export function CameraSection(props: {
             )}
           </p>
 
-          {!!props.poses?.length && (
+          {more && !!props.poses?.length && (
             <>
               <span className="text-xs text-muted-foreground">Pose</span>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -197,26 +204,36 @@ export function CameraSection(props: {
             <span className="w-14 text-right font-mono text-xs text-muted-foreground">{m.seconds} s</span>
           </div>
           <span />
-          <p className="-mt-1 text-xs text-muted-foreground">Up to 5 s: past that a take drifts (LTX&apos;s own guidance is about 4 s). A longer moment is two shots.</p>
+          <p className="-mt-1 text-xs text-muted-foreground">Up to 5 s: longer takes drift. A longer moment is two shots.</p>
 
-          <span className="text-xs text-muted-foreground">Focus</span>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {FOCUS.map((x) => (
-              <button key={x.id} type="button" aria-pressed={(m.focus ?? "deep") === x.id} className={chip((m.focus ?? "deep") === x.id)} onClick={() => set({ focus: x.id })}>
-                {x.label}
+          {more && (
+            <>
+            <span className="text-xs text-muted-foreground">Focus</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {FOCUS.map((x) => (
+                <button key={x.id} type="button" aria-pressed={(m.focus ?? "deep") === x.id} className={chip((m.focus ?? "deep") === x.id)} onClick={() => set({ focus: x.id })}>
+                  {x.label}
+                </button>
+              ))}
+              {(m.focus ?? "deep") !== "deep" && <span className="ml-2 text-[11px] text-muted-foreground">The keyframes and the take paint the blur; the 3D view stays sharp.</span>}
+            </div>
+
+            <span className="text-xs text-muted-foreground">Ease</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button type="button" aria-pressed={m.ease} className={chip(m.ease)} onClick={() => set({ ease: !m.ease })}>
+                Ease in and out
               </button>
-            ))}
-            {(m.focus ?? "deep") !== "deep" && <span className="ml-2 text-[11px] text-muted-foreground">The keyframes and the take paint the blur; the 3D view stays sharp.</span>}
-          </div>
-
-          <span className="text-xs text-muted-foreground">Ease</span>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button type="button" aria-pressed={m.ease} className={chip(m.ease)} onClick={() => set({ ease: !m.ease })}>
-              Ease in and out
+              <span className="ml-2 font-mono text-[11px] text-muted-foreground">
+                {frames} frames at {FPS} fps
+              </span>
+            </div>
+            </>
+          )}
+          <span />
+          <div>
+            <button type="button" aria-pressed={more} className={chip(more)} onClick={() => props.onMore(!more)}>
+              {more ? "Fewer controls" : "More controls"}
             </button>
-            <span className="ml-2 font-mono text-[11px] text-muted-foreground">
-              {frames} frames at {FPS} fps
-            </span>
           </div>
         </div>
       )}

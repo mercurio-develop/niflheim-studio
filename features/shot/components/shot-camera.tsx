@@ -44,6 +44,8 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   const ready = !!cam?.floor && !!pl?.at;
   const [move, setMove] = useState<CameraMove>(props.camera ? { ...props.camera, seconds: Math.min(5, props.camera.seconds) } : DEFAULT_MOVE);
   const [overview, setOverview] = useState(false);
+  // The expert controls (More): open by itself when the shot already uses moments.
+  const [more, setMore] = useState(!!props.camera?.moments?.length);
   const [playing, setPlaying] = useState(false);
   const live = useRef<Vec | null>(null); // where the character stands this frame, when they walk
   const setLive = useCallback((at: Vec | null) => void (live.current = at), []);
@@ -150,14 +152,14 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
         />
       </StageViewer>
       <ViewSwitch overview={overview} onOverview={view} home="Through the lens" />
-      <button
+      {(more || free) && <button
         type="button"
         aria-pressed={free}
         onClick={() => (setPlaying(false), setOverview(false), setFree(!free))}
         className="absolute top-2 right-2 z-20 rounded-full border bg-background/80 px-2.5 py-1 text-xs backdrop-blur aria-pressed:border-primary aria-pressed:text-primary"
       >
         Fly the camera
-      </button>
+      </button>}
       {edits.error && <p className="absolute bottom-2 left-2 z-20 rounded bg-background/80 px-2 py-1 text-xs text-destructive">{edits.error}</p>}
     </div>
   );
@@ -180,7 +182,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
         viewer && (
           <>
             {viewer}
-            <MomentsBar
+            {(more || ms.length > 0) && <MomentsBar
               moments={ms}
               frames={n}
               picked={sel}
@@ -194,11 +196,13 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
               canShoot={free && sel !== null}
               onShoot={() => probe.current && sel !== null && setMoments(ms.map((x, i) => (i === sel ? { ...x, camera: { ...probe.current! } } : x)))}
               warnings={warnings}
-            />
+            />}
           </>
         )
       }
       ready={ready}
+      more={more}
+      onMore={(on) => (setMore(on), on || (setFree(false), setSel(null)))}
     />
   );
 }
