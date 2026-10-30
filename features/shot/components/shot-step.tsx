@@ -14,7 +14,9 @@ import { NextBar } from "@/features/wizard/components/next-bar";
 import type { Job, Keyframes, Shot, ShotKind } from "@/lib/store";
 import { goodTake } from "@/lib/score";
 import { cn } from "@/lib/utils";
-import { cancelShot, pickTake, renderTake, saveBeats, setShotKind } from "../actions/shot";
+import { cancelShot, oneShoot as oneShootAction, pickTake, renderTake, saveBeats, setShotKind } from "../actions/shot";
+import { clayFrameMax } from "../state";
+import { shootCapturer } from "./shot-keyframes";
 import { drawShotSheet } from "../actions/sheet";
 import { chip } from "@/features/scene/components/chip";
 import { ShotTabs, type ShotTab } from "./shot-tabs";
@@ -66,6 +68,32 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
   const toggleProp = (id: string) => setPick((x) => ({ ...x, props: x.props.includes(id) ? x.props.filter((p) => p !== id) : x.props.length < 2 ? [...x.props, id] : x.props }));
   const character = kind === "character";
   const shoot = (tries: number) => run(() => renderTake(props.projectId, { beats, tries, expression: character ? expression : undefined, fromKey: character && fromKey }));
+  // One Shoot: whatever is stale is drawn in the browser (keys, then the clay clip for a Camera
+  // move), then the server paints, shoots up to 3 takes and picks the steadiest.
+  const [phase, setPhase] = useState<string | null>(null);
+  const oneShoot = () =>
+    run(async () => {
+      const c = shootCapturer();
+      const form = new FormData();
+      try {
+        if ((!character || fromKey) && !props.ready) {
+          if (!c) throw new Error("Build the scene first: a stage, the character standing in it and a camera move.");
+          setPhase("Drawing the keyframes");
+          (await c.capture("keys")).forEach((b, i) => form.set(`key${i}`, new File([b], `key${i}.jpg`, { type: "image/jpeg" })));
+        }
+        if (!character && c && !c.clayCurrent) {
+          setPhase("Drawing the motion guide");
+          const frames = await c.capture("clay");
+          const max = clayFrameMax(frames.length);
+          if (frames.some((b) => b.size >= max)) throw new Error("A clay frame came out too big to send; shorten the move.");
+          frames.forEach((b, i) => form.set(`f${i}`, new File([b], `${i}.jpg`, { type: "image/jpeg" })));
+        }
+        setPhase("Sending");
+        await oneShootAction(props.projectId, form, { beats, tries: 3, expression: character ? expression : undefined, fromKey: character && fromKey });
+      } finally {
+        setPhase(null);
+      }
+    });
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const running = props.job?.status === "running";
@@ -210,9 +238,9 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                 <Clapperboard data-icon="inline-start" />
                 One take
               </Button>
-              <Button type="button" size="lg" disabled={!canShoot} onClick={() => shoot(3)} title="Shoots until a take is steady with nothing popping in, at most 3, and picks the best">
+              <Button type="button" size="lg" disabled={busy || beats.start.trim().length < 3 || (character && !props.sheet)} onClick={oneShoot} title="Repaints the keyframes if they are stale (faces fixed), draws the motion guide for a Camera move, shoots up to 3 takes and picks the steadiest">
                 {pending && !running ? <LoadingDots /> : <Repeat data-icon="inline-start" />}
-                Shoot (best of 3)
+                {phase ?? "One Shoot"}
               </Button>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}

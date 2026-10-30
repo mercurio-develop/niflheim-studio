@@ -17,6 +17,8 @@ import { keysProblem, suggestedKind } from "../state";
 import { addIngredients, firstKeyOnly, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, whoOf, withSheet } from "../ingredients";
 import { PYTHON } from "@/lib/python";
 import { goodTake, takeRank } from "@/lib/score";
+import { saveKeys } from "./keyframes";
+import { saveClay } from "./layout";
 
 const abs = (id: string, f: string) => path.join(projectDir(id), f);
 const run = promisify(execFile);
@@ -168,16 +170,57 @@ function sheetFor(p: Project, video: string, expression?: string) {
 }
 
 export async function renderTake(id: string, raw: unknown) {
-  const { beats, action, tries, expression, fromKey } = Input.parse(raw);
-  const negative = DEFAULT_NEGATIVE;
+  await shoot(id, Input.parse(raw), false);
+}
+
+// One Shoot: the browser's captures of today's stale keys and of the move's clay clip are saved
+// (the keys painted and the clip joined, each as its own job), then one shot job waits for them,
+// shoots up to `tries` takes and picks the steadiest. The browser draws only what is stale.
+export async function oneShoot(id: string, form: FormData, raw: unknown) {
+  const input = Input.parse(raw);
   const p = await getProject(id);
   if (!p) throw new Error("Project not found.");
   if (!p.camera) throw new Error("Choose a camera move first.");
+  if (p.jobs.shot?.status === "running") throw new Error("A take is still being shot; wait for it or cancel it first.");
+  await updateProject(id, (q) => void (q.shot = { negative: DEFAULT_NEGATIVE, takes: [], ...q.shot, beats: input.beats, action: input.action }));
+  if (form.has("key0")) await saveKeys(id, form, p.keyframes?.note ?? "", true);
+  if (form.has("f0")) await saveClay(id, form);
+  await shoot(id, input, true);
+}
+
+// Waits for the keys and the clay clip being made for this shoot; a key that failed ends it.
+async function settled(id: string, ctx: { alive: () => Promise<boolean>; progress: (d: string) => Promise<unknown> }) {
+  for (;;) {
+    const p = await getProject(id);
+    if (!p || !(await ctx.alive())) return false;
+    const j = p.jobs;
+    if (j.keyframes?.status === "error") throw new Error(`Keyframes failed: ${j.keyframes.error}`);
+    if (j.keyframes?.status === "cancelled") throw new Error("The keyframes were cancelled.");
+    const busy = [j.keyframes, j.layout].find((x) => x?.status === "running");
+    if (!busy) return true;
+    await ctx.progress(busy.detail ?? "Painting the keyframes");
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
+async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: boolean) {
+  const { beats, action, tries, expression, fromKey } = input;
+  const negative = DEFAULT_NEGATIVE;
+  const first = await getProject(id);
+  if (!first) throw new Error("Project not found.");
+  if (!first.camera) throw new Error("Choose a camera move first.");
+  // Keys guide every take but a character take from the sheet alone; they must be today's.
+  const problem = keysProblem(first);
+  if (!wait && problem && ((first.shot?.kind ?? suggestedKind(first)) === "camera" || fromKey)) throw new Error(problem);
+  await updateProject(id, (q) => void (q.shot = { takes: [], ...q.shot, action, beats, negative, expression }));
+  await startJob(id, "shot", async (ctx) => {
+  if (wait && !(await settled(id, ctx))) return;
+  const p = await getProject(id);
+  if (!p?.camera) throw new Error("Choose a camera move first.");
   const k = p.keyframes;
   const kind = p.shot?.kind ?? suggestedKind(p);
-  // Keys guide every take but a character take from the sheet alone; they must be today's.
-  const problem = keysProblem(p);
-  if (problem && (kind === "camera" || fromKey)) throw new Error(problem);
+  const late = keysProblem(p);
+  if (late && (kind === "camera" || fromKey)) throw new Error(late);
   const length = frameCount(p.camera.seconds);
   const keys = (k?.keys ?? []) as string[];
   // A character take is the sheet's trained length, from the sheet alone or from the first key too
@@ -193,8 +236,6 @@ export async function renderTake(id: string, raw: unknown) {
   const prompt = sheet?.prompt ?? (clip ? shotPrompt(p, beats).replace(/\b(clay|3D|Unreal)\b\s*/gi, "") : shotPrompt(p, beats));
   const ms = momentsOf(p.camera);
   const endStrength = ms.length > 1 && (ms[0].marks.main?.pose ?? "") !== (ms.at(-1)!.marks.main?.pose ?? "") ? END_NEW_POSE_STRENGTH : END_STRENGTH;
-  await updateProject(id, (q) => void (q.shot = { takes: [], ...q.shot, action, beats, negative, expression }));
-  await startJob(id, "shot", async (ctx) => {
     const made: { index: number; score?: TakeScore }[] = [];
     for (let n = 1; n <= tries; n++) {
       if (tries > 1) await ctx.progress(`Shooting take ${n} of up to ${tries}`);
