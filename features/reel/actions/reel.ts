@@ -9,6 +9,7 @@ import { z } from "zod";
 import { startJob } from "@/lib/jobs";
 import { getProject, projectDir, updateProject } from "@/lib/store";
 import { reelClips } from "../clips";
+import { clipVideo } from "../effects";
 import { PYTHON } from "@/lib/python";
 
 const run = promisify(execFile);
@@ -32,7 +33,8 @@ export async function saveReel(id: string, raw: unknown) {
 export async function exportReel(id: string) {
   const p = await getProject(id);
   if (!p) throw new Error("Project not found.");
-  const clips = reelClips(p);
+  // Each picked take as the reel plays it: with its effect, when one is in use.
+  const clips = reelClips(p).map((c) => ({ ...c, video: clipVideo(id, c.video) }));
   if (!clips.length) throw new Error("Pick a take in at least one shot first.");
   // A join nobody chose is a fade (the reel's one join control, Order; Autopilot keeps it).
   const joins = clips.slice(1).map((_, i) => p.reel?.joins[i] ?? "fade");
