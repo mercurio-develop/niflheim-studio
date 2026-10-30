@@ -10,7 +10,7 @@ import { CameraSection } from "@/features/scene/components/camera-section";
 import { StageViewer } from "@/features/scene/components/stage-viewer";
 import { finishedPoses, fileUrl, urlsOf } from "@/lib/stage-context";
 import { ViewSwitch } from "@/features/scene/components/view-switch";
-import { DEFAULT_MOVE, cardAt, frameCount, inside, momentsOf, placeAt, poses, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
+import { DEFAULT_MOVE, cardAt, clampWalk, frameCount, inside, momentsOf, placeAt, poses, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
 import { saveMoments } from "../actions/moments";
 import { MomentsBar } from "./moments-bar";
 import type { Block, CharacterPose, SceneAsset, SetData, StageData } from "@/lib/store";
@@ -42,8 +42,10 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   const [free, setFree] = useState(false);
   const pl = useMemo(() => (props.placement && liveMain ? { ...props.placement, at: liveMain.at, turn: liveMain.turn } : props.placement), [props.placement, liveMain]);
   const ready = !!cam?.floor && !!pl?.at;
-  const [move, setMove] = useState<CameraMove>(props.camera ?? DEFAULT_MOVE);
+  const [move, setMove] = useState<CameraMove>(props.camera ? { ...props.camera, seconds: Math.min(5, props.camera.seconds) } : DEFAULT_MOVE);
   const [overview, setOverview] = useState(false);
+  // The expert controls (More): open by itself when the shot already uses moments.
+  const [more, setMore] = useState(!!props.camera?.moments?.length);
   const [playing, setPlaying] = useState(false);
   const live = useRef<Vec | null>(null); // where the character stands this frame, when they walk
   const setLive = useCallback((at: Vec | null) => void (live.current = at), []);
@@ -145,19 +147,19 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
           onDone={() => setPlaying(false)}
           onStart={(from: Vec) => pick({ ...move, framing: "free", from })}
           onEnd={(to: Vec) => pick({ ...move, to })}
-          onWalk={(to: Vec) => move.walk && pick({ ...move, walk: { ...move.walk, to } })}
+          onWalk={(to: Vec) => move.walk && pick({ ...move, walk: { ...move.walk, to: clampWalk(move.walk.from, to) } })}
           onLive={setLive}
         />
       </StageViewer>
       <ViewSwitch overview={overview} onOverview={view} home="Through the lens" />
-      <button
+      {(more || free) && <button
         type="button"
         aria-pressed={free}
         onClick={() => (setPlaying(false), setOverview(false), setFree(!free))}
         className="absolute top-2 right-2 z-20 rounded-full border bg-background/80 px-2.5 py-1 text-xs backdrop-blur aria-pressed:border-primary aria-pressed:text-primary"
       >
         Fly the camera
-      </button>
+      </button>}
       {edits.error && <p className="absolute bottom-2 left-2 z-20 rounded bg-background/80 px-2 py-1 text-xs text-destructive">{edits.error}</p>}
     </div>
   );
@@ -169,7 +171,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
       move={move}
       onMove={pick}
       start={path?.poses[0].position ?? null}
-      subject={ready ? { at: pl!.at!, turn: pl!.turn } : null}
+      subject={ready ? { at: pl!.at!, height: pl!.height, turn: pl!.turn } : null}
       subjects={[{ id: "main", label: "The character" }, ...edits.assets.filter((a) => a.at && assetReady(a)).map((a) => ({ id: a.id, label: a.name })), { id: "none", label: "Nothing (free)" }]}
       poses={ready4.map((p) => ({ id: p.id, label: p.label }))}
       outside={path ? path.inside.filter((x) => !x).length : 0}
@@ -180,7 +182,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
         viewer && (
           <>
             {viewer}
-            <MomentsBar
+            {(more || ms.length > 0) && <MomentsBar
               moments={ms}
               frames={n}
               picked={sel}
@@ -194,11 +196,13 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
               canShoot={free && sel !== null}
               onShoot={() => probe.current && sel !== null && setMoments(ms.map((x, i) => (i === sel ? { ...x, camera: { ...probe.current! } } : x)))}
               warnings={warnings}
-            />
+            />}
           </>
         )
       }
       ready={ready}
+      more={more}
+      onMore={(on) => (setMore(on), on || (setFree(false), setSel(null)))}
     />
   );
 }
