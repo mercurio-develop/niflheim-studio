@@ -145,9 +145,30 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           <h1 className="text-2xl font-semibold tracking-tight">Say what happens</h1>
         </div>
         <ShotTabs projectId={props.projectId} shots={props.shots} locked={running} />
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
         <fieldset disabled={locked} className="contents" title={locked ? "The keyframes are being painted from these settings" : undefined}>
           <ShotFrameContext.Provider value={{ beats, setBeat: (id, v) => setBeats((b) => ({ ...b, [id]: v })), shoot: { label: phase ?? (running ? "Shooting…" : keysFirst && needsKeys && !props.ready ? "Paint keyframes" : count === 1 ? "Shoot" : `Shoot ${count}`), busy: (pending && !running) || !!phase, disabled: !canGenerate, title: "Draws and paints what is out of date (keyframes, motion guide), then shoots the takes", onShoot: () => generate(count) } }}>{props.cameraPanel}</ShotFrameContext.Provider>
         </fieldset>
+        <aside aria-label="The latest take" className="flex min-w-0 flex-col gap-2 rounded-lg border p-2">
+          <span className="text-xs text-muted-foreground">Latest take</span>
+          {running && props.job ? (
+            <div className="relative aspect-[768/448] overflow-hidden rounded-md border">
+              <FogLoader className="absolute inset-0" message={props.job.detail ?? "Shooting the take"} startedAt={props.job.startedAt} expected={expected * count} onCancel={() => cancelShot(props.projectId)} />
+            </div>
+          ) : last ? (
+            <>
+              <video key={last.video} src={file(last.video)} controls loop playsInline preload="metadata" className="aspect-[768/448] w-full rounded-md bg-black" />
+              <span className="text-xs text-muted-foreground">
+                <span className="font-mono text-foreground">Take {takes.length}</span>
+                {last.score && ` · ${goodTake(last.score, last.frames) ? "steady" : `${last.score.popins} of ${last.frames} frames pop in`}`}
+              </span>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">No takes yet. Shoot on the picture.</p>
+          )}
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </aside>
+        </div>
 
         <Section id="action" n="2" tone="bg-tone-yellow" title="What happens" line="Who is in the shot and their expression. What they do is written on the picture above, in three short beats with a verb each. The keyframes after the first are painted with them (Generate paints them again after a change), so the take does what they show; a thing not in the scene (a lantern, a sword) appears out of nowhere."
           summary={props.shot?.action || "Say what the character does"}

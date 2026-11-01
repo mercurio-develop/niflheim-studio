@@ -224,7 +224,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   };
   const poseName = (id?: string) => (id ? (ready4.find((p) => p.id === id)?.label ?? "As designed") : "As designed");
   const viewer = ready && path && (
-    <div className="relative aspect-[7/4] overflow-hidden rounded-lg border">
+    <div className="relative aspect-[7/4] max-w-[calc((100svh-15rem)*7/4)] overflow-hidden rounded-lg border">
       <StageViewer mesh={fileUrl(props.projectId, fill!.mesh)} camera={cam} filled overview={overview && !free} free={free} pose={posed} className="absolute inset-0">
         {free && <CameraProbe report={report} />}
         <StageScene
