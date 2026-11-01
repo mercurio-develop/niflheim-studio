@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { CameraPath } from "@/features/scene/components/camera-path";
@@ -12,6 +12,8 @@ import { finishedPoses, fileUrl, urlsOf } from "@/lib/stage-context";
 import { ViewSwitch } from "@/features/scene/components/view-switch";
 import { DEFAULT_MOVE, cardAt, clampWalk, presetMove, frameCount, inside, momentsOf, placeAt, poses, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
 import { saveMoments } from "../actions/moments";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { MomentsBar } from "./moments-bar";
 import { SHOT_TYPES } from "../state";
 import type { Block, CharacterPose, SceneAsset, SetData, StageData } from "@/lib/store";
@@ -25,6 +27,54 @@ function CameraProbe(props: { report: (v: { from: Vec; look: Vec }) => void }) {
     props.report({ from: [camera.position.x, camera.position.y, camera.position.z], look: [look.x, look.y, look.z] });
   });
   return null;
+}
+
+// What the character does, shared with the shot page so the strip on the picture reads and writes it.
+const BEATS = [
+  { id: "start", label: "First", placeholder: "stands still, breathing slowly" },
+  { id: "then", label: "As the camera moves", placeholder: "turns their head toward the camera" },
+  { id: "end", label: "By the end", placeholder: "narrows their eyes, shoulders tense" },
+] as const;
+type BeatId = (typeof BEATS)[number]["id"];
+export const ShotFrameContext = createContext<{ beats: Record<BeatId, string>; setBeat: (id: BeatId, v: string) => void } | null>(null);
+
+// The strip on the picture: start pose, the three lines, end pose. A line edits in place and frames
+// the end it belongs to (the first line the start, the last the end; the middle keeps the end shown).
+function Strip(props: { end: 0 | 1; onEnd: (e: 0 | 1) => void; start: string; finish: string }) {
+  const frame = useContext(ShotFrameContext)!;
+  const [editing, setEditing] = useState<BeatId | null>(null);
+  const pose = (label: string, on: boolean, title: string, e: 0 | 1) => (
+    <button type="button" aria-pressed={on} onClick={() => props.onEnd(e)} className="flex shrink-0 flex-col items-start rounded-md border bg-background/80 px-2 py-1 text-left text-xs backdrop-blur aria-pressed:border-primary">
+      <span className="text-[10px] text-muted-foreground">{title}</span>
+      <span>{label}</span>
+    </button>
+  );
+  return (
+    <div className="absolute inset-x-2 bottom-2 z-20 flex items-stretch gap-1.5" role="group" aria-label="The shot, start to end">
+      {pose(props.start, props.end === 0, "Start pose", 0)}
+      {BEATS.map((b) => (
+        <div key={b.id} className="min-w-0 flex-1 rounded-md border bg-background/80 px-2 py-1 text-xs backdrop-blur">
+          <span className="block text-[10px] text-muted-foreground">{b.label}</span>
+          {editing === b.id ? (
+            <Input autoFocus aria-label={b.label} value={frame.beats[b.id]} maxLength={300} placeholder={b.placeholder} onChange={(e) => frame.setBeat(b.id, e.target.value)} onBlur={() => setEditing(null)} onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && setEditing(null)} className="h-6 px-1 text-xs" />
+          ) : (
+            <button
+              type="button"
+              title={frame.beats[b.id] || b.placeholder}
+              onClick={() => {
+                setEditing(b.id);
+                if (b.id !== "then") props.onEnd(b.id === "end" ? 1 : 0);
+              }}
+              className={cn("block w-full truncate text-left", !frame.beats[b.id] && "text-muted-foreground")}
+            >
+              {frame.beats[b.id] || b.placeholder}
+            </button>
+          )}
+        </div>
+      ))}
+      {pose(props.finish, props.end === 1, "End pose", 1)}
+    </div>
+  );
 }
 
 const near = (a: Vec, b: Vec) => Math.hypot(a[0] - b[0], a[2] - b[2]);
@@ -75,7 +125,8 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   const n = frameCount(move.seconds);
   const [sel, setSel] = useState<number | null>(null);
   const moment = sel !== null ? ms[sel] ?? null : null;
-  const frame = moment?.frame ?? 0;
+  const [end, setEnd] = useState<0 | 1>(0); // the end the picture shows when no moment is picked
+  const frame = moment?.frame ?? (end ? n - 1 : 0);
   const probe = useRef<{ from: Vec; look: Vec } | null>(null);
   const report = useCallback((v: { from: Vec; look: Vec }) => void (probe.current = v), []);
   const saving = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -121,10 +172,12 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   const shownAssets = liveAssets.map((a) => (a.at ? { ...a, ...(({ at, turn }) => ({ at, turn }))(placeAt(move, a.id, { at: a.at, turn: a.turn }, frame)) } : a));
   // Shot view: a selected moment's camera, else the shot's own first frame (its framing and start),
   // not the painting's camera (which showed whatever framing was chosen: 05_submit Chrome test).
-  const first = path?.poses[0];
+  const first = path?.poses[end ? n - 1 : 0] ?? path?.poses[0];
   const posed =
-    overview || free || playing ? undefined : sel !== null && moment?.camera ? { position: moment.camera.from, target: moment.camera.look, n: sel } : first ? { position: first.position, target: first.target, n: -1 } : undefined;
+    overview || free || playing ? undefined : sel !== null && moment?.camera ? { position: moment.camera.from, target: moment.camera.look, n: sel } : first ? { position: first.position, target: first.target, n: -1 - end } : undefined;
 
+  const inFrame = !!useContext(ShotFrameContext);
+  const poseName = (id?: string) => (id ? (ready4.find((p) => p.id === id)?.label ?? "As designed") : "As designed");
   const viewer = ready && path && (
     <div className="relative aspect-[7/4] overflow-hidden rounded-lg border">
       <StageViewer mesh={fileUrl(props.projectId, fill!.mesh)} camera={cam} filled overview={overview && !free} free={free} pose={posed} className="absolute inset-0">
@@ -161,7 +214,8 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
       >
         Fly the camera
       </button>}
-      {edits.error && <p className="absolute bottom-2 left-2 z-20 rounded bg-background/80 px-2 py-1 text-xs text-destructive">{edits.error}</p>}
+      {inFrame && <Strip end={end} onEnd={(e) => (setSel(null), setEnd(e))} start={poseName(move.pose)} finish={poseName(move.poseThen === "designed" ? undefined : (move.poseThen ?? move.pose))} />}
+      {edits.error && <p className="absolute bottom-20 left-2 z-20 rounded bg-background/80 px-2 py-1 text-xs text-destructive">{edits.error}</p>}
     </div>
   );
 

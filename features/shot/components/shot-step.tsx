@@ -1,7 +1,7 @@
 "use client";
 
 import { SectionNav } from "@/components/section-nav";
-import { Fragment, useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Clapperboard, Dices, Download, Plus, Trash2, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import { drawShotSheet } from "../actions/sheet";
 import { chip } from "@/features/scene/components/chip";
 import { ShotTabs, type ShotTab } from "./shot-tabs";
 import { changes } from "../setup";
+import { ShotFrameContext } from "./shot-camera";
 
 // Actions that only use what is in the keyframes: a prop the keys do not show makes LTX conjure it
 // mid-take (04_shot ACCEPT proof 6). Props go into the keyframes through the In the frame note.
@@ -40,11 +41,6 @@ const KINDS: { id: ShotKind; label: string; line: string }[] = [
 // scene's assets that have pictures.
 export type SheetChoices = { expressions: { id: string; label: string }[]; poses: { id: string; label: string }[]; props: { id: string; label: string }[] };
 const EXPRESSIONS = ["calm", "smiling", "curious", "worried", "frightened", "angry", "sad", "determined"];
-const BEATS = [
-  { id: "start", label: "First", placeholder: "stands still, breathing slowly" },
-  { id: "then", label: "As the camera moves", placeholder: "turns their head toward the camera" },
-  { id: "end", label: "By the end", placeholder: "narrows their eyes, shoulders tense" },
-] as const;
 
 // Step 03: set the shot's camera and walk (decision 0011), make the keyframes, say what the character does; LTX-2.5 shoots the shot's camera move, guided by its
 // keyframes. Each take is kept; pick the one the sequence uses, or download it.
@@ -151,10 +147,10 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
         </div>
         <ShotTabs projectId={props.projectId} shots={props.shots} locked={running} />
         <fieldset disabled={locked} className="contents" title={locked ? "The keyframes are being painted from these settings" : undefined}>
-          {props.cameraPanel}
+          <ShotFrameContext.Provider value={{ beats, setBeat: (id, v) => setBeats((b) => ({ ...b, [id]: v })) }}>{props.cameraPanel}</ShotFrameContext.Provider>
         </fieldset>
 
-        <Section id="action" n="2" tone="bg-tone-yellow" title="What happens" line="What they do, in three short beats with a verb each: first, as the camera moves, by the end. The keyframes after the first are painted with them (Generate paints them again after a change), so the take does what they show; a thing not in the scene (a lantern, a sword) appears out of nowhere."
+        <Section id="action" n="2" tone="bg-tone-yellow" title="What happens" line="Who is in the shot and their expression. What they do is written on the picture above, in three short beats with a verb each. The keyframes after the first are painted with them (Generate paints them again after a change), so the take does what they show; a thing not in the scene (a lantern, a sword) appears out of nowhere."
           summary={props.shot?.action || "Say what the character does"}
           open={!takes.length}
           className="nifl-enter"
@@ -210,16 +206,6 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                   </Button>
                 </div>
               </div>
-            </div>
-            <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
-              {BEATS.map((b) => (
-                <Fragment key={b.id}>
-                  <label htmlFor={`beat-${b.id}`} className="text-xs text-muted-foreground">
-                    {b.label}
-                  </label>
-                  <Input id={`beat-${b.id}`} value={beats[b.id]} maxLength={300} onChange={(e) => setBeats({ ...beats, [b.id]: e.target.value })} placeholder={b.placeholder} />
-                </Fragment>
-              ))}
             </div>
             {!action && (
               <div className="-mt-1 flex flex-wrap gap-1.5">
