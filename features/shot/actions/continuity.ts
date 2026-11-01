@@ -6,7 +6,8 @@ import { mkdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
 import { DEFAULT_MOVE, momentsOf, type CameraMove, type Mark } from "@/lib/camera";
-import { allShots, getProject, projectDir, updateProject, type Project } from "@/lib/store";
+import { previousInReel } from "@/features/reel/clips";
+import { getProject, projectDir, updateProject, type Project } from "@/lib/store";
 import { PYTHON } from "@/lib/python";
 import { startJob } from "@/lib/jobs";
 
@@ -16,9 +17,7 @@ const done = (id: string) => revalidatePath(`/p/${id}/shot`);
 
 // The shot before the active one and the take it would hand on: the picked one, else the newest.
 async function previousTake(p: Project) {
-  const shots = allShots(p);
-  const at = shots.findIndex((s) => s.active);
-  const prev = at > 0 ? shots[at - 1] : null;
+  const prev = previousInReel(p);
   const takes = prev?.shot?.takes ?? [];
   if (!prev || !takes.length) return null;
   const take = prev.shot?.picked ?? takes.length - 1;

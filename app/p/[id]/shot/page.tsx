@@ -7,6 +7,7 @@ import { asShot, beatsStale, keysProblem, subjectOf, suggestedKind } from "@/fea
 import { namedCaptions, whoOf } from "@/features/shot/ingredients";
 import { StepRail } from "@/features/wizard/components/step-rail";
 import { mainInShot, shotAssets, stepStates } from "@/lib/progress";
+import { previousInReel } from "@/features/reel/clips";
 import { allShots, getProject } from "@/lib/store";
 
 async function Shot({ params }: { params: Promise<{ id: string }> }) {
@@ -20,8 +21,7 @@ async function Shot({ params }: { params: Promise<{ id: string }> }) {
   const seconds = project.keyframes?.full !== undefined ? (project.keyframes.frames.at(-1)! + 1) / 24 : (project.camera?.seconds ?? 4);
   const ready = !keysProblem(project);
   // The shot before this one, which this one can continue from once it has a take.
-  const shots = allShots(project);
-  const prev = shots[shots.findIndex((s) => s.active) - 1];
+  const prev = previousInReel(project);
   const view = asShot(project);
   const off = project.shot?.off ?? [];
   const inShot = [{ id: "main", name: whoOf(project.character.prompt ?? "").name.replace(/^the /, "") || "The character" }, ...(project.sceneAssets ?? []).filter((a) => a.at).map((a) => ({ id: a.id, name: a.name }))].map((x) => ({ ...x, on: !off.includes(x.id) }));
