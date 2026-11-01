@@ -23,7 +23,6 @@ export function CameraSection(props: {
   start: Vec | null; // where the move starts today, which the Height slider raises or lowers
   subject: Subject | null; // where the character stands, how tall and which way they face, to start a walk
   subjects?: { id: string; label: string }[]; // what the camera can work around: main, placed assets, none
-  poses?: { id: string; label: string }[]; // the character's finished poses (Character → Turnaround)
   outside: number; // frames outside the stage's space
   close?: number; // the first frame the camera is too close to the character, or -1
   playing: boolean;
@@ -164,27 +163,6 @@ export function CameraSection(props: {
                   <span>Drag either end of the path from above to change it.</span>
                 )}
               </p>
-
-              {more && !!props.poses?.length && (
-                <>
-                  <span className="text-xs text-muted-foreground">Pose</span>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {[{ id: "", label: "As designed" }, ...props.poses].map((x) => (
-                      <button key={x.id || "designed"} type="button" aria-pressed={(m.pose ?? "") === x.id} className={chip((m.pose ?? "") === x.id)} onClick={() => set({ pose: x.id || undefined })}>
-                        {x.label}
-                      </button>
-                    ))}
-                  </div>
-                  <span className="text-xs text-muted-foreground">Then, halfway</span>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {[{ id: "", label: "Same pose" }, { id: "designed", label: "As designed" }, ...props.poses].filter((x) => x.id !== (m.pose ?? "designed")).map((x) => (
-                      <button key={x.id || "same"} type="button" aria-pressed={(m.poseThen ?? "") === x.id} className={chip((m.poseThen ?? "") === x.id)} onClick={() => set({ poseThen: x.id || undefined })}>
-                        {x.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
 
               <span className="text-xs text-muted-foreground">Character</span>
               <div className="flex flex-wrap items-center gap-1.5">

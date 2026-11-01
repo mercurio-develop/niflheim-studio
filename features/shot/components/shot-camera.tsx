@@ -40,14 +40,43 @@ export const ShotFrameContext = createContext<{ beats: Record<BeatId, string>; s
 
 // The strip on the picture: start pose, the three lines, end pose. A line edits in place and frames
 // the end it belongs to (the first line the start, the last the end; the middle keeps the end shown).
-function Strip(props: { end: 0 | 1; onEnd: (e: 0 | 1) => void; start: string; finish: string }) {
+type PoseChoice = { id: string; label: string; src?: string };
+function Strip(props: { end: 0 | 1; onEnd: (e: 0 | 1) => void; start: string; finish: string; choices: PoseChoice[]; current: [string, string]; onPose: (e: 0 | 1, id: string) => void }) {
   const frame = useContext(ShotFrameContext)!;
   const [editing, setEditing] = useState<BeatId | null>(null);
+  const [picking, setPicking] = useState<0 | 1 | null>(null);
+  // A pose cell frames its end and opens the sheet pictures to pick that end's pose from, once.
   const pose = (label: string, on: boolean, title: string, e: 0 | 1) => (
-    <button type="button" aria-pressed={on} onClick={() => props.onEnd(e)} className="flex shrink-0 flex-col items-start rounded-md border bg-background/80 px-2 py-1 text-left text-xs backdrop-blur aria-pressed:border-primary">
-      <span className="text-[10px] text-muted-foreground">{title}</span>
-      <span>{label}</span>
-    </button>
+    <div className="relative flex shrink-0">
+      <button
+        type="button"
+        aria-pressed={on}
+        aria-expanded={picking === e}
+        onClick={() => {
+          props.onEnd(e);
+          setPicking(picking === e || !props.choices.length ? null : e);
+        }}
+        className="flex flex-col items-start rounded-md border bg-background/80 px-2 py-1 text-left text-xs backdrop-blur aria-pressed:border-primary"
+      >
+        <span className="text-[10px] text-muted-foreground">{title}</span>
+        <span>{label}</span>
+      </button>
+      {picking === e && (
+        <div role="listbox" aria-label={`${title} from the sheet`} className={cn("absolute bottom-full mb-1.5 flex max-w-[60vw] gap-1.5 overflow-x-auto rounded-md border bg-background/90 p-1.5 backdrop-blur", e ? "right-0" : "left-0")}>
+          {[{ id: "", label: "As designed" } as PoseChoice, ...props.choices].map((c) => (
+            <button key={c.id || "designed"} type="button" role="option" aria-selected={props.current[e] === c.id} onClick={() => (props.onPose(e, c.id), setPicking(null))} className="flex w-16 shrink-0 flex-col items-center gap-0.5 rounded-md border p-1 text-[10px] aria-selected:border-primary">
+              {c.src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={c.src} alt="" className="aspect-square w-full rounded object-contain" />
+              ) : (
+                <span className="aspect-square w-full rounded bg-muted" />
+              )}
+              <span className="w-full truncate text-center">{c.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
   return (
     <div className="absolute inset-x-2 bottom-2 z-20 flex items-stretch gap-1.5" role="group" aria-label="The shot, start to end">
@@ -177,6 +206,16 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
     overview || free || playing ? undefined : sel !== null && moment?.camera ? { position: moment.camera.from, target: moment.camera.look, n: sel } : first ? { position: first.position, target: first.target, n: -1 - end } : undefined;
 
   const inFrame = !!useContext(ShotFrameContext);
+  // The pose each end wears (moments, when blocked, set it on the first and last one).
+  const endPose = (e: 0 | 1): string | undefined => {
+    if (ms.length) return ms[e ? ms.length - 1 : 0].marks.main?.pose || undefined;
+    return e ? (move.poseThen === "designed" ? undefined : (move.poseThen ?? move.pose)) : move.pose;
+  };
+  const setPose = (e: 0 | 1, id: string) => {
+    if (ms.length) return setMoments(ms.map((x, i) => (i === (e ? ms.length - 1 : 0) ? { ...x, marks: { ...x.marks, main: { ...x.marks.main, pose: id } } } : x)));
+    if (!e) return pick({ ...move, pose: id || undefined });
+    pick({ ...move, poseThen: id === (move.pose ?? "") ? undefined : id || "designed" });
+  };
   const poseName = (id?: string) => (id ? (ready4.find((p) => p.id === id)?.label ?? "As designed") : "As designed");
   const viewer = ready && path && (
     <div className="relative aspect-[7/4] overflow-hidden rounded-lg border">
@@ -214,7 +253,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
       >
         Fly the camera
       </button>}
-      {inFrame && <Strip end={end} onEnd={(e) => (setSel(null), setEnd(e))} start={poseName(move.pose)} finish={poseName(move.poseThen === "designed" ? undefined : (move.poseThen ?? move.pose))} />}
+      {inFrame && <Strip end={end} onEnd={(e) => (setSel(null), setEnd(e))} start={poseName(endPose(0))} finish={poseName(endPose(1))} choices={ready4.map((p) => ({ id: p.id, label: p.label, src: urls(p.views).front }))} current={[endPose(0) ?? "", endPose(1) ?? ""]} onPose={setPose} />}
       {edits.error && <p className="absolute bottom-20 left-2 z-20 rounded bg-background/80 px-2 py-1 text-xs text-destructive">{edits.error}</p>}
     </div>
   );
@@ -228,7 +267,6 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
       start={path?.poses[0].position ?? null}
       subject={ready ? { at: pl!.at!, height: pl!.height, turn: pl!.turn } : null}
       subjects={[{ id: "main", label: "The character" }, ...edits.assets.filter((a) => a.at && assetReady(a)).map((a) => ({ id: a.id, label: a.name })), { id: "none", label: "Nothing (free)" }]}
-      poses={ready4.map((p) => ({ id: p.id, label: p.label }))}
       outside={path ? path.inside.filter((x) => !x).length : 0}
       close={path?.close ?? -1}
       playing={playing}
@@ -246,8 +284,6 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
               onAdd={add}
               onDelete={(i) => (setMoments(ms.filter((_, j) => j !== i)), setSel(null))}
               onFrame={(i, f) => setMoments(ms.map((x, j) => (j === i ? { ...x, frame: Math.min(ms[i + 1].frame - 8, Math.max(ms[i - 1].frame + 8, f)) } : x)))}
-              poses={ready4.map((p) => ({ id: p.id, label: p.label }))}
-              onPose={(_, id) => mark("main", { pose: id })}
               canShoot={free && sel !== null}
               onShoot={() => probe.current && sel !== null && setMoments(ms.map((x, i) => (i === sel ? { ...x, camera: { ...probe.current! } } : x)))}
               warnings={warnings}
