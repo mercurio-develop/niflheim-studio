@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Plus, RefreshCw, Square, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
+import { ImageViewer } from "@/components/image-viewer";
 import { LoadingDots } from "@/components/loading-dots";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import type { CharacterPose, Job } from "@/lib/store";
@@ -33,6 +34,7 @@ export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; j
   const [label, setLabel] = useState("");
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);
   const [pending, start] = useTransition();
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const run = (fn: () => Promise<unknown>) => start(() => fn().then(() => setError(null), (e: Error) => setError(e.message)));
@@ -122,7 +124,9 @@ export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; j
                   <li key={v} className="flex flex-col gap-1">
                     <div className={cn("relative overflow-hidden rounded-xl border bg-card", !img && "bg-card/40")}>
                       {img ? (
-                        <FadeImage key={img} src={file(img)} alt={`${p.label}, ${VIEW_LABEL[v]}`} className="aspect-[7/9] w-full object-cover" />
+                        <button type="button" aria-label={`Open ${p.label}, ${VIEW_LABEL[v]} full screen`} onClick={() => setViewing({ src: file(img), label: `${p.label} · ${VIEW_LABEL[v]}` })} className="block w-full cursor-zoom-in">
+                          <FadeImage key={img} src={file(img)} alt={`${p.label}, ${VIEW_LABEL[v]}`} className="aspect-[7/9] w-full object-cover" />
+                        </button>
                       ) : (
                         <div className={cn("flex aspect-[7/9] w-full items-center justify-center text-xs text-muted-foreground", painting && "nifl-loading")}>{painting ? "" : "Not painted yet"}</div>
                       )}
@@ -151,6 +155,7 @@ export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; j
         );
       })}
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {viewing && <ImageViewer src={viewing.src} label={viewing.label} onClose={() => setViewing(null)} />}
     </div>
   );
 }
