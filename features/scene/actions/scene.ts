@@ -1,11 +1,14 @@
 "use server";
 
 import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { runWorkflow } from "@/lib/comfy";
 import { fillStage } from "@/lib/stage-fill";
+import { PYTHON } from "@/lib/python";
 import { cancelJob, startJob, type JobCtx } from "@/lib/jobs";
 import { home, sees, shiftMain, type Vec } from "@/lib/camera";
 import { currentFill, defaultHeight } from "@/lib/progress";
@@ -13,6 +16,7 @@ import { getProject, projectDir, updateProject, type Project, type ViewId } from
 import { REFERENCE_TYPES, StyleId, referenceError } from "@/features/character/schemas";
 import { SET_STYLES, composeSetPrompt, fillPlace } from "../prompt";
 
+const run = promisify(execFile);
 const rel = (id: string, file: string) => path.relative(projectDir(id), file);
 const abs = (id: string, file: string) => path.join(projectDir(id), file);
 const stamp = () => Date.now().toString(36);
@@ -96,7 +100,7 @@ export async function rebuildStage(id: string) {
   done(id);
 }
 
-// MoGe 2 reads the painting as geometry: one graph saves a textured mesh (GLB) and its depth map.
+// MoGe 2 reads the painting as geometry: one graph saves a textured mesh (GLB) and its depth and normal maps.
 async function buildStage(id: string, image: string, ctx: JobCtx) {
   const dir = `set/stage/${stamp()}`;
   const run = (output: string, ext: string) =>
@@ -105,11 +109,26 @@ async function buildStage(id: string, image: string, ctx: JobCtx) {
   if (!mesh) throw new Error("MoGe made no mesh.");
   if (!(await ctx.alive())) return;
   const [depth] = await run("7", "png");
+  // Beside the depth (set/stage/<stamp>/png): the next step reads the normals from there.
+  const [normal] = await run("9", "png");
+  if (!normal) throw new Error("MoGe made no normal map.");
   if (!(await ctx.alive())) return;
   await updateProject(id, (q) => {
     if (q.set?.image === image) q.set.stage = { image, mesh: rel(id, mesh), depth: rel(id, depth) };
   });
   await fill(id, ctx);
+}
+
+// MoGe's normal map (stage-normal*.png beside the depth) becomes the vertex normals of the fill
+// mesh, the one the viewer loads. No normal image, or a script that fails: the mesh stays as it is.
+async function putNormals(depthDir: string, mesh: string) {
+  const file = (await readdir(depthDir).catch(() => [])).find((f) => /^stage-normal.*\.png$/.test(f));
+  if (!file) return;
+  try {
+    await run(PYTHON, ["-I", path.join(/* turbopackIgnore: true */ process.cwd(), "scripts", "stage_normals.py"), mesh, path.join(depthDir, file), path.join(path.dirname(mesh), "cam.json")]);
+  } catch (e) {
+    console.error("stage normals skipped:", e instanceof Error ? e.message : e);
+  }
 }
 
 // The stage is shown as soon as MoGe has it; the same job then paints its holes (1-2 min).
@@ -129,6 +148,7 @@ async function fill(id: string, ctx: JobCtx) {
     progress: ctx.progress,
   });
   if (!r || !(await ctx.alive())) return;
+  await putNormals(abs(id, path.dirname(stage.depth)), r.mesh);
   await updateProject(id, (q) => {
     if (q.set?.stage?.mesh !== stage.mesh) return; // rebuilt meanwhile
     q.set.stage.fill = { mesh: rel(id, r.mesh), cameras: rel(id, r.cameras), views: r.views.map((v) => rel(id, v.filled)), holes: r.holes, camera: r.camera };
