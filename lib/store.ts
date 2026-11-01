@@ -7,7 +7,9 @@ import type { CameraMove } from "./camera";
 // Projects live on disk: data/projects/<id>/project.json, step results beside it.
 // Image paths in a project are relative to its folder and served by /api/files/<id>/<path>.
 
-export type Job = { status: "running" | "done" | "error" | "cancelled"; startedAt: string; error?: string; comfyId?: string; run?: string; detail?: string }; // detail: what this run makes, e.g. the concepts' style
+export type Job = { status: "running" | "done" | "error" | "cancelled"; startedAt: string; error?: string; comfyId?: string; run?: string; detail?: string; record?: JobRecord }; // detail: what this run makes, e.g. the concepts' style
+// What a step reads and makes, by role, project-relative paths (lib/job-sheet.ts). Node ids stay in the workflow call.
+export type JobRecord = { description: string; workflow: string; inputs: Record<string, string[]>; outputs: Record<string, string[]> };
 
 export type ViewId = "front" | "threequarter" | "side" | "back" | "top" | "bottom";
 
