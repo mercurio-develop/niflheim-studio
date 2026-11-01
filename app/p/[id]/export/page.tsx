@@ -14,10 +14,15 @@ async function Export({ params }: { params: Promise<{ id: string }> }) {
   if (!project) notFound();
   if (!project.character.doneAt) redirect(`/p/${id}/character`);
   const shots = allShots(project);
-  const rows = reelOrder(project).map((sid) => {
+  const order = reelOrder(project);
+  const rows = order.map((sid, i) => {
     const s = shots.find((x) => x.id === sid)!;
     const video = s.shot?.picked !== undefined ? (s.shot.takes[s.shot.picked]?.video ?? null) : null;
-    return { shot: s.id, name: s.name, video, effects: video ? effectsOf(id, video) : null, fxJob: project.jobs[`fx-${s.id}`] };
+    // The PNG this shot's key 1 started from, and whether it is still the last frame of the picked take of the shot before it.
+    const prev = i > 0 ? shots.find((x) => x.id === order[i - 1]) : undefined;
+    const sf = s.seededFrom;
+    const seed = sf ? { frame: sf.frame, from: shots.find((x) => x.id === sf.shot)?.name ?? sf.shot, current: !!prev && sf.shot === prev.id && sf.take === prev.shot?.picked } : null;
+    return { shot: s.id, name: s.name, video, seed, effects: video ? effectsOf(id, video) : null, fxJob: project.jobs[`fx-${s.id}`] };
   });
   const clips = reelClips(project).map((c) => ({ ...c, video: clipVideo(id, c.video) }));
   const joins = project.reel?.joins ?? [];

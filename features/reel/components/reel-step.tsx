@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { exportReel, saveReel } from "../actions/reel";
 import { ClipEffects } from "./clip-effects";
 
-export type ReelRow = { shot: string; name: string; video: string | null; effects?: { made: string[]; use: string | null } | null; fxJob?: Job }; // video: the picked take
+export type ReelRow = { shot: string; name: string; video: string | null; effects?: { made: string[]; use: string | null } | null; fxJob?: Job; seed?: { frame: string; from: string; current: boolean } | null }; // video: the picked take
 const JOINS: { id: Join; label: string }[] = [
   { id: "cut", label: "Cut" },
   { id: "fade", label: "Fade" },
@@ -155,6 +155,13 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
               {used.map((r, i) => (
                 <li key={r.shot} className="flex flex-col gap-1">
                   {i > 0 && <span className="pl-1 text-[11px] text-muted-foreground">{JOINS.find((j) => j.id === (joins[i - 1] ?? "fade"))?.label}</span>}
+                  {r.seed && (
+                    <span className="flex items-center gap-1.5 pl-1 text-[11px] text-muted-foreground" title={r.seed.frame}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={file(r.seed.frame)} alt="" className="aspect-[768/448] w-8 rounded-sm bg-black object-cover" />
+                      <span className="truncate">Key 1: {r.seed.frame.split("/").pop()} · last frame of {r.seed.from}{r.seed.current ? "" : " (not the picked take now)"}</span>
+                    </span>
+                  )}
                   <button type="button" aria-pressed={picked === r.shot} onClick={() => setView(r.shot)} className={cn("flex items-center gap-2 rounded-lg border p-1.5 text-left transition-colors hover:border-ring/60", picked === r.shot && "border-primary")}>
                     <video src={file(r.video!)} muted playsInline preload="metadata" className="aspect-[768/448] w-20 shrink-0 rounded-md bg-black" />
                     <span className="truncate text-sm">{r.name}</span>
