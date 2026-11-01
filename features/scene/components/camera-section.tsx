@@ -3,18 +3,15 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Play, Square, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Section } from "@/components/section";
 import { FOCUS, FPS, FRAMINGS, MOVES, crossWalk, frameCount, type CameraMove, type Subject, type Vec } from "@/lib/camera";
 import { saveCamera } from "../actions/camera";
 import { chip } from "./chip";
 
-// Step 3 of the scene: the camera move, aimed at the character. Pick where it starts (a framing,
-// or Free: dragged in Overview, its height set here), a move, how far and how long; the path shows in the stage above (from above), Play flies it, and frames that leave the
-// space the stage holds are counted. Saved a moment after the last change. (The depth-video Render
-// is gone: no take used it; the clay clip in Keyframes is the move's guide now.)
-// Without More, only the presets that cannot fail show; one already picked stays.
-const EXPERT_FRAMINGS = ["free", "pov"];
-const EXPERT_MOVES = ["crane", "track"];
+// The camera move on the shot's picture. The bar holds the preset, the length, Play and More (and
+// what the page hands it, Shoot); More opens framing, move, walk, distance, height, Around, Focus
+// and Ease. It renders absolute pieces, so it goes inside the stage's frame. The path shows in the
+// stage (from above), Play flies it, and frames that leave the space the stage holds are counted.
+// Saved a moment after the last change.
 
 export function CameraSection(props: {
   projectId: string;
@@ -28,11 +25,10 @@ export function CameraSection(props: {
   playing: boolean;
   onPlay: (on: boolean) => void;
   ready: boolean; // a character stands on the stage
-  n?: string; // its number on the page
-  top?: React.ReactNode; // above the controls: the stage viewer the path is shown in
+  extra?: React.ReactNode; // the last thing on the bar: Shoot
   presets?: { id: string; label: string; line: string; actor: string }[]; // one click: framing, move and the actor's walk
   onPreset?: (id: string, side: 1 | -1) => void;
-  more: boolean; // every control shown: framing, move, walk, distance, height, poses, Around, Focus, Ease
+  more: boolean; // the expert panel open
   onMore: (on: boolean) => void;
 }) {
   const m = props.move;
@@ -41,7 +37,7 @@ export function CameraSection(props: {
   const frames = frameCount(m.seconds);
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
-  // A change by hand leaves the preset (its chip unlights); length, ease and focus keep it.
+  // A change by hand leaves the preset; length, ease and focus keep it.
   const set = (patch: Partial<CameraMove>) => props.onMove({ ...m, ...patch, ...(Object.keys(patch).every((k) => ["seconds", "ease", "focus"].includes(k)) ? {} : { preset: undefined }) });
   const preset = props.presets?.find((x) => x.id === m.preset);
   const more = props.more;
@@ -54,165 +50,151 @@ export function CameraSection(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [m.preset, m.side, m.move, m.amount, m.seconds, m.ease, m.framing, m.from?.join(), m.to?.join(), m.walk?.to.join(), m.walk?.from.join(), m.focus, m.pose, m.poseThen, m.subject]);
 
+  const near = (props.close ?? -1) >= 0;
   return (
-    <Section
-      id="camera"
-      n={props.n ?? "1"}
-      tone="bg-tone-pink"
-      title="Camera"
-      line={props.ready ? "This shot's framing, move and walk. From above shows the path with a handle on each end; Play flies it." : "Stand the character on the stage in Scene first: every move is aimed at them."}
-      summary={`${framing.label} · ${spec.label}${m.move === "static" ? "" : ` ${m.amount}${spec.unit}`} · ${m.seconds} s${m.ease ? " · eased" : ""}`}
-      open={props.ready}
-      actions={
-        props.ready && (
-          <>
-            <Button size="sm" onClick={() => props.onPlay(!props.playing)}>
-              {props.playing ? <Square data-icon="inline-start" /> : <Play data-icon="inline-start" />}
-              {props.playing ? "Stop" : "Play"}
-            </Button>
-          </>
-        )
-      }
-      className="nifl-enter"
-      style={{ "--i": 1 } as React.CSSProperties}
-    >
-      {props.top}
+    <>
       {props.ready && (
-        <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:max-w-xl">
+        <div className="absolute top-3 right-3 left-44 z-20 flex flex-wrap items-center justify-end gap-2">
           {!!props.presets?.length && (
             <>
-              <span className="text-xs text-muted-foreground">Shot</span>
-              <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Shot preset">
+              <select
+                aria-label="Shot preset"
+                value={m.preset ?? ""}
+                onChange={(e) => e.target.value && props.onPreset?.(e.target.value, m.side ?? 1)}
+                title={preset ? preset.line : "Set by hand (More). Pick a shot to start again from a preset."}
+                className="h-8 rounded-md border bg-background/80 px-2 text-xs backdrop-blur"
+              >
+                {m.preset === undefined && <option value="">By hand</option>}
                 {props.presets.map((x) => (
-                  <button key={x.id} type="button" role="radio" aria-checked={m.preset === x.id} className={chip(m.preset === x.id)} onClick={() => props.onPreset?.(x.id, m.side ?? 1)}>
+                  <option key={x.id} value={x.id}>
                     {x.label}
-                  </button>
+                  </option>
                 ))}
-                {preset?.actor === "across" && (
-                  <button type="button" aria-label="Walk the other way" className={chip(false)} onClick={() => props.onPreset?.(preset.id, m.side === -1 ? 1 : -1)}>
-                    {m.side === -1 ? "← walks left" : "walks right →"}
-                  </button>
-                )}
-              </div>
-              <span />
-              <p className="-mt-1 text-xs text-muted-foreground">{preset ? preset.line : m.preset === undefined && props.presets.length ? "Set by hand (More controls). Pick a shot to start again from a preset." : ""}</p>
-            </>
-          )}
-          {more && !!props.subjects && props.subjects.length > 2 && (
-            <>
-              <span className="text-xs text-muted-foreground">Around</span>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {props.subjects.map((x) => (
-                  <button key={x.id} type="button" aria-pressed={(m.subject ?? "main") === x.id} className={chip((m.subject ?? "main") === x.id)} onClick={() => set({ subject: x.id === "main" ? undefined : x.id })}>
-                    {x.label}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-          {more && (
-            <>
-              <span className="text-xs text-muted-foreground">Framing</span>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {FRAMINGS.filter((x) => more || !EXPERT_FRAMINGS.includes(x.id) || x.id === framing.id).map((x) => (
-                  <button key={x.id} type="button" aria-pressed={framing.id === x.id} className={chip(framing.id === x.id)} onClick={() => set({ framing: x.id, from: x.id === "free" ? (m.from ?? props.start ?? undefined) : m.from })}>
-                    {x.label}
-                  </button>
-                ))}
-              </div>
-              <span />
-              <p className="-mt-1 text-xs text-muted-foreground">{framing.line}</p>
-
-              {more && props.start && (
-                <>
-                  <label htmlFor="cam-height" className="text-xs text-muted-foreground">
-                    Height
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      id="cam-height"
-                      type="range"
-                      min={0.2}
-                      max={4}
-                      step={0.05}
-                      value={Math.min(4, Math.max(0.2, props.start[1]))}
-                      onChange={(e) => set({ framing: "free", from: [props.start![0], Number(e.target.value), props.start![2]] })}
-                      className="w-full accent-primary"
-                    />
-                    <span className="w-14 text-right font-mono text-xs text-muted-foreground">{props.start[1].toFixed(2)} m</span>
-                  </div>
-                </>
-              )}
-
-              <span className="text-xs text-muted-foreground">Move</span>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {MOVES.filter((x) => more || !EXPERT_MOVES.includes(x.id) || x.id === m.move).map((x) => (
-                  <button key={x.id} type="button" aria-pressed={m.move === x.id} className={chip(m.move === x.id)} onClick={() => set({ move: x.id, amount: x.value, to: undefined })}>
-                    {x.label}
-                  </button>
-                ))}
-              </div>
-              <span />
-              <p className="-mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                {spec.line}
-                {m.to ? (
-                  <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => set({ to: undefined })}>
-                    End moved from above · back to the preset
-                  </button>
-                ) : (
-                  <span>Drag either end of the path from above to change it.</span>
-                )}
-              </p>
-
-              <span className="text-xs text-muted-foreground">Character</span>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <button type="button" aria-pressed={!m.walk} className={chip(!m.walk)} onClick={() => set({ walk: undefined })}>
-                  Stands still
+              </select>
+              {preset?.actor === "across" && (
+                <button type="button" aria-label="Walk the other way" className={chip(false)} onClick={() => props.onPreset?.(preset.id, m.side === -1 ? 1 : -1)}>
+                  {m.side === -1 ? "← walks left" : "walks right →"}
                 </button>
-                <button
-                  type="button"
-                  aria-pressed={!!m.walk}
-                  className={chip(!!m.walk)}
-                  disabled={!props.subject || !props.start}
-                  onClick={() => {
-                    if (m.walk || !props.subject || !props.start) return;
-                    set({ walk: crossWalk(props.subject, props.start) });
-                  }}
-                >
-                  Walks
-                </button>
-                {m.walk && <span className="ml-2 font-mono text-[11px] text-muted-foreground">{Math.hypot(m.walk.to[0] - m.walk.from[0], m.walk.to[2] - m.walk.from[2]).toFixed(1)} m · drag the yellow ring from above</span>}
-              </div>
-
-              {spec.max !== spec.min && (
-                <>
-                  <label htmlFor="cam-amount" className="text-xs text-muted-foreground">
-                    {spec.unit === "°" ? "Angle" : "Distance"}
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input id="cam-amount" type="range" min={spec.min} max={spec.max} step={spec.step} value={m.amount} onChange={(e) => set({ amount: Number(e.target.value), to: undefined })} className="w-full accent-primary" />
-                    <span className="w-14 text-right font-mono text-xs text-muted-foreground">
-                      {m.amount}
-                      {spec.unit === "°" ? "°" : ` ${spec.unit}`}
-                    </span>
-                  </div>
-                </>
               )}
             </>
           )}
-
-          <label htmlFor="cam-seconds" className="text-xs text-muted-foreground">
+          <label className="flex h-8 items-center gap-1.5 rounded-md border bg-background/80 px-2 text-xs backdrop-blur" title="Up to 5 s: longer takes drift. A longer moment is two shots.">
             Length
+            <input aria-label="Length" type="range" min={2} max={5} step={0.5} value={Math.min(5, m.seconds)} onChange={(e) => set({ seconds: Number(e.target.value) })} className="w-20 accent-primary" />
+            <span className="w-8 text-right font-mono text-muted-foreground">{m.seconds} s</span>
           </label>
-          <div className="flex items-center gap-3">
-            <input id="cam-seconds" type="range" min={2} max={5} step={0.5} value={Math.min(5, m.seconds)} onChange={(e) => set({ seconds: Number(e.target.value) })} className="w-full accent-primary" />
-            <span className="w-14 text-right font-mono text-xs text-muted-foreground">{m.seconds} s</span>
-          </div>
-          <span />
-          <p className="-mt-1 text-xs text-muted-foreground">Up to 5 s: longer takes drift. A longer moment is two shots.</p>
+          <Button size="sm" variant="outline" onClick={() => props.onPlay(!props.playing)}>
+            {props.playing ? <Square data-icon="inline-start" /> : <Play data-icon="inline-start" />}
+            {props.playing ? "Stop" : "Play"}
+          </Button>
+          <button type="button" aria-pressed={more} aria-expanded={more} className={chip(more)} onClick={() => props.onMore(!more)}>
+            More
+          </button>
+          {props.extra}
+        </div>
+      )}
+      {props.ready && more && (
+        <div className="absolute top-14 right-3 z-20 max-h-[60%] w-[min(28rem,calc(100%-1.5rem))] overflow-y-auto rounded-md border bg-background/90 p-3 backdrop-blur">
+          <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
+            {!!props.subjects && props.subjects.length > 2 && (
+              <>
+                <span className="text-xs text-muted-foreground">Around</span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {props.subjects.map((x) => (
+                    <button key={x.id} type="button" aria-pressed={(m.subject ?? "main") === x.id} className={chip((m.subject ?? "main") === x.id)} onClick={() => set({ subject: x.id === "main" ? undefined : x.id })}>
+                      {x.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <span className="text-xs text-muted-foreground">Framing</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {FRAMINGS.map((x) => (
+                <button key={x.id} type="button" aria-pressed={framing.id === x.id} className={chip(framing.id === x.id)} onClick={() => set({ framing: x.id, from: x.id === "free" ? (m.from ?? props.start ?? undefined) : m.from })}>
+                  {x.label}
+                </button>
+              ))}
+            </div>
+            <span />
+            <p className="-mt-1 text-xs text-muted-foreground">{framing.line}</p>
 
-          {more && (
-            <>
+            {props.start && (
+              <>
+                <label htmlFor="cam-height" className="text-xs text-muted-foreground">
+                  Height
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="cam-height"
+                    type="range"
+                    min={0.2}
+                    max={4}
+                    step={0.05}
+                    value={Math.min(4, Math.max(0.2, props.start[1]))}
+                    onChange={(e) => set({ framing: "free", from: [props.start![0], Number(e.target.value), props.start![2]] })}
+                    className="w-full accent-primary"
+                  />
+                  <span className="w-14 text-right font-mono text-xs text-muted-foreground">{props.start[1].toFixed(2)} m</span>
+                </div>
+              </>
+            )}
+
+            <span className="text-xs text-muted-foreground">Move</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {MOVES.map((x) => (
+                <button key={x.id} type="button" aria-pressed={m.move === x.id} className={chip(m.move === x.id)} onClick={() => set({ move: x.id, amount: x.value, to: undefined })}>
+                  {x.label}
+                </button>
+              ))}
+            </div>
+            <span />
+            <p className="-mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+              {spec.line}
+              {m.to ? (
+                <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => set({ to: undefined })}>
+                  End moved from above · back to the preset
+                </button>
+              ) : (
+                <span>Drag either end of the path from above to change it.</span>
+              )}
+            </p>
+
+            <span className="text-xs text-muted-foreground">Character</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button type="button" aria-pressed={!m.walk} className={chip(!m.walk)} onClick={() => set({ walk: undefined })}>
+                Stands still
+              </button>
+              <button
+                type="button"
+                aria-pressed={!!m.walk}
+                className={chip(!!m.walk)}
+                disabled={!props.subject || !props.start}
+                onClick={() => {
+                  if (m.walk || !props.subject || !props.start) return;
+                  set({ walk: crossWalk(props.subject, props.start) });
+                }}
+              >
+                Walks
+              </button>
+              {m.walk && <span className="ml-2 font-mono text-[11px] text-muted-foreground">{Math.hypot(m.walk.to[0] - m.walk.from[0], m.walk.to[2] - m.walk.from[2]).toFixed(1)} m · drag the yellow ring from above</span>}
+            </div>
+
+            {spec.max !== spec.min && (
+              <>
+                <label htmlFor="cam-amount" className="text-xs text-muted-foreground">
+                  {spec.unit === "°" ? "Angle" : "Distance"}
+                </label>
+                <div className="flex items-center gap-3">
+                  <input id="cam-amount" type="range" min={spec.min} max={spec.max} step={spec.step} value={m.amount} onChange={(e) => set({ amount: Number(e.target.value), to: undefined })} className="w-full accent-primary" />
+                  <span className="w-14 text-right font-mono text-xs text-muted-foreground">
+                    {m.amount}
+                    {spec.unit === "°" ? "°" : ` ${spec.unit}`}
+                  </span>
+                </div>
+              </>
+            )}
+
             <span className="text-xs text-muted-foreground">Focus</span>
             <div className="flex flex-wrap items-center gap-1.5">
               {FOCUS.map((x) => (
@@ -232,30 +214,18 @@ export function CameraSection(props: {
                 {frames} frames at {FPS} fps
               </span>
             </div>
-            </>
-          )}
-          <span />
-          <div>
-            <button type="button" aria-pressed={more} className={chip(more)} onClick={() => props.onMore(!more)}>
-              {more ? "Fewer controls" : "More controls"}
-            </button>
           </div>
         </div>
       )}
-
-      {props.ready && (props.close ?? -1) >= 0 && (
-        <p className="flex items-start gap-1.5 text-xs text-destructive">
-          <TriangleAlert className="mt-px size-3.5 shrink-0" />
-          From frame {props.close} the camera is inside or right against them: the keys would show a flat card edge on. Drag the path&apos;s end (from above) away from them, or shorten the move.
+      {props.ready && (near || props.outside > 0) && (
+        <p className="absolute right-3 bottom-20 z-20 flex max-w-[50%] items-start gap-1.5 rounded bg-background/80 px-2 py-1 text-xs backdrop-blur">
+          <TriangleAlert className={near ? "mt-px size-3.5 shrink-0 text-destructive" : "mt-px size-3.5 shrink-0 text-tone-yellow"} />
+          <span className={near ? "text-destructive" : "text-muted-foreground"}>
+            {near ? `From frame ${props.close} the camera is right against them: drag the path's end (from above) away, or shorten the move.` : `${props.outside} of ${frames} frames leave the stage's space (red from above): holes or stretched shapes.`}
+          </span>
         </p>
       )}
-      {props.ready && props.outside > 0 && (
-        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-          <TriangleAlert className="mt-px size-3.5 shrink-0 text-tone-yellow" />
-          {props.outside} of {frames} frames leave the space the stage holds (red from above): those will show holes or stretched shapes. A smaller move, or a start nearer the painting&apos;s camera, stays clean.
-        </p>
-      )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </Section>
+      {error && <p className="absolute top-14 left-3 z-20 rounded bg-background/80 px-2 py-1 text-xs text-destructive">{error}</p>}
+    </>
   );
 }

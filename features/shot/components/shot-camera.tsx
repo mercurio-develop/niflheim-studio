@@ -12,6 +12,9 @@ import { finishedPoses, fileUrl, urlsOf } from "@/lib/stage-context";
 import { ViewSwitch } from "@/features/scene/components/view-switch";
 import { DEFAULT_MOVE, cardAt, clampWalk, presetMove, frameCount, inside, momentsOf, placeAt, poses, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
 import { saveMoments } from "../actions/moments";
+import { Clapperboard } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { LoadingDots } from "@/components/loading-dots";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { MomentsBar } from "./moments-bar";
@@ -36,7 +39,9 @@ const BEATS = [
   { id: "end", label: "By the end", placeholder: "narrows their eyes, shoulders tense" },
 ] as const;
 type BeatId = (typeof BEATS)[number]["id"];
-export const ShotFrameContext = createContext<{ beats: Record<BeatId, string>; setBeat: (id: BeatId, v: string) => void } | null>(null);
+// shoot is the one Shoot button of the shot, kept by the shot page and worn by the picture.
+export type ShootState = { label: string; busy: boolean; disabled: boolean; title: string; onShoot: () => void };
+export const ShotFrameContext = createContext<{ beats: Record<BeatId, string>; setBeat: (id: BeatId, v: string) => void; shoot: ShootState } | null>(null);
 
 // The strip on the picture: start pose, the three lines, end pose. A line edits in place and frames
 // the end it belongs to (the first line the start, the last the end; the middle keeps the end shown).
@@ -205,7 +210,8 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
   const posed =
     overview || free || playing ? undefined : sel !== null && moment?.camera ? { position: moment.camera.from, target: moment.camera.look, n: sel } : first ? { position: first.position, target: first.target, n: -1 - end } : undefined;
 
-  const inFrame = !!useContext(ShotFrameContext);
+  const frameCtx = useContext(ShotFrameContext);
+  const inFrame = !!frameCtx;
   // The pose each end wears (moments, when blocked, set it on the first and last one).
   const endPose = (e: 0 | 1): string | undefined => {
     if (ms.length) return ms[e ? ms.length - 1 : 0].marks.main?.pose || undefined;
@@ -249,30 +255,47 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
         type="button"
         aria-pressed={free}
         onClick={() => (setPlaying(false), setOverview(false), setFree(!free))}
-        className="absolute top-2 right-2 z-20 rounded-full border bg-background/80 px-2.5 py-1 text-xs backdrop-blur aria-pressed:border-primary aria-pressed:text-primary"
+        className="absolute top-14 left-3 z-20 rounded-full border bg-background/80 px-2.5 py-1 text-xs backdrop-blur aria-pressed:border-primary aria-pressed:text-primary"
       >
         Fly the camera
       </button>}
       {inFrame && <Strip end={end} onEnd={(e) => (setSel(null), setEnd(e))} start={poseName(endPose(0))} finish={poseName(endPose(1))} choices={ready4.map((p) => ({ id: p.id, label: p.label, src: urls(p.views).front }))} current={[endPose(0) ?? "", endPose(1) ?? ""]} onPose={setPose} />}
       {edits.error && <p className="absolute bottom-20 left-2 z-20 rounded bg-background/80 px-2 py-1 text-xs text-destructive">{edits.error}</p>}
+      <CameraSection
+        projectId={props.projectId}
+        move={move}
+        onMove={pick}
+        start={path?.poses[0].position ?? null}
+        subject={ready ? { at: pl!.at!, height: pl!.height, turn: pl!.turn } : null}
+        subjects={[{ id: "main", label: "The character" }, ...edits.assets.filter((a) => a.at && assetReady(a)).map((a) => ({ id: a.id, label: a.name })), { id: "none", label: "Nothing (free)" }]}
+        outside={path ? path.inside.filter((x) => !x).length : 0}
+        close={path?.close ?? -1}
+        playing={playing}
+        onPlay={setPlaying}
+        ready={ready}
+        presets={SHOT_TYPES}
+        onPreset={(id, side) => {
+          const p = SHOT_TYPES.find((x) => x.id === id);
+          if (p && ready) pick({ ...presetMove(cam!, { at: pl!.at!, height: pl!.height, turn: pl!.turn }, p, side), subject: move.subject, pose: move.pose, focus: move.focus });
+        }}
+        more={more}
+        onMore={(on) => (setMore(on), on || (setFree(false), setSel(null)))}
+        extra={
+          frameCtx && (
+            <Button size="sm" disabled={frameCtx.shoot.disabled} onClick={frameCtx.shoot.onShoot} title={frameCtx.shoot.title}>
+              {frameCtx.shoot.busy ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
+              {frameCtx.shoot.label}
+            </Button>
+          )
+        }
+      />
     </div>
   );
 
   return (
-    <CameraSection
-      projectId={props.projectId}
-      n="1"
-      move={move}
-      onMove={pick}
-      start={path?.poses[0].position ?? null}
-      subject={ready ? { at: pl!.at!, height: pl!.height, turn: pl!.turn } : null}
-      subjects={[{ id: "main", label: "The character" }, ...edits.assets.filter((a) => a.at && assetReady(a)).map((a) => ({ id: a.id, label: a.name })), { id: "none", label: "Nothing (free)" }]}
-      outside={path ? path.inside.filter((x) => !x).length : 0}
-      close={path?.close ?? -1}
-      playing={playing}
-      onPlay={setPlaying}
-      top={
-        viewer && (
+    <div id="camera" className="nifl-enter flex flex-col gap-3">
+      {!ready && <p className="text-sm text-muted-foreground">Stand the character on the stage in Scene first: every move is aimed at them.</p>}
+      {viewer && (
           <>
             {viewer}
             {(more || ms.length > 0) && <MomentsBar
@@ -289,16 +312,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
               warnings={warnings}
             />}
           </>
-        )
-      }
-      ready={ready}
-      presets={SHOT_TYPES}
-      onPreset={(id, side) => {
-        const p = SHOT_TYPES.find((x) => x.id === id);
-        if (p && ready) pick({ ...presetMove(cam!, { at: pl!.at!, height: pl!.height, turn: pl!.turn }, p, side), subject: move.subject, pose: move.pose, focus: move.focus });
-      }}
-      more={more}
-      onMore={(on) => (setMore(on), on || (setFree(false), setSel(null)))}
-    />
+      )}
+    </div>
   );
 }

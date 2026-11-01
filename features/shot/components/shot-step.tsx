@@ -2,11 +2,10 @@
 
 import { SectionNav } from "@/components/section-nav";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Clapperboard, Dices, Download, Plus, Trash2, X } from "lucide-react";
+import { Dices, Download, Plus, Trash2, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FadeImage } from "@/components/fade-image";
-import { LoadingDots } from "@/components/loading-dots";
 import { Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobPoller } from "@/features/wizard/components/job-poller";
@@ -147,7 +146,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
         </div>
         <ShotTabs projectId={props.projectId} shots={props.shots} locked={running} />
         <fieldset disabled={locked} className="contents" title={locked ? "The keyframes are being painted from these settings" : undefined}>
-          <ShotFrameContext.Provider value={{ beats, setBeat: (id, v) => setBeats((b) => ({ ...b, [id]: v })) }}>{props.cameraPanel}</ShotFrameContext.Provider>
+          <ShotFrameContext.Provider value={{ beats, setBeat: (id, v) => setBeats((b) => ({ ...b, [id]: v })), shoot: { label: phase ?? (running ? "Shooting…" : keysFirst && needsKeys && !props.ready ? "Paint keyframes" : count === 1 ? "Shoot" : `Shoot ${count}`), busy: (pending && !running) || !!phase, disabled: !canGenerate, title: "Draws and paints what is out of date (keyframes, motion guide), then shoots the takes", onShoot: () => generate(count) } }}>{props.cameraPanel}</ShotFrameContext.Provider>
         </fieldset>
 
         <Section id="action" n="2" tone="bg-tone-yellow" title="What happens" line="Who is in the shot and their expression. What they do is written on the picture above, in three short beats with a verb each. The keyframes after the first are painted with them (Generate paints them again after a change), so the take does what they show; a thing not in the scene (a lantern, a sword) appears out of nowhere."
@@ -317,10 +316,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
             <span className="font-mono text-[11px] text-muted-foreground">
               ~{Math.round((expected * count) / 60)} min · {Math.round(seconds * 10) / 10} s each with sound
             </span>
-            <Button type="button" size="lg" className="ml-auto" disabled={!canGenerate} onClick={() => generate(count)} title="Draws and paints what is out of date (keyframes, motion guide), then shoots the takes">
-              {pending && !running ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
-              {phase ?? (running ? "Generating…" : keysFirst && needsKeys && !props.ready ? "Paint the keyframes" : `Generate ${count === 1 ? "a take" : `${count} takes`}`)}
-            </Button>
+            <span className="ml-auto text-xs text-muted-foreground">Shoot is on the picture above</span>
             {needsKeys && (
               <label className="flex w-full items-center gap-2 text-xs text-muted-foreground">
                 <input type="checkbox" checked={keysFirst} disabled={busy} onChange={(e) => setKeysFirst(e.target.checked)} className="accent-primary" />
