@@ -48,6 +48,6 @@ export async function drawShotSheet(id: string, raw: unknown) {
     });
     if (!r || !(await ctx.alive())) return;
     await updateProject(id, (q) => void (q.shot = { action: "", negative: DEFAULT_NEGATIVE, takes: [], ...q.shot, sheet: { ...choice, ...r } }));
-  }, "Drawing the shot's sheet");
+  }, "Drawing the shot's sheet", [], { step: "sheet", cid });
   revalidatePath(`/p/${id}/shot`);
 }

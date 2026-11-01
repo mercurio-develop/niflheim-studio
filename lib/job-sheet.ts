@@ -66,3 +66,29 @@ export async function expect(p: Project, step: JobStep, cid = "c1"): Promise<Job
   if (nothing) missing.push("keyframes");
   return { step, ...r, missing, blocked: missing.length > 0 };
 }
+
+const present = async (id: string, roles: Record<string, string[]>) => {
+  const out: Record<string, string[]> = {};
+  for (const [role, files] of Object.entries(roles)) out[role] = (await Promise.all(files.map(async (f) => (f && (await exists(id, f)) ? f : "")))).filter(Boolean);
+  return out;
+};
+
+// The record a job stores when it starts: what it is and the input paths that are on disk (outputs
+// empty until it finishes). `missing` names the inputs that are not: the step is blocked and no
+// Comfy call is made. The stage step's raw pictures only block when they are set but gone.
+export async function startRecord(p: Project, step: JobStep, cid = "c1"): Promise<{ record: JobRecord; missing: string[] }> {
+  const r = step === "sheet" ? sheetRecord(p, cid) : stageRecord(p);
+  const missing: string[] = [];
+  for (const [role, files] of Object.entries(r.inputs)) {
+    for (const [i, f] of files.entries()) if (!f ? step === "sheet" : !(await exists(p.id, f))) missing.push(f || `${role}[${i}]`);
+  }
+  return {
+    record: { description: r.description, workflow: r.workflow, inputs: await present(p.id, r.inputs), outputs: Object.fromEntries(Object.keys(r.outputs).map((k) => [k, []])) },
+    missing,
+  };
+}
+
+// The output paths once the job is done: the files that exist, by role.
+export async function finishOutputs(p: Project, step: JobStep, cid = "c1") {
+  return present(p.id, (step === "sheet" ? sheetRecord(p, cid) : stageRecord(p)).outputs);
+}
