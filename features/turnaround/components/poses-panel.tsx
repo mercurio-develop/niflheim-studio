@@ -9,7 +9,7 @@ import { LoadingDots } from "@/components/loading-dots";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import type { CharacterPose, Job } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { cancelPose, deletePose, makePose, remakePose, remakePoseView } from "../actions/poses";
+import { cancelPose, deletePose, makePose, poseViewPrompt, remakePose, remakePoseView } from "../actions/poses";
 
 // Poses a shot can put the character in: each says, in plain words, what Qwen should make of the
 // turnaround's front. Running is a three-quarter stride so the whole figure stays in frame (a
@@ -35,10 +35,18 @@ export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; j
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);
+  // Per view, the prompt disclosure: closed until opened; `built` is what Reset restores.
+  const [edits, setEdits] = useState<Record<string, { built: string; text: string }>>({});
   const [pending, start] = useTransition();
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const run = (fn: () => Promise<unknown>) => start(() => fn().then(() => setError(null), (e: Error) => setError(e.message)));
   const taken = new Set(props.poses.map((p) => p.label.toLowerCase()));
+  const openPrompt = (pid: string, v: string) =>
+    run(async () => {
+      const built = await poseViewPrompt(props.projectId, pid, v, props.cid);
+      setEdits((e) => ({ ...e, [`${pid}:${v}`]: { built, text: built } }));
+    });
+  const closePrompt = (k: string) => setEdits(({ [k]: _, ...rest }) => rest);
   const blocked = pending || props.locked || !!props.busy;
 
   return (
@@ -120,6 +128,8 @@ export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; j
                 const j = viewJob(v);
                 const busy = j?.status === "running";
                 const painting = running || busy;
+                const k = `${p.id}:${v}`;
+                const ed = edits[k];
                 return (
                   <li key={v} className="flex flex-col gap-1">
                     <div className={cn("relative overflow-hidden rounded-xl border bg-card", !img && "bg-card/40")}>
@@ -140,11 +150,29 @@ export function PosesPanel(props: { projectId: string; poses: CharacterPose[]; j
                         variant="ghost"
                         size="sm"
                         disabled={blocked || painting || (v !== "front" && !p.views.front)}
-                        onClick={() => run(() => remakePoseView(props.projectId, p.id, v, props.cid))}
+                        onClick={() =>
+                          run(async () => {
+                            await remakePoseView(props.projectId, p.id, v, props.cid, ed && ed.text !== ed.built ? ed.text : undefined);
+                            closePrompt(k);
+                          })
+                        }
                       >
                         <RefreshCw data-icon="inline-start" />
                         Again
                       </Button>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <button type="button" aria-expanded={!!ed} disabled={painting} onClick={() => (ed ? closePrompt(k) : openPrompt(p.id, v))} className="self-start text-xs text-muted-foreground hover:text-foreground disabled:opacity-50">
+                        {ed ? "Hide prompt" : "Prompt"}
+                      </button>
+                      {ed && (
+                        <>
+                          <textarea aria-label={`Prompt for ${p.label}, ${VIEW_LABEL[v]}`} value={ed.text} rows={8} onChange={(e) => setEdits((all) => ({ ...all, [k]: { ...ed, text: e.target.value } }))} className="w-full rounded-md border bg-transparent p-2 text-xs" />
+                          <Button variant="ghost" size="sm" className="self-start" disabled={ed.text === ed.built} onClick={() => setEdits((all) => ({ ...all, [k]: { ...ed, text: ed.built } }))}>
+                            Reset
+                          </Button>
+                        </>
+                      )}
                     </div>
                     {j?.status === "error" && <p className="text-xs text-destructive">{j.error}</p>}
                   </li>
