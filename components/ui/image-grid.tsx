@@ -18,19 +18,19 @@ export function ImageGrid({
             key={item.src}
             type="button"
             onClick={() => onPick?.(i)}
-            className={`group relative overflow-hidden rounded-[var(--radius)] border bg-surface ${
-              picked === item.src ? "border-text" : "border-border hover:border-primary"
+            className={`group relative overflow-hidden rounded-[var(--radius)] border bg-card ${
+              picked === item.src ? "border-foreground" : "border-border hover:border-primary"
             }`}
           >
             <img src={item.src} alt={item.label || `Image ${i + 1}`} className="aspect-[7/9] w-full object-cover" />
-            <span className="absolute bottom-2 left-2 rounded-[var(--radius)] border border-border bg-surface/80 px-1.5 font-mono text-[11px] text-muted">
+            <span className="absolute bottom-2 left-2 rounded-[var(--radius)] border border-border bg-card/80 px-1.5 font-mono text-[11px] text-muted-foreground">
               {picked === item.src ? "picked" : item.label || String(i + 1).padStart(2, "0")}
             </span>
           </button>
         ) : (
           <div
             key={i}
-            className={`aspect-[7/9] rounded-[var(--radius)] border border-border bg-surface/60${running ? " animate-pulse" : ""}`}
+            className={`aspect-[7/9] rounded-[var(--radius)] border border-border bg-card/60${running ? " animate-pulse" : ""}`}
           />
         ),
       )}

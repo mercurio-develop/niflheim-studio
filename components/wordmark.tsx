@@ -8,6 +8,7 @@ const syne = Syne({ subsets: ["latin"], weight: ["500", "800"], display: "swap" 
 export function Wordmark({ className }: { className?: string }) {
   return (
     <Link href="/" aria-label="NIFLheim Studio, home" className={cn("group flex items-center gap-2", className)}>
+      <img src="/brand/mark.png" alt="" className="size-7 shrink-0 object-contain" />
       <span className={cn(syne.className, "text-[17px] leading-none tracking-tight")}>
         <span className="font-extrabold text-foreground">NIFL</span>
         <span className="font-medium text-primary/85 transition-colors group-hover:text-primary">heim</span>

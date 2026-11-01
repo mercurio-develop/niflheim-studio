@@ -16,6 +16,7 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-heading: var(--font-sans);
+  --color-mid: var(--mid);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -84,6 +85,7 @@
   --accent: #3a4654;
   --accent-foreground: #ffffff;
   --destructive: #fd6883;
+  --mid: #32a996;
   --border: #3a4654;
   --input: #3a4654;
   --ring: rgb(62 248 241 / 60%);
