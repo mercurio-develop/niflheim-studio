@@ -96,7 +96,7 @@ export async function rebuildStage(id: string) {
   done(id);
 }
 
-// MoGe 2 reads the painting as geometry: one graph saves a textured mesh (GLB) and its depth map.
+// MoGe 2 reads the painting as geometry: one graph saves a textured mesh (GLB) and its depth and normal maps.
 async function buildStage(id: string, image: string, ctx: JobCtx) {
   const dir = `set/stage/${stamp()}`;
   const run = (output: string, ext: string) =>
@@ -105,6 +105,9 @@ async function buildStage(id: string, image: string, ctx: JobCtx) {
   if (!mesh) throw new Error("MoGe made no mesh.");
   if (!(await ctx.alive())) return;
   const [depth] = await run("7", "png");
+  // Beside the depth (set/stage/<stamp>/png): the next step reads the normals from there.
+  const [normal] = await run("9", "png");
+  if (!normal) throw new Error("MoGe made no normal map.");
   if (!(await ctx.alive())) return;
   await updateProject(id, (q) => {
     if (q.set?.image === image) q.set.stage = { image, mesh: rel(id, mesh), depth: rel(id, depth) };

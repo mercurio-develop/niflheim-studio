@@ -93,5 +93,31 @@
   "_meta": {
    "title": "Save: depth"
   }
+ },
+ "8": {
+  "class_type": "MoGeRender",
+  "inputs": {
+   "moge_geometry": [
+    "3",
+    0
+   ],
+   "output": "normal_opengl"
+  },
+  "_meta": {
+   "title": "Render normals (OpenGL, glTF)"
+  }
+ },
+ "9": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "8",
+    0
+   ],
+   "filename_prefix": "nifl/stage-normal"
+  },
+  "_meta": {
+   "title": "Save: normals"
+  }
  }
 }
