@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { ArrowRight, Pencil, Plus, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeImage } from "@/components/fade-image";
+import { ImageViewer } from "@/components/image-viewer";
 import { LoadingDots } from "@/components/loading-dots";
 import { Textarea } from "@/components/ui/textarea";
 import { Section, SectionFire } from "@/components/section";
@@ -44,6 +45,7 @@ export function SheetSection(props: {
   const [word, setWord] = useState("");
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<{ src: string; label: string } | null>(null);
   const [pending, start] = useTransition();
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const job = props.jobs.sheet;
@@ -167,7 +169,9 @@ export function SheetSection(props: {
             <li key={c.id} className="flex min-w-0 flex-col gap-1">
               <div className="relative">
                 {c.image ? (
-                  <FadeImage src={file(c.image)} alt={c.label} className="aspect-square w-full rounded border bg-muted object-contain" />
+                  <button type="button" aria-label={`Open ${c.label} full screen`} onClick={() => setViewing({ src: file(c.image!), label: c.label })} className="block w-full cursor-zoom-in">
+                    <FadeImage src={file(c.image)} alt={c.label} className="aspect-square w-full rounded border bg-muted object-contain" />
+                  </button>
                 ) : (
                   <span className={cn("flex aspect-square w-full items-center justify-center rounded border bg-card/40", running && "nifl-loading")}>{running && <LoadingDots />}</span>
                 )}
@@ -207,7 +211,9 @@ export function SheetSection(props: {
 
       <div className={cn("relative w-full overflow-hidden rounded-xl border bg-card", stale && props.sheet?.drawn && "opacity-60")}>
         {props.sheet?.drawn ? (
-          <FadeImage src={file(props.sheet.drawn)} alt="The reference sheet" className="aspect-[768/448] w-full object-contain" />
+          <button type="button" aria-label="Open the reference sheet full screen" onClick={() => setViewing({ src: file(props.sheet!.drawn!), label: "The reference sheet" })} className="block w-full cursor-zoom-in">
+            <FadeImage src={file(props.sheet.drawn)} alt="The reference sheet" className="aspect-[768/448] w-full object-contain" />
+          </button>
         ) : (
           <div className={cn("flex aspect-[768/448] w-full items-center justify-center text-sm text-muted-foreground", running && "nifl-loading")}>{running ? "" : "The sheet lands here"}</div>
         )}
@@ -215,6 +221,7 @@ export function SheetSection(props: {
           <FogLoader className="absolute inset-0" message={job.detail ?? "Painting the sheet"} startedAt={job.startedAt} expected={90} onCancel={() => cancelSheet(props.projectId, props.cid)} />
         )}
       </div>
+      {viewing && <ImageViewer src={viewing.src} label={viewing.label} onClose={() => setViewing(null)} />}
     </Section>
   );
 }
