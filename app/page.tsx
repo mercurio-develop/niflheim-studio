@@ -30,6 +30,12 @@ export default function Home() {
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center gap-16 px-4 pt-24 pb-16">
         <section className="flex w-full flex-col items-center gap-6 text-center">
+          {/* The jpeg field is the page background; lighten keeps any jpeg noise from showing as a box. */}
+          <img
+            src="/brand/niflheim-logo.jpg"
+            alt="NIFLheim Studio"
+            className="w-full max-w-md mix-blend-lighten"
+          />
           <h1 className="max-w-4xl text-2xl font-semibold tracking-tight text-balance sm:text-3xl lg:text-4xl lg:leading-tight">
             Design a character, give them a world, aim the camera and shoot the takes.
           </h1>

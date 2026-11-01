@@ -1,0 +1,9 @@
+NIFLheim brand, sampled from niflheim-logo.jpg.
+
+background  #212830
+foreground  #FFFFFF
+primary     #3EF8F1
+mid         #32A996
+
+mark.png is the figure only, navy removed. niflheim-logo.jpg is the full lockup for the front door. app/icon.png is the 32px mark.
+Use these hex values in app/globals.css. Do not invent a lighter teal. Tailwind 4 stays. No new font.
