@@ -33,6 +33,11 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
   const busy = pending || running;
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
   const used = rows.filter((r) => r.video);
+  const [view, setView] = useState<string | null>(null);
+  const picked = used.some((r) => r.shot === view) ? view : null;
+  const first = used[0]?.video ?? null;
+  const cut = props.export?.video ?? null;
+  const screen = picked ? (used.find((r) => r.shot === picked)?.video ?? null) : (cut ?? first);
   const save = (r: ReelRow[], j: Join[]) => start(() => saveReel(props.projectId, { order: r.map((x) => x.shot), joins: j }).then(() => setError(null), (e: Error) => setError(e.message)));
   const move = (i: number, d: -1 | 1) => {
     const r = [...rows];
@@ -114,35 +119,53 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
           </ol>
         </Section>
 
-        <Section id="reel" n="3" tone="bg-tone-pink" title="Reel" line={used.length ? `${used.length} shot${used.length > 1 ? "s" : ""}, one MP4 with sound at 24 fps.` : "Pick a take in at least one shot."}
-          summary={props.export ? "Exported · open to watch it" : used.length ? "Ready to export" : "Pick a take in at least one shot"}
-          actions={
-            <>
-              <Button disabled={busy || !used.length} onClick={() => start(() => exportReel(props.projectId).then(() => setError(null), (e: Error) => setError(e.message)))}>
-                {pending && !running ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
-                {props.export ? "Export again" : "Export reel"}
-              </Button>
-            </>
-          }
-          className="nifl-enter"
-          style={{ "--i": 2 } as React.CSSProperties}
-        >
-          {running && props.job && <JobStatus message={props.job.detail ?? "Putting the reel together"} startedAt={props.job.startedAt} expected={10} />}
-          {props.export && !running && (
-            <figure className={cn("flex flex-col gap-2", !props.export.current && "opacity-60")}>
-              <video key={props.export.video} src={file(props.export.video)} controls playsInline className="aspect-[768/448] w-full max-w-3xl rounded-lg border bg-black" />
-              <figcaption className="flex items-center gap-3 text-xs text-muted-foreground">
-                {props.export.seconds.toFixed(1)} s{!props.export.current && " · the order, the joins or a pick changed since: export again"}
-                <a href={file(props.export.video)} download="reel.mp4" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                  <Download data-icon="inline-start" />
-                  Download
-                </a>
+        <section id="reel" className="nifl-enter flex flex-col gap-4" style={{ "--i": 2 } as React.CSSProperties}>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_14rem]">
+            <figure className="flex min-w-0 flex-col gap-2">
+              {running && props.job ? (
+                <JobStatus message={props.job.detail ?? "Putting the reel together"} startedAt={props.job.startedAt} expected={10} />
+              ) : screen ? (
+                <video key={screen} src={file(screen)} controls playsInline className={cn("aspect-[768/448] w-full rounded-lg border bg-black", !picked && cut && !props.export?.current && "opacity-60")} />
+              ) : (
+                <div className="flex aspect-[768/448] w-full items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">Pick a take in at least one shot.</div>
+              )}
+              <figcaption className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                {picked ? `${rows.find((r) => r.shot === picked)?.name} · picked take` : props.export ? `The cut · ${props.export.seconds.toFixed(1)} s${props.export.current ? "" : " · the order, the joins or a pick changed since: export again"}` : first ? "First picked take · export to see the cut" : null}
+                {picked && (
+                  <>
+                    <button type="button" onClick={() => setView(null)} className="underline underline-offset-2">Back to the cut</button>
+                    <Link href={`/p/${props.projectId}/shot`} className="underline underline-offset-2">Open in Shot</Link>
+                  </>
+                )}
+                {props.export && !picked && (
+                  <a href={file(props.export.video)} download="reel.mp4" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                    <Download data-icon="inline-start" />
+                    Download
+                  </a>
+                )}
               </figcaption>
+              <div>
+                <Button disabled={busy || !used.length} onClick={() => start(() => exportReel(props.projectId).then(() => setError(null), (e: Error) => setError(e.message)))}>
+                  {pending && !running ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
+                  {props.export ? "Export again" : "Export"}
+                </Button>
+              </div>
             </figure>
-          )}
+            <ol className="flex flex-col gap-1" aria-label="Picked takes in reel order">
+              {used.map((r, i) => (
+                <li key={r.shot} className="flex flex-col gap-1">
+                  {i > 0 && <span className="pl-1 text-[11px] text-muted-foreground">{JOINS.find((j) => j.id === (joins[i - 1] ?? "fade"))?.label}</span>}
+                  <button type="button" aria-pressed={picked === r.shot} onClick={() => setView(r.shot)} className={cn("flex items-center gap-2 rounded-lg border p-1.5 text-left transition-colors hover:border-ring/60", picked === r.shot && "border-primary")}>
+                    <video src={file(r.video!)} muted playsInline preload="metadata" className="aspect-[768/448] w-20 shrink-0 rounded-md bg-black" />
+                    <span className="truncate text-sm">{r.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </div>
           {props.job?.status === "error" && <p className="text-sm text-destructive">The reel failed: {props.job.error}</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
-        </Section>
+        </section>
         </div>
       </div>
       <NextBar back={{ href: `/p/${props.projectId}/shot`, label: "Shots" }} summary={props.export ? `Reel: ${props.export.seconds.toFixed(1)} s.` : "Export the reel to finish."} next={{ label: "Done", disabled: true }} />
