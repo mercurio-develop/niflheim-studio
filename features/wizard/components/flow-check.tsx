@@ -5,7 +5,12 @@ import { FadeImage } from "@/components/fade-image";
 import { StatusDot } from "@/components/ui/status-dot";
 import { onCloud } from "@/lib/comfy";
 import { getProject } from "@/lib/store";
+import { effectsOf } from "@/features/reel/effects";
 import { flowBoxes, flowChain, flowLines } from "@/lib/job-sheet";
+
+// Both effect workflows run on the LTX-2.5 distilled unet.
+const EFFECT_MODEL = "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors";
+const EFFECT_FLOW = { night: "04_effect_night.api.json", refine: "04_effect_refine.api.json" } as const;
 
 // The Comfy workflows behind a chain box, by its id. The sheet boxes run a script or an action, not Comfy.
 function comfyFlows(id: string, clay: boolean): string[] {
@@ -50,6 +55,8 @@ export async function FlowCheck(props: { projectId: string; cid?: string }) {
   const boxes = await flowBoxes(p, props.cid);
   const lines = await flowLines(p);
   const chain = await flowChain(p, props.cid);
+  const takeFile = chain.find((c) => c.id === "take")?.file;
+  const use = takeFile ? effectsOf(p.id, takeFile).use : null;
   const clay = chain.some((c) => c.id === "clay" && c.file);
   return (
     <ol className="flex flex-col gap-3" aria-label="Flow check">
@@ -78,6 +85,17 @@ export async function FlowCheck(props: { projectId: string; cid?: string }) {
           </div>
         </li>
       ))}
+      {use && (
+        <li key="effect" className="flex items-start gap-3 rounded border p-3 text-xs text-muted-foreground">
+          <div className="flex min-w-0 flex-col gap-1">
+            <StatusDot on label="Done" />
+            <span className="text-foreground">Effect {use} on the LTX take</span>
+            <span className="break-all font-mono text-[11px]">{EFFECT_FLOW[use]}</span>
+            <span className="break-all font-mono text-[11px]">{EFFECT_MODEL}</span>
+            <OpenButtons flows={[EFFECT_FLOW[use]]} />
+          </div>
+        </li>
+      )}
       {lines.map((l) => (
         <li key={l.shot} className="flex items-start gap-3 rounded border p-3 text-xs text-muted-foreground">
           {l.frame && <FadeImage src={`/api/files/${p.id}/${l.frame}`} alt={`Last frame of ${l.from}`} className="aspect-[768/448] w-32 shrink-0 rounded border bg-muted object-contain" />}
