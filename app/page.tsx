@@ -37,7 +37,7 @@ export default function Home() {
             className="w-full max-w-md mix-blend-lighten"
           />
           <h1 className="max-w-4xl text-2xl font-semibold tracking-tight text-balance sm:text-3xl lg:text-4xl lg:leading-tight">
-            Design a character, give them a world, aim the camera and shoot the takes.
+            Make someone, a place, and a short film. Three screens, one button each.
           </h1>
           <div className="mt-4 flex w-full justify-center">
             <StartForm />

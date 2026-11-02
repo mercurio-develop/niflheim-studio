@@ -179,16 +179,6 @@ export function StageSection(props: {
                 {oldCut ? "Cut out the new turnaround" : "Cut out again"}
               </Button>
             )}
-            {fresh && (
-              <Button variant="ghost" size="sm" onClick={() => run(() => refillStage(props.projectId))}>
-                <PaintBucket data-icon="inline-start" />
-                {filled ? "Fill again" : "Fill the holes"}
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={() => run(() => rebuildStage(props.projectId))}>
-              <RefreshCw data-icon="inline-start" />
-              Rebuild
-            </Button>
           </>
         )
       }
@@ -263,6 +253,19 @@ export function StageSection(props: {
       </div>
 
       {fresh && (
+        <More label="Stage tools" summary="look, height, facing, fill again, rebuild">
+        {!building && !cutting && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => run(() => refillStage(props.projectId))}>
+              <PaintBucket data-icon="inline-start" />
+              {filled ? "Fill again" : "Fill the holes"}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => run(() => rebuildStage(props.projectId))}>
+              <RefreshCw data-icon="inline-start" />
+              Rebuild
+            </Button>
+          </div>
+        )}
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 pt-1 sm:max-w-xl">
           {filled && (
             <>
@@ -296,6 +299,7 @@ export function StageSection(props: {
             </>
           )}
         </div>
+        </More>
       )}
 
       {floor && (
