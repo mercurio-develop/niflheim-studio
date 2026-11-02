@@ -1,7 +1,7 @@
 import { FadeImage } from "@/components/fade-image";
 import { StatusDot } from "@/components/ui/status-dot";
 import { getProject } from "@/lib/store";
-import { flowBoxes, flowLines } from "@/lib/job-sheet";
+import { flowBoxes, flowChain, flowLines } from "@/lib/job-sheet";
 
 // The support view: one box per expect() step with its state and its picture. A blocked box names
 // the missing path; a done box shows the output image. It only reads the project.
@@ -10,6 +10,7 @@ export async function FlowCheck(props: { projectId: string; cid?: string }) {
   if (!p) return null;
   const boxes = await flowBoxes(p, props.cid);
   const lines = await flowLines(p);
+  const chain = await flowChain(p, props.cid);
   return (
     <ol className="flex flex-col gap-3" aria-label="Flow check">
       {boxes.map((b) => (
@@ -19,6 +20,18 @@ export async function FlowCheck(props: { projectId: string; cid?: string }) {
             <StatusDot on={!b.blocked} label={b.blocked ? "Blocked" : "Done"} />
             <span className="text-foreground">{b.description}</span>
             {b.blocked && <span className="break-all font-mono text-[11px]">Missing: {b.missing.join(", ")}</span>}
+          </div>
+        </li>
+      ))}
+      {chain.map((c) => (
+        <li key={c.id} className="flex items-start gap-3 rounded border p-3 text-xs text-muted-foreground">
+          {c.image && <FadeImage src={`/api/files/${p.id}/${c.image}`} alt={c.label} className="aspect-[768/448] w-32 shrink-0 rounded border bg-muted object-contain" />}
+          <div className="flex min-w-0 flex-col gap-1">
+            <StatusDot on={!c.missing} label={c.missing ? "Blocked" : "Done"} />
+            <span className="text-foreground">{c.label}{c.feeds && ` feeds ${c.feeds}`}</span>
+            {c.workflow && <span className="break-all font-mono text-[11px]">{c.workflow}</span>}
+            {c.file && !c.image && <span className="break-all font-mono text-[11px]">{c.file}</span>}
+            {c.missing && <span className="break-all font-mono text-[11px]">Missing: {c.missing}</span>}
           </div>
         </li>
       ))}

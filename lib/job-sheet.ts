@@ -133,3 +133,41 @@ export async function flowBoxes(p: Project, cid = "c1"): Promise<FlowBox[]> {
     }),
   );
 }
+
+export type FlowPicture = { id: string; label: string; feeds: string | null; workflow: string | null; file: string | null; image: string | null; missing: string | null };
+
+// The picture chain for the support view, in order: turnaround views, the character sheet, a face
+// expression, pose views, the stage card, the shot sheet, the clay clip, the LTX take. `feeds` names
+// the box a picture goes into: a character take is fed by the shot sheet, a camera take by the clay
+// clip; the stage card feeds the clay clip and never the take. A path that is unset or gone is
+// missing. Reads only.
+export async function flowChain(p: Project, cid = "c1"): Promise<FlowPicture[]> {
+  const c = charOf(p, cid);
+  const kind = p.shot?.kind ?? "camera";
+  const choice = p.shot?.sheet;
+  const cells = c.sheet?.cells ?? [];
+  const pose = choice?.pose ? c.poses?.find((x) => x.id === choice.pose) : undefined;
+  const expr = choice?.expression ? cells.find((x) => x.id === choice.expression) : undefined;
+  const take = p.shot?.takes?.[p.shot.picked ?? p.shot.takes.length - 1];
+  const stageCard = p.stage ? (p.stage.cutouts.front ?? Object.values(p.stage.cutouts)[0]) : undefined;
+  type Item = { id: string; label: string; feeds: string | null; workflow: string | null; file: string | null | undefined; video?: boolean };
+  const items: Item[] = [
+    ...VIEWS.map((v) => {
+      const s = c.turnaround?.views[v];
+      return { id: `view:${v}`, label: `Turnaround ${v}`, feeds: "Character sheet", workflow: null, file: s?.versions[s.current]?.image };
+    }),
+    { id: "sheet", label: "Character sheet", feeds: kind === "character" ? "Shot sheet" : null, workflow: "scripts/make_sheet.py", file: c.sheet?.drawn },
+    ...(choice?.expression ? [{ id: "expression", label: `Face expression${expr ? `: ${expr.label}` : ""}`, feeds: "Shot sheet", workflow: null, file: expr?.image }] : []),
+    ...(pose ? VIEWS.map((v) => ({ id: `pose:${v}`, label: `Pose ${pose.label} ${v}`, feeds: "Shot sheet", workflow: null, file: pose.views[v] })) : []),
+    { id: "stage", label: "Stage card", feeds: kind === "camera" ? "Clay clip" : null, workflow: null, file: stageCard },
+    ...(kind === "character" ? [{ id: "shot-sheet", label: "Shot sheet", feeds: "LTX take", workflow: "features/shot/actions/sheet.ts", file: choice?.drawn }] : []),
+    ...(kind === "camera" ? [{ id: "clay", label: "Clay clip", feeds: "LTX take", workflow: null, file: p.layout?.clip, video: true }] : []),
+    { id: "take", label: "LTX take", feeds: null, workflow: null, file: take?.video, video: true },
+  ];
+  return Promise.all(
+    items.map(async (i) => {
+      const there = i.file ? await exists(p.id, i.file) : false;
+      return { id: i.id, label: i.label, feeds: i.feeds, workflow: i.workflow, file: there ? i.file! : null, image: there && !i.video ? i.file! : null, missing: there ? null : i.file || i.label };
+    }),
+  );
+}
