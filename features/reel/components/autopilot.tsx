@@ -5,7 +5,7 @@ import { Check, CircleAlert, Play, RotateCcw, Square, Wand2 } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/loading-dots";
-import { Section } from "@/components/section";
+import { More, Section } from "@/components/section";
 import { KeyCapture } from "@/features/scene/components/key-capture";
 import type { StagePose } from "@/features/scene/components/stage-viewer";
 import { saveCamera } from "@/features/scene/actions/camera";
@@ -213,14 +213,22 @@ export function AutopilotPanel(props: { projectId: string; shots: PilotShot[]; p
             <span className="truncate text-sm" title={s.name}>
               {s.name}
             </span>
-            <div className="col-span-full row-start-2 grid gap-1 sm:col-span-1 sm:row-start-auto sm:grid-cols-3">
+            <span />
+            <span className="text-xs text-muted-foreground">3 takes</span>
+          </div>
+        ))}
+        <More label="What happens in each shot" summary="up to three beats per shot: first, then, by the end">
+          {props.shots.map((s, i) => (
+            <div key={s.id} className={cn("grid gap-1 sm:grid-cols-[minmax(0,8rem)_repeat(3,minmax(0,1fr))] sm:items-center", !plan[i].include && "opacity-60")}>
+              <span className="truncate text-sm" title={s.name}>
+                {s.name}
+              </span>
               {(["start", "then", "end"] as const).map((n) => (
                 <Input key={n} value={beatsOf(plan[i].action)[n] ?? ""} disabled={driving} maxLength={300} onChange={(e) => edit(i, { action: joinBeats({ ...beatsOf(plan[i].action), [n]: e.target.value }) })} placeholder={n === "start" ? "first: lifts the tire" : n === "then" ? "then: bites it" : "by the end: walks off"} aria-label={`Beat ${n} of ${s.name}`} />
               ))}
             </div>
-            <span className="text-xs text-muted-foreground">3 takes</span>
-          </div>
-        ))}
+          ))}
+        </More>
         <div className="flex flex-wrap items-center gap-1.5 pt-1">
           <span className="text-xs text-muted-foreground">Joins between shots: as set in Order below (a fade unless you choose).</span>
           <span className="ml-2 font-mono text-[11px] text-muted-foreground">~{plan.filter((p) => p.include).length * 12} min</span>

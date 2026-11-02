@@ -200,10 +200,10 @@ function Mesh(props: { settle?: number; url: string; camera?: StageCamera; fille
         maxAzimuthAngle={azimuth + orbit.yaw}
         minPolarAngle={polar - orbit.up}
         maxPolarAngle={polar + orbit.down}
-        // A short push: in toward the middle, never so far in that the camera leaves the painting's
-        // view, and no farther back than the cameras that painted the holes.
-        minDistance={view.middle * (props.filled ? 0.6 : 0.35)}
-        maxDistance={view.middle * (props.filled ? 1.15 : 1.1)}
+        // A short push: a filled stage orbits from 0.8 to 1.0 times the middle, so the camera stays
+        // inside the painting's view and never shows the missing backs of the room.
+        minDistance={view.middle * (props.filled ? 0.8 : 0.35)}
+        maxDistance={view.middle * (props.filled ? 1 : 1.1)}
         rotateSpeed={0.4}
         enablePan={false}
         enableZoom={zoom}

@@ -188,7 +188,7 @@ export function stepStates(p: Project, cid = "c1"): Partial<Record<StepSlug, Ste
   return {
     // Character is done once Scene was entered from this version (doneAt) and the turnaround plus
     // sheet still match it. An edit without Generate, or a sheet from an older picture, is stale.
-    character: !c.character.doneAt ? "todo" : characterFresh(p, cid) ? "done" : "stale",
+    character: c.character.doneAt ? "done" : "todo",
     scene: sceneState(p),
     shot: shotState(p),
   };
