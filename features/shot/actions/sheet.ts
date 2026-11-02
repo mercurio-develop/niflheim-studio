@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { startJob } from "@/lib/jobs";
+import { expect, finishOutputs } from "@/lib/job-sheet";
 import { getProject, updateProject } from "@/lib/store";
 import { renderSheet } from "@/features/turnaround/sheet";
 import { DEFAULT_NEGATIVE } from "../graph";
@@ -19,6 +20,16 @@ const Choice = z.object({
   props: z.array(z.string().regex(/^[a-z0-9]{1,16}$/)).max(2).default([]),
 });
 const ANGLES = ["front", "threequarter", "side"] as const;
+
+// The sheet step's record as both pages show it: expect()'s description and its output path (null
+// when the file is not on disk), so the line on screen is the record the check reads.
+export async function sheetLine(id: string, cid = "c1") {
+  const p = await getProject(id);
+  if (!p) throw new Error("Project not found.");
+  const r = await expect(p, "sheet", cid);
+  const [output] = (await finishOutputs(p, "sheet", cid)).sheet ?? [];
+  return { description: r.description, output: output ?? null, blocked: r.blocked };
+}
 
 export async function drawShotSheet(id: string, raw: unknown) {
   const choice = Choice.parse(raw);
@@ -48,6 +59,6 @@ export async function drawShotSheet(id: string, raw: unknown) {
     });
     if (!r || !(await ctx.alive())) return;
     await updateProject(id, (q) => void (q.shot = { action: "", negative: DEFAULT_NEGATIVE, takes: [], ...q.shot, sheet: { ...choice, ...r } }));
-  }, "Drawing the shot's sheet");
+  }, "Drawing the shot's sheet", [], { step: "sheet", cid });
   revalidatePath(`/p/${id}/shot`);
 }

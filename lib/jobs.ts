@@ -1,5 +1,6 @@
 import { cancelComfyJob } from "./comfy";
 import { randomUUID } from "node:crypto";
+import { finishOutputs, startRecord, type JobStep } from "./job-sheet";
 import { getProject, updateProject, type Project } from "./store";
 
 // A job is one GPU step for one project, e.g. "concepts" or "swap". It runs in the server
@@ -20,10 +21,16 @@ const SHARED: Record<string, { keys: string[]; busy: string }> = {
 
 // beside: jobs this one may start next to because it waits for them before it uses the GPU (a
 // take waiting on the keyframes it is shot from).
-export async function startJob(projectId: string, key: string, work: (ctx: JobCtx) => Promise<void>, detail?: string, beside: string[] = []) {
+// step: which job-sheet step this job is. Its record (description, workflow or script, input paths)
+// is written on the job, a missing input blocks it before any work (so before any Comfy call), and
+// the output paths that exist are filled in when it finishes.
+export async function startJob(projectId: string, key: string, work: (ctx: JobCtx) => Promise<void>, detail?: string, beside: string[] = [], step?: { step: JobStep; cid?: string }) {
   // Each run gets its own id, so a late finish (or failure) of a cancelled run never
   // overwrites the run that replaced it under the same key.
   const run = randomUUID();
+  const first = step ? await getProject(projectId) : undefined;
+  const planned = step && first ? await startRecord(first, step.step, step.cid) : undefined;
+  const blocked = planned?.missing.length ? `Blocked, missing: ${planned.missing.join(", ")}` : undefined;
   await updateProject(projectId, (p) => {
     if (p.jobs[key]?.status === "running") throw new Error(`${key} is already running`);
     const shared = SHARED[key];
@@ -31,18 +38,26 @@ export async function startJob(projectId: string, key: string, work: (ctx: JobCt
     // One GPU job at a time: a second Generate used to start while the first was still on Comfy.
     const other = Object.entries(p.jobs).find(([k, j]) => k !== key && !beside.includes(k) && j.status === "running");
     if (other) throw new Error("A generation is already running; wait for it or cancel it first.");
-    p.jobs[key] = { status: "running", startedAt: new Date().toISOString(), run, ...(detail ? { detail } : {}) };
+    const record = planned ? { record: planned.record } : {};
+    p.jobs[key] = blocked
+      ? { status: "error", startedAt: new Date().toISOString(), run, error: blocked, ...record }
+      : { status: "running", startedAt: new Date().toISOString(), run, ...(detail ? { detail } : {}), ...record };
   });
+  if (blocked) throw new Error(blocked);
   const mine = (p: Project) => p.jobs[key]?.run === run;
   const track = (comfyId: string) => updateProject(projectId, (p) => void (mine(p) && (p.jobs[key] = { ...p.jobs[key], comfyId })));
   const progress = (detail: string) => updateProject(projectId, (p) => void (mine(p) && (p.jobs[key] = { ...p.jobs[key], detail })));
   const alive = async () => { const p = await getProject(projectId); return !!p && mine(p) && p.jobs[key].status === "running"; };
   void work({ track, alive, progress })
-    .then(() =>
-      updateProject(projectId, (p) => {
-        if (mine(p) && p.jobs[key].status === "running") p.jobs[key] = { ...p.jobs[key], status: "done" };
-      }),
-    )
+    .then(async () => {
+      const now = step ? await getProject(projectId) : undefined;
+      const outputs = step && now ? await finishOutputs(now, step.step, step.cid) : undefined;
+      await updateProject(projectId, (p) => {
+        if (!mine(p) || p.jobs[key].status !== "running") return;
+        const job = p.jobs[key];
+        p.jobs[key] = { ...job, status: "done", ...(outputs && job.record ? { record: { ...job.record, outputs } } : {}) };
+      });
+    })
     .catch((err: unknown) =>
       updateProject(projectId, (p) => {
         if (!mine(p) || p.jobs[key].status !== "running") return; // cancelled or replaced: leave it

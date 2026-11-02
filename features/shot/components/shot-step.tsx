@@ -1,15 +1,15 @@
 "use client";
 
 import { SectionNav } from "@/components/section-nav";
-import { Fragment, useEffect, useRef, useState, useTransition } from "react";
-import { Clapperboard, Dices, Download, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { Dices, Download, Plus, Trash2, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FadeImage } from "@/components/fade-image";
-import { LoadingDots } from "@/components/loading-dots";
 import { Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobPoller } from "@/features/wizard/components/job-poller";
+import { RecordLine } from "@/features/wizard/components/job-status";
 import type { Job, Keyframes, Shot, ShotKind, TakeSetup } from "@/lib/store";
 import { goodTake } from "@/lib/score";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,8 @@ import { drawShotSheet } from "../actions/sheet";
 import { chip } from "@/features/scene/components/chip";
 import { ShotTabs, type ShotTab } from "./shot-tabs";
 import { changes } from "../setup";
+import { ShotFrameContext } from "./shot-camera";
+import { SentLine } from "./sent-line";
 
 // Actions that only use what is in the keyframes: a prop the keys do not show makes LTX conjure it
 // mid-take (04_shot ACCEPT proof 6). Props go into the keyframes through the In the frame note.
@@ -40,11 +42,6 @@ const KINDS: { id: ShotKind; label: string; line: string }[] = [
 // scene's assets that have pictures.
 export type SheetChoices = { expressions: { id: string; label: string }[]; poses: { id: string; label: string }[]; props: { id: string; label: string }[] };
 const EXPRESSIONS = ["calm", "smiling", "curious", "worried", "frightened", "angry", "sad", "determined"];
-const BEATS = [
-  { id: "start", label: "First", placeholder: "stands still, breathing slowly" },
-  { id: "then", label: "As the camera moves", placeholder: "turns their head toward the camera" },
-  { id: "end", label: "By the end", placeholder: "narrows their eyes, shoulders tense" },
-] as const;
 
 // Step 03: set the shot's camera and walk (decision 0011), make the keyframes, say what the character does; LTX-2.5 shoots the shot's camera move, guided by its
 // keyframes. Each take is kept; pick the one the sequence uses, or download it.
@@ -63,6 +60,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
   const kind = props.shot?.kind ?? props.suggested;
   const [expression, setExpression] = useState(props.shot?.expression ?? "");
   const [fromKey, setFromKey] = useState(false);
+  const [line, setLine] = useState<string | undefined>(); // the Generated video line, edited for the next take only
   const own = props.shot?.sheet;
   const [pick, setPick] = useState<{ expression?: string; pose?: string; props: string[] }>({ expression: own?.expression, pose: own?.pose, props: own?.props ?? [] });
   const toggleProp = (id: string) => setPick((x) => ({ ...x, props: x.props.includes(id) ? x.props.filter((p) => p !== id) : x.props.length < 2 ? [...x.props, id] : x.props }));
@@ -115,7 +113,8 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           frames.forEach((b, i) => form.set(`f${i}`, new File([b], `${i}.jpg`, { type: "image/jpeg" })));
         }
         setPhase("Sending");
-        await oneShootAction(props.projectId, form, { beats, tries, expression: expression || undefined, fromKey: character && fromKey, seed, keysOnly: keysFirst && needsKeys && !props.ready });
+        await oneShootAction(props.projectId, form, { beats, tries, expression: expression || undefined, fromKey: character && fromKey, seed, line: character ? line : undefined, keysOnly: keysFirst && needsKeys && !props.ready });
+        setLine(undefined);
       } finally {
         setPhase(null);
       }
@@ -150,11 +149,32 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           <h1 className="text-2xl font-semibold tracking-tight">Say what happens</h1>
         </div>
         <ShotTabs projectId={props.projectId} shots={props.shots} locked={running} />
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
         <fieldset disabled={locked} className="contents" title={locked ? "The keyframes are being painted from these settings" : undefined}>
-          {props.cameraPanel}
+          <ShotFrameContext.Provider value={{ beats, setBeat: (id, v) => setBeats((b) => ({ ...b, [id]: v })), shoot: { label: phase ?? (running ? "Shooting…" : keysFirst && needsKeys && !props.ready ? "Paint keyframes" : count === 1 ? "Shoot" : `Shoot ${count}`), busy: (pending && !running) || !!phase, disabled: !canGenerate, title: "Draws and paints what is out of date (keyframes, motion guide), then shoots the takes", onShoot: () => generate(count) } }}>{props.cameraPanel}</ShotFrameContext.Provider>
         </fieldset>
+        <aside aria-label="The latest take" className="flex min-w-0 flex-col gap-2 rounded-lg border p-2">
+          <span className="text-xs text-muted-foreground">Latest take</span>
+          {running && props.job ? (
+            <div className="relative aspect-[768/448] overflow-hidden rounded-md border">
+              <FogLoader className="absolute inset-0" message={props.job.detail ?? "Shooting the take"} startedAt={props.job.startedAt} expected={expected * count} onCancel={() => cancelShot(props.projectId)} />
+            </div>
+          ) : last ? (
+            <>
+              <video key={last.video} src={file(last.video)} controls loop playsInline preload="metadata" className="aspect-[768/448] w-full rounded-md bg-black" />
+              <span className="text-xs text-muted-foreground">
+                <span className="font-mono text-foreground">Take {takes.length}</span>
+                {last.score && ` · ${goodTake(last.score, last.frames) ? "steady" : `${last.score.popins} of ${last.frames} frames pop in`}`}
+              </span>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">No takes yet. Shoot on the picture.</p>
+          )}
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </aside>
+        </div>
 
-        <Section id="action" n="2" tone="bg-tone-yellow" title="What happens" line="What they do, in three short beats with a verb each: first, as the camera moves, by the end. The keyframes after the first are painted with them (Generate paints them again after a change), so the take does what they show; a thing not in the scene (a lantern, a sword) appears out of nowhere."
+        <Section id="action" n="2" tone="bg-tone-yellow" title="What happens" line="Who is in the shot and their expression. What they do is written on the picture above, in three short beats with a verb each. The keyframes after the first are painted with them (Generate paints them again after a change), so the take does what they show; a thing not in the scene (a lantern, a sword) appears out of nowhere."
           summary={props.shot?.action || "Say what the character does"}
           open={!takes.length}
           className="nifl-enter"
@@ -210,16 +230,6 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                   </Button>
                 </div>
               </div>
-            </div>
-            <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
-              {BEATS.map((b) => (
-                <Fragment key={b.id}>
-                  <label htmlFor={`beat-${b.id}`} className="text-xs text-muted-foreground">
-                    {b.label}
-                  </label>
-                  <Input id={`beat-${b.id}`} value={beats[b.id]} maxLength={300} onChange={(e) => setBeats({ ...beats, [b.id]: e.target.value })} placeholder={b.placeholder} />
-                </Fragment>
-              ))}
             </div>
             {!action && (
               <div className="-mt-1 flex flex-wrap gap-1.5">
@@ -285,6 +295,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                   <FadeImage src={file(own?.drawn ?? props.sheet)} alt={own ? "This shot's sheet" : "The character's sheet"} className="aspect-[768/448] w-full max-w-64 shrink-0 rounded border bg-black object-contain" />
                   <div className="flex min-w-0 flex-col gap-1.5">
+                    <RecordLine projectId={props.projectId} again={`${props.job?.status}${own?.drawn}${props.sheet}`} />
                     {(props.choices.expressions.length > 0 || props.choices.poses.length > 0 || props.choices.props.length > 0) && (
                       <div className="flex flex-col gap-1.5 border-b pb-2">
                         <span className="text-xs text-muted-foreground">This shot&apos;s sheet: {own ? "drawn" : "the character's, unless you draw one"}</span>
@@ -309,6 +320,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                         </Button>
                       </div>
                     )}
+                    <SentLine projectId={props.projectId} beats={beats} expression={expression} edited={line} onEdit={setLine} />
                     <label className="flex items-center gap-2 text-xs text-muted-foreground">
                       <input type="checkbox" checked={fromKey} onChange={(e) => setFromKey(e.target.checked)} className="accent-primary" />
                       Start from the first keyframe (only when it shows this same character; otherwise its face wins)
@@ -331,10 +343,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
             <span className="font-mono text-[11px] text-muted-foreground">
               ~{Math.round((expected * count) / 60)} min · {Math.round(seconds * 10) / 10} s each with sound
             </span>
-            <Button type="button" size="lg" className="ml-auto" disabled={!canGenerate} onClick={() => generate(count)} title="Draws and paints what is out of date (keyframes, motion guide), then shoots the takes">
-              {pending && !running ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
-              {phase ?? (running ? "Generating…" : keysFirst && needsKeys && !props.ready ? "Paint the keyframes" : `Generate ${count === 1 ? "a take" : `${count} takes`}`)}
-            </Button>
+            <span className="ml-auto text-xs text-muted-foreground">Shoot is on the picture above</span>
             {needsKeys && (
               <label className="flex w-full items-center gap-2 text-xs text-muted-foreground">
                 <input type="checkbox" checked={keysFirst} disabled={busy} onChange={(e) => setKeysFirst(e.target.checked)} className="accent-primary" />

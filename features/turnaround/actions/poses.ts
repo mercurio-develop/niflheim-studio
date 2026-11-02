@@ -18,6 +18,7 @@ const done = (id: string) => {
 };
 const jobKey = (pid: string, cid = "c1") => charKey(cid, `pose:${pid}`);
 const Cid = z.string().regex(CID).optional(); // which character: c1 unless another is named
+const Prompt = z.string().trim().min(3).max(4000);
 const Pid = z.string().regex(/^[a-z0-9]{1,16}$/);
 const Input = z.object({ label: z.string().trim().min(2).max(30), prompt: z.string().trim().min(3).max(200) });
 
@@ -31,7 +32,15 @@ const setPose = (id: string, cid: string, pid: string, fn: (x: CharacterPose) =>
     if (x) fn(x);
   });
 
-async function paintPoseView(id: string, pid: string, view: AssetView, ctx: JobCtx, cid: string) {
+// The full string a view of a pose sends: the front from the pose's words, the others from that front.
+function builtPrompt(pose: CharacterPose, view: AssetView) {
+  const spec = ASSET_VIEWS.find((v) => v.id === view)!;
+  return view === "front"
+    ? `Make this character ${pose.prompt}, a clear full-body pose that reads at once. The whole figure from head to feet stays in frame. Front view, facing the viewer. ${KEEP}`
+    : `Show this same character in exactly the same pose ${spec.from}. Keep the pose, the arms and the legs as they are; only the angle changes. ${KEEP}`;
+}
+
+async function paintPoseView(id: string, pid: string, view: AssetView, ctx: JobCtx, cid: string, override?: string) {
   const p = await getProject(id);
   const pose = p && charOf(p, cid).poses?.find((x) => x.id === pid);
   if (!pose) return;
@@ -40,10 +49,7 @@ async function paintPoseView(id: string, pid: string, view: AssetView, ctx: JobC
   if (!from) return;
   const dir = charDir(cid, `turnaround/poses/${pid}`);
   await ctx.progress(`Painting ${pose.label.toLowerCase()} ${spec.from}`);
-  const prompt =
-    view === "front"
-      ? `Make this character ${pose.prompt}, a clear full-body pose that reads at once. The whole figure from head to feet stays in frame. Front view, facing the viewer. ${KEEP}`
-      : `Show this same character in exactly the same pose ${spec.from}. Keep the pose, the arms and the legs as they are; only the angle changes. ${KEEP}`;
+  const prompt = override ?? builtPrompt(pose, view);
   const [out] = await runWorkflow({
     workflow: "01_edit.api.json",
     onSubmit: ctx.track,
@@ -126,8 +132,10 @@ export async function cancelPose(id: string, rawPid: string, rawCid?: unknown, r
 }
 
 // One view of a pose again: the front from the turnaround, any other view from that pose's front.
-export async function remakePoseView(id: string, rawPid: string, rawView: string, rawCid?: unknown) {
+// An edited prompt, if given, replaces the built one for this run only.
+export async function remakePoseView(id: string, rawPid: string, rawView: string, rawCid?: unknown, rawPrompt?: unknown) {
   const pid = Pid.parse(rawPid);
+  const override = rawPrompt === undefined || rawPrompt === null ? undefined : Prompt.parse(rawPrompt);
   const view = View.parse(rawView);
   const cid = Cid.parse(rawCid) ?? "c1";
   const p = await getProject(id);
@@ -135,6 +143,17 @@ export async function remakePoseView(id: string, rawPid: string, rawView: string
   if (!pose) throw new Error("No such pose.");
   if (view !== "front" && !pose.views.front) throw new Error("Paint the front of this pose first.");
   if (view === "front" && !viewImage(p, "front", cid)) throw new Error("Generate the turnaround first.");
-  await startJob(id, charKey(cid, `pose:${pid}:${view}`), (ctx) => paintPoseView(id, pid, view, ctx, cid), `Painting ${pose.label.toLowerCase()} ${LABELS[view]}`);
+  await startJob(id, charKey(cid, `pose:${pid}:${view}`), (ctx) => paintPoseView(id, pid, view, ctx, cid, override), `Painting ${pose.label.toLowerCase()} ${LABELS[view]}`);
   done(id);
+}
+
+// The prompt Again on this view would send, to show and edit before it runs.
+export async function poseViewPrompt(id: string, rawPid: string, rawView: string, rawCid?: unknown) {
+  const pid = Pid.parse(rawPid);
+  const view = View.parse(rawView);
+  const cid = Cid.parse(rawCid) ?? "c1";
+  const p = await getProject(id);
+  const pose = p && charOf(p, cid).poses?.find((x) => x.id === pid);
+  if (!pose) throw new Error("No such pose.");
+  return builtPrompt(pose, view);
 }

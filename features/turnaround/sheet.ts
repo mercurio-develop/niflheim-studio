@@ -6,7 +6,7 @@ import { runWorkflow } from "@/lib/comfy";
 import type { JobCtx } from "@/lib/jobs";
 import { characterImage, fourLegs, viewImage } from "@/lib/progress";
 import { PYTHON } from "@/lib/python";
-import { charDir, charOf, getProject, projectDir, updateProject, type SheetCell, type SheetRow, type ViewId } from "@/lib/store";
+import { charDir, charOf, getProject, projectDir, updateProject, type Project, type SheetCell, type SheetRow, type ViewId } from "@/lib/store";
 
 // The character's Ingredients reference sheet (the LTX-2.5 IC-LoRA that keeps who and what is in a
 // take), laid out like Lightricks' own sheets: three close-ups of the face and the things they wear
@@ -83,19 +83,28 @@ export type SheetOverrides = { face?: string; views?: (string | undefined)[]; pr
 // The sheet drawn from the turnaround's views and the painted cells, with the place when the
 // project has one, or with a shot's overrides. Returns the file and the rows it drew, so a take's
 // prompt can say each cell by its place.
+// The pictures a sheet is drawn from (project-relative), a shot's overrides applied: the painted
+// faces (the first is the front close-up), the items, and the four views (undefined where missing).
+// lib/job-sheet.ts reads the same list before anyone clicks.
+export function sheetInputs(p: Project, cid: string, o: SheetOverrides = {}) {
+  const painted = (kind: SheetCell["kind"]) => (charOf(p, cid).sheet?.cells ?? []).filter((c) => c.kind === kind && c.image);
+  const faces = painted("face").map((c) => c.image!);
+  if (o.face) faces[0] = o.face;
+  const items = painted("item").map((c) => c.cutout ?? c.image!);
+  const views = o.views ?? (["front", "threequarter", "side", "back"] as const).map((v) => viewImage(p, v, cid) ?? undefined);
+  return { faces, items, views };
+}
+
 export async function renderSheet(id: string, cid: string, o: SheetOverrides = {}) {
   const p = await getProject(id);
   const sheet = p ? charOf(p, cid).sheet : undefined;
   if (!p || !sheet) return null;
-  const painted = (kind: SheetCell["kind"]) => sheet.cells.filter((c) => c.kind === kind && c.image);
-  const faces = painted("face").map((c) => c.image!);
-  if (o.face) faces[0] = o.face;
-  const views = o.views ?? (["front", "threequarter", "side", "back"] as const).map((v) => viewImage(p, v, cid) ?? undefined);
+  const { faces, items, views } = sheetInputs(p, cid, o);
   const out = o.out ?? charDir(cid, `sheet/sheet-${Date.now().toString(36)}.png`);
   const spec = {
     out: abs(id, out),
     faces: faces.map((f) => abs(id, f)),
-    items: painted("item").map((c) => abs(id, c.cutout ?? c.image!)),
+    items: items.map((f) => abs(id, f)),
     views: views.map((f) => (f ? abs(id, f) : null)),
     props: (o.props ?? []).map((p) => p.map((f) => abs(id, f))),
     set: p.set?.image ? abs(id, p.set.image) : null,

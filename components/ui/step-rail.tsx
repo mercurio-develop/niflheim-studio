@@ -8,17 +8,17 @@ export function StepRail({ steps, active }: { steps: RailStep[]; active: string 
         const ready = s.ready !== false;
         const cls = [
           "flex shrink-0 items-center gap-2 rounded-[var(--radius)] border px-3 py-1.5 font-sans text-sm",
-          isActive ? "border-border bg-surface text-text" : "border-transparent text-muted",
+          isActive ? "border-border bg-card text-foreground" : "border-transparent text-muted-foreground",
           !ready && "opacity-50",
         ].filter(Boolean).join(" ");
         const body = (
           <>
-            <span className="font-mono text-[11px] text-muted">{s.n}</span>
+            <span className="font-mono text-[11px] text-muted-foreground">{s.n}</span>
             {s.title}
           </>
         );
         return s.href && ready ? (
-          <a key={s.id} href={s.href} className={isActive ? cls : `${cls} hover:text-text`}>{body}</a>
+          <a key={s.id} href={s.href} className={isActive ? cls : `${cls} hover:text-foreground`}>{body}</a>
         ) : (
           <span key={s.id} className={cls} title={ready ? undefined : "Soon"}>{body}</span>
         );
