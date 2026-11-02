@@ -46,7 +46,17 @@ function useLook(scene: THREE.Object3D, look: StageLook) {
     });
     return map;
   }, [scene]);
-  const guide = useMemo(() => new THREE.MeshStandardMaterial({ color: "#b9b4ab", roughness: 1, flatShading: true, side: THREE.DoubleSide }), []);
+  // A filled stage carries MoGe's normal map as vertex normals (scripts/stage_normals.py): the guide
+  // shades with them, so it shows the surface MoGe read. Flat faces only for a stage without them.
+  const normals = useMemo(() => {
+    let has = false;
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && m.name.startsWith("stage") && m.geometry.attributes.normal) has = true;
+    });
+    return has;
+  }, [scene]);
+  const guide = useMemo(() => new THREE.MeshStandardMaterial({ color: "#b9b4ab", roughness: 1, flatShading: !normals, side: THREE.DoubleSide }), [normals]);
   const floor = useMemo(() => new THREE.MeshStandardMaterial({ color: "#6f8f86", roughness: 1, side: THREE.DoubleSide }), []);
   for (const [m, mat] of painted) m.material = look === "painting" ? mat : m.name.startsWith("floor") ? floor : guide;
 }
@@ -134,7 +144,8 @@ function Mesh(props: { settle?: number; url: string; camera?: StageCamera; fille
     // A drag to orbit ends in a click too: only a press that barely moved places anything.
     if (!props.onFloor || !e.object.name.startsWith("floor") || e.delta > 4) return;
     e.stopPropagation();
-    props.onFloor([e.point.x, e.point.y, e.point.z]);
+    // Feet on the floor: a levelled stage's floor is y = 0, whatever the click's depth noise.
+    props.onFloor([e.point.x, view.floorY ?? e.point.y, e.point.z]);
   };
   const double = (e: ThreeEvent<MouseEvent>) => {
     if (!props.onFloorDouble || !e.object.name.startsWith("floor")) return;
@@ -189,8 +200,10 @@ function Mesh(props: { settle?: number; url: string; camera?: StageCamera; fille
         maxAzimuthAngle={azimuth + orbit.yaw}
         minPolarAngle={polar - orbit.up}
         maxPolarAngle={polar + orbit.down}
-        minDistance={view.middle * 0.35}
-        maxDistance={view.middle * (props.filled ? 1.15 : 1.1)}
+        // A short push: a filled stage orbits from 0.8 to 1.0 times the middle, so the camera stays
+        // inside the painting's view and never shows the missing backs of the room.
+        minDistance={view.middle * (props.filled ? 0.8 : 0.35)}
+        maxDistance={view.middle * (props.filled ? 1 : 1.1)}
         rotateSpeed={0.4}
         enablePan={false}
         enableZoom={zoom}

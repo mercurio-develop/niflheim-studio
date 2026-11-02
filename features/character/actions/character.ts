@@ -11,7 +11,7 @@ import { parentIn, stackMoves } from "@/lib/history";
 import { mergeParts, partsFromTags, partSearches } from "@/lib/parts";
 import { CID, charDir, charKey, charOf, getProject, projectDir, updateProject, type Edit, type Project, type Version, type ViewId } from "@/lib/store";
 import { mediumOf, styleById } from "@/lib/styles";
-import { characterFresh, characterImage, viewsFor } from "@/lib/progress";
+import { characterImage } from "@/lib/progress";
 import { drawSheet } from "@/features/turnaround/sheet";
 import { Count, Index, Prompt, REFERENCE_TYPES, StyleId, referenceError } from "../schemas";
 
@@ -652,12 +652,7 @@ export async function finishCharacter(id: string, rawCid?: unknown) {
     const data = charOf(p, cid);
     const c = data.character;
     if (c.current === null) throw new Error("Pick a concept first.");
-    const image = c.versions[c.current].image;
-    const t = data.turnaround;
-    if (!t || t.source !== image) throw new Error("Generate the turnaround from this version first.");
-    if (!viewsFor(t.options).every((v) => t.views[v.id]?.versions.length)) throw new Error("Paint every view of the turnaround first.");
-    if (!data.sheet?.drawn || data.sheet.source !== image) throw new Error("Generate the sheet from this version first.");
-    if (!characterFresh(p, cid)) throw new Error("Generate the turnaround and the sheet from this version first.");
+    // A picked concept is enough: the turnaround and the sheet are made behind More, or on the way.
     c.doneAt = new Date().toISOString();
   });
   return `/p/${id}/scene`;

@@ -1,6 +1,6 @@
 import { allCharacters, charOf, type Job, type Project } from "@/lib/store";
 import { historyMoves } from "@/lib/history";
-import { characterFresh, characterImage, viewsFor } from "@/lib/progress";
+import { characterFresh, characterImage } from "@/lib/progress";
 import { TurnaroundSections } from "@/features/turnaround/components/turnaround-step";
 import { SectionNav } from "@/components/section-nav";
 import { JobPoller } from "@/features/wizard/components/job-poller";
@@ -60,27 +60,12 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
   // Next is c1's: its version, its turnaround, its jobs, whichever character is open.
   const c1 = project.character;
   const v1 = c1.current === null ? null : c1.versions[c1.current];
-  const { t: t1, fresh: fresh1, complete } = completeOf(project, "c1");
-  const sheet1 = project.sheet;
+  const { complete } = completeOf(project, "c1");
   const ownJob = ownJobOf(jobsOf(project.jobs, "c1"));
   // Why Next is off, in words: Edit is still the work, the turnaround belongs to another version,
   // a view or the sheet is missing, or a job of this step is still running.
-  const from = t1 ? c1.versions.findIndex((v) => v.image === t1.source) : -1;
-  const hint = !v1
-    ? undefined
-    : ownJob
-      ? `Wait: ${ownJob.detail ?? "a job is running"}`
-      : t1 && !fresh1
-        ? from >= 0
-          ? `The turnaround is from v${from + 1}: Looks good on this version, then Generate, or pick v${from + 1} in History`
-          : "This version has no turnaround yet: Looks good, then Generate"
-        : !t1
-          ? "Looks good, then Generate the turnaround"
-          : !viewsFor(t1.options).every((v) => t1.views[v.id]?.versions.length)
-            ? "Paint every view of the turnaround first"
-            : !sheet1?.drawn || sheet1.source !== v1.image
-              ? "Generate the sheet from the views"
-              : undefined;
+  // A picked concept is enough to go on; the turnaround and the sheet are optional.
+  const hint = !v1 ? undefined : ownJob ? `Wait: ${ownJob.detail ?? "a job is running"}` : undefined;
 
   return (
     <>
@@ -93,7 +78,6 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
               ? [
                   { id: "edit", n: "2", title: "Edit", tone: "bg-primary" },
                   { id: "turnaround", n: "3", title: "Turnaround", tone: "bg-tone-lilac" },
-                  { id: "poses", n: "4", title: "Poses", tone: "bg-tone-green" },
                   { id: "sheet", n: "5", title: "Sheet", tone: "bg-tone-lilac" },
                   { id: "model", n: "6", title: "3D model", tone: "bg-tone-cyan" },
                 ]
@@ -102,7 +86,7 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
         />
         <div className="flex min-w-0 flex-col gap-10">
           <div className="nifl-enter flex flex-col gap-1">
-            <span className="font-mono text-xs text-muted-foreground">01 · Character</span>
+            <span className="font-mono text-xs text-muted-foreground">01 · Person</span>
             <h1 className="text-2xl font-semibold tracking-tight">Make your characters</h1>
           </div>
 
@@ -172,8 +156,8 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
         <VersionsSidebar key={cid} projectId={project.id} cid={cid} versions={c.versions} current={c.current} busy={editing} />
       </div>
       <NextBar
-        summary={!v1 ? `Pick a concept for ${cards[0].name} to continue` : complete ? <><span className="font-mono text-xs">v{c1.current! + 1}</span> · {v1.label} · every side and the sheet</> : t1 && !fresh1 ? "Looks good, then Generate the turnaround from this version" : !t1 ? "Edit, then Looks good, then Generate the turnaround" : "Generate the sheet from the views"}
-        next={{ label: "Scene", disabled: !complete || !!ownJob, hint, onNext: finishCharacter.bind(null, project.id) }}
+        summary={!v1 ? `Pick a concept for ${cards[0].name} to continue` : <><span className="font-mono text-xs">v{c1.current! + 1}</span> · {v1.label}{complete ? " · every side and the sheet" : ""}</>}
+        next={{ label: "Place", disabled: !v1 || !!ownJob, hint, onNext: finishCharacter.bind(null, project.id) }}
       />
     </>
   );

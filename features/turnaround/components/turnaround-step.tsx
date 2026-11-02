@@ -347,19 +347,9 @@ export function TurnaroundSections(props: {
         </SectionFire>
       </Section>
 
-      <Section
-        id="poses"
-        n="4"
-        tone="bg-tone-green"
-        title="Poses"
-        line="The same character in other poses, each with four views. A shot can use one, and switch to another halfway."
-        summary={props.poses.length ? props.poses.map((p) => p.label).join(", ") : "None yet"}
-        open={props.poses.some((p) => props.jobs[`pose:${p.id}`]?.status === "running")}
-        className="nifl-enter"
-        style={{ "--i": 4 } as React.CSSProperties}
-      >
+      <More label="Poses" summary={props.poses.length ? props.poses.map((p) => p.label).join(", ") : "the same character in other poses, for shots"} open={props.poses.some((p) => props.jobs[`pose:${p.id}`]?.status === "running")}>
         <PosesPanel cid={props.cid} projectId={props.projectId} poses={props.poses} jobs={props.jobs} locked={!!props.locked || !image("front")} busy={blocked} />
-      </Section>
+      </More>
 
         {ASSETS && <AssetsShelf cid={props.cid} projectId={props.projectId} assets={props.assets} jobs={props.jobs} locked={blocked} onView={(src, label) => setViewing({ src, label })} />}
 
