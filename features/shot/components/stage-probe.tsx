@@ -36,3 +36,31 @@ export async function probeRecords(
     }),
   );
 }
+
+// One box per record: plays the clip or shows the still through /api/files and prints its path
+// under data/projects. A missing file is a blocked box that names the path.
+export async function StageProbe(props: { projectId: string; layout?: LayoutClip | null; keyframes?: Keyframes | null; shot?: Pick<Shot, "takes"> | null }) {
+  const records = await probeRecords(props.projectId, props);
+  if (!records.length) return <p className="text-sm text-muted-foreground">The stage has left nothing for this shot yet.</p>;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {records.map((r) => {
+        const src = `/api/files/${props.projectId}/${r.path}`;
+        return (
+          <figure key={`${r.role}:${r.path}`} className="flex flex-col gap-2 rounded-md border p-3">
+            <figcaption className="text-sm">{r.label}</figcaption>
+            {r.blocked ? (
+              <p role="alert" className="text-xs text-destructive">Blocked: {r.full} is missing.</p>
+            ) : r.role === "key" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={src} alt={r.label} className="w-full rounded-md border bg-black object-contain" />
+            ) : (
+              <video src={src} controls loop muted playsInline preload="metadata" className="aspect-[768/448] w-full rounded-md border bg-black" />
+            )}
+            <code className="break-all text-xs text-muted-foreground">{r.full}</code>
+          </figure>
+        );
+      })}
+    </div>
+  );
+}
