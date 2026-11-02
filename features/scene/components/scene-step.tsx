@@ -6,7 +6,7 @@ import { JobPoller } from "@/features/wizard/components/job-poller";
 import { NextBar } from "@/features/wizard/components/next-bar";
 import type { Block, Job, SceneAsset, SetData, StageData } from "@/lib/store";
 import { DescribeSection } from "./describe-section";
-import { StageSection } from "./stage-section";
+import { StageSection, type ShotCam } from "./stage-section";
 import type { CastOption } from "./cast-picker";
 
 // Step 02: one painting becomes a 3D stage, and the character stands in it. Describe (or upload)
@@ -26,6 +26,7 @@ export function SceneStep(props: {
   moved: boolean;
   setJob?: Job;
   stageJob?: Job;
+  shots?: ShotCam[];
 }) {
   const building = props.setJob?.status === "running";
   const cutting = props.stageJob?.status === "running" && props.stageJob.detail !== "Rendering the camera move";
@@ -64,6 +65,7 @@ export function SceneStep(props: {
           moved={props.moved}
           setJob={props.setJob}
           stageJob={props.stageJob}
+          shots={props.shots}
         />
         </div>
       </div>
