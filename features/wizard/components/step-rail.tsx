@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 // The wizard as a timeline: done (accent, check), stale (made from an older step), current
 // (accent ring + pulse), next (hollow). The accent line fills up to the current step.
 export function StepRail(props: { projectId: string; active: StepSlug; states: Partial<Record<StepSlug, StepState>> }) {
-  const at = STEPS.findIndex((s) => s.slug === props.active);
+  // The reel page is the end of Film.
+  const at = STEPS.findIndex((s) => s.slug === (props.active === "export" ? "shot" : props.active));
   // The line runs from the first dot's centre to the last's: half a column in from each side.
   const inset = 50 / STEPS.length;
   // A step whose page would only send you back (the one before it is not done yet) is not a link:

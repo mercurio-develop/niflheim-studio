@@ -102,7 +102,7 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
         />
         <div className="flex min-w-0 flex-col gap-10">
           <div className="nifl-enter flex flex-col gap-1">
-            <span className="font-mono text-xs text-muted-foreground">01 · Character</span>
+            <span className="font-mono text-xs text-muted-foreground">01 · Person</span>
             <h1 className="text-2xl font-semibold tracking-tight">Make your characters</h1>
           </div>
 
@@ -173,7 +173,7 @@ export function CharacterStep({ project, cid = "c1" }: { project: Project; cid?:
       </div>
       <NextBar
         summary={!v1 ? `Pick a concept for ${cards[0].name} to continue` : complete ? <><span className="font-mono text-xs">v{c1.current! + 1}</span> · {v1.label} · every side and the sheet</> : t1 && !fresh1 ? "Looks good, then Generate the turnaround from this version" : !t1 ? "Edit, then Looks good, then Generate the turnaround" : "Generate the sheet from the views"}
-        next={{ label: "Scene", disabled: !complete || !!ownJob, hint, onNext: finishCharacter.bind(null, project.id) }}
+        next={{ label: "Place", disabled: !complete || !!ownJob, hint, onNext: finishCharacter.bind(null, project.id) }}
       />
     </>
   );

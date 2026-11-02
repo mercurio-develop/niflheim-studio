@@ -62,7 +62,7 @@ export function ReelStep(props: { projectId: string; rows: ReelRow[]; joins: Joi
         <SectionNav items={[{ id: "autopilot", n: "1", title: "Autopilot", tone: "bg-tone-yellow" }, { id: "order", n: "2", title: "Order", tone: "bg-tone-cyan" }, { id: "reel", n: "3", title: "Reel", tone: "bg-tone-pink" }]} />
         <div className="flex min-w-0 flex-col gap-10">
         <div className="nifl-enter flex flex-col gap-1">
-          <span className="font-mono text-xs text-muted-foreground">04 · Reel</span>
+          <span className="font-mono text-xs text-muted-foreground">03 · Film · Reel</span>
           <h1 className="text-2xl font-semibold tracking-tight">Put the shots together</h1>
         </div>
         {props.autopilot}

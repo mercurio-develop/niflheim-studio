@@ -7,7 +7,7 @@ import { FadeImage } from "@/components/fade-image";
 import { ImageViewer } from "@/components/image-viewer";
 import { LoadingDots } from "@/components/loading-dots";
 import { Textarea } from "@/components/ui/textarea";
-import { Section, SectionFire } from "@/components/section";
+import { More, Section, SectionFire } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobStatus, RecordLine } from "@/features/wizard/components/job-status";
 import type { CharacterSheet, Job, SheetCell } from "@/lib/store";
@@ -116,7 +116,10 @@ export function SheetSection(props: {
           </div>
           <span className="text-xs text-muted-foreground">Up to {MAX_ITEMS} things they wear or carry, each painted alone on the sheet so takes keep them. Pick from the parts or type one.</span>
         </div>
+      </div>
 
+      <More label="Expressions" summary={picked.length ? picked.join(", ") : "faces the sheet paints"}>
+      <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3">
         <span className="pt-0.5 text-xs text-muted-foreground">Expressions</span>
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -145,6 +148,7 @@ export function SheetSection(props: {
           <span className="text-xs text-muted-foreground">Painted from the front close-up when you Generate. A shot can hold them to that look.</span>
         </div>
       </div>
+      </More>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {job?.status === "error" && <p className="text-sm text-destructive">Failed: {job.error}</p>}
