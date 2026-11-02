@@ -128,7 +128,7 @@ export function sheetOnly(g: Graph) {
 
 // @lantern in the action names a scene asset: its picture goes with the take (reference images) and
 // the prompt says its name. A handle is the name lowercased, with spaces as dashes or none.
-const slug = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "");
+export const slug = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "");
 export function resolveHandles(text: string, assets: SceneAsset[]) {
   const refs: { name: string; file: string }[] = [];
   const unknown: string[] = [];
