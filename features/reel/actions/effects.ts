@@ -2,7 +2,7 @@
 
 import path from "node:path";
 import { execFile } from "node:child_process";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -15,6 +15,8 @@ const run = promisify(execFile);
 const ShotId = z.string().regex(/^s\d{1,3}$/);
 const Effect = z.enum(EFFECTS.map((e) => e.id) as [EffectId, ...EffectId[]]);
 const NIGHT = "Night under cold blue moonlight, deep shadows, dim cool light on the ground and on the figures, a dark sky. Only the lighting changes from day to night; identical composition, framing, camera movement and motion.";
+// Where the effect applies, as fractions of the frame; omitted: the whole frame.
+const Region = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().gt(0).max(1), h: z.number().gt(0).max(1) }).optional();
 const done = (id: string) => revalidatePath(`/p/${id}/export`);
 
 // The shot's picked take: the one the reel plays.
@@ -34,10 +36,23 @@ async function probe(file: string) {
   return { w, h, n };
 }
 
+// Lay the effect over the source plate: inside the region the effect, everywhere else the source
+// pixels, kept lossless (crf 0) so they match the take. Audio stays the take's.
+async function composite(plate: string, fx: string, dest: string, w: number, h: number, region: z.infer<typeof Region>) {
+  const even = (v: number) => Math.max(2, Math.round(v / 2) * 2);
+  const r = region ?? { x: 0, y: 0, w: 1, h: 1 };
+  const cx = Math.min(even(r.x * w), w - 2), cy = Math.min(even(r.y * h), h - 2);
+  const cw = Math.min(even(r.w * w), w - cx), ch = Math.min(even(r.h * h), h - cy);
+  await run("ffmpeg", ["-v", "error", "-y", "-i", plate, "-i", fx, "-filter_complex",
+    `[1:v]scale=${w}:${h},crop=${cw}:${ch}:${cx}:${cy}[fx];[0:v][fx]overlay=${cx}:${cy}:shortest=1,format=yuv420p[v]`,
+    "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-crf", "0", "-c:a", "copy", dest]);
+}
+
 // Make one effect of the shot's picked take as a job (one per shot at a time), then use it.
-export async function makeEffect(id: string, rawShot: unknown, rawEffect: unknown) {
+export async function makeEffect(id: string, rawShot: unknown, rawEffect: unknown, rawRegion?: unknown) {
   const shot = ShotId.parse(rawShot);
   const effect = Effect.parse(rawEffect);
+  const region = Region.parse(rawRegion);
   const take = await pickedTake(id, shot);
   const src = path.join(projectDir(id), take.video);
   await startJob(id, `fx-${shot}`, async (ctx) => {
@@ -68,7 +83,7 @@ export async function makeEffect(id: string, rawShot: unknown, rawEffect: unknow
     });
     if (!(await ctx.alive())) return;
     await mkdir(out, { recursive: true });
-    await rename(file, path.join(out, "00.mp4"));
+    await composite(src, file, path.join(out, "00.mp4"), w, h, region);
     await writeFile(path.join(path.dirname(out), "use.txt"), effect);
   }, `${EFFECTS.find((e) => e.id === effect)!.label}: one pass on Comfy Cloud`);
   done(id);
