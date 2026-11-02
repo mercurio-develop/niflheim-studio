@@ -39,3 +39,37 @@ export function shapeShot(g: Graph, frames: number[], length: number, endStrengt
   });
   g[GUIDE_LAST].inputs = { ...g[GUIDE_LAST].inputs, positive: [prev, 0], negative: [prev, 1], latent: [prev, 2] };
 }
+
+// The Layout-to-Render graph (03_shot_layout) with the keyframes added as guides on top of the
+// clay clip, chained after its first-key reference (node 31): the guided arm of a layout pair.
+export const keyImageNode = (i: number) => String(300 + i * 4);
+export function addKeyGuides(g: Graph, frames: number[], length: number) {
+  g["30"].inputs.length = length;
+  g["33"].inputs.frames_number = length;
+  let prev = "31";
+  frames.forEach((frame, i) => {
+    const [load, scale, prep, guide] = [0, 1, 2, 3].map((d) => String(300 + i * 4 + d));
+    const edge = i === 0 || i === frames.length - 1;
+    g[load] = { class_type: "LoadImage", inputs: { image: "key.png" }, _meta: { title: `Key at frame ${frame}` } };
+    g[scale] = { class_type: "ImageScale", inputs: { ...(g["3"].inputs as object), image: [load, 0] } };
+    g[prep] = { class_type: "LTXVPreprocess", inputs: { ...(g["5"].inputs as object), image: [scale, 0] } };
+    g[guide] = {
+      class_type: "LTXVAddGuide",
+      inputs: { positive: [prev, 0], negative: [prev, 1], vae: ["11", 0], latent: [prev, 2], image: [prep, 0], frame_idx: frame, strength: edge ? END_STRENGTH : MIDDLE_STRENGTH },
+      _meta: { title: `Guide: frame ${frame}` },
+    };
+    prev = guide;
+  });
+  g["34"].inputs.video_latent = [prev, 2];
+  for (const n of ["41", "51"]) g[n].inputs = { ...g[n].inputs, positive: [prev, 0], negative: [prev, 1] };
+}
+
+// The shot graph (03_shot) with no guide at all: the empty video latent goes to the sampler as
+// it is and the move is only what the prompt says. The words-only arm of a layout pair.
+export function wordsOnly(g: Graph, length: number) {
+  g["30"].inputs.length = length;
+  g["33"].inputs.frames_number = length;
+  for (const n of ["1", "2", "3", "4", "5", "6", "31", "32"]) delete g[n];
+  g["34"].inputs.video_latent = ["30", 0];
+  for (const n of ["41", "51"]) g[n].inputs = { ...g[n].inputs, positive: ["22", 0], negative: ["22", 1] };
+}
