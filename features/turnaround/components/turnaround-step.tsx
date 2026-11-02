@@ -12,7 +12,7 @@ import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import { Editor } from "@/features/character/components/editor";
 import { stackMoves } from "@/lib/history";
-import { suggestedBody, VIEWS, viewsFor } from "@/lib/progress";
+import { firstView, frontPrompt, suggestedBody, viewPrompt, VIEWS, viewsFor } from "@/lib/progress";
 import type { Asset, CharacterPose, CharacterSheet, Job, Mesh, TurnaroundOptions, ViewId, ViewStack } from "@/lib/store";
 import { PosesPanel } from "./poses-panel";
 import { itemChoices, SheetSection } from "./sheet-section";
@@ -67,6 +67,7 @@ export function TurnaroundSections(props: {
   const [editing, setEditing] = useState<ViewId | null>(null);
   const [seeing, setSeeing] = useState<ViewId | null>(null); // the view shown full screen
   const [error, setError] = useState<string | null>(null);
+  const [edited, setEdited] = useState<Partial<Record<ViewId, string>>>({}); // a view's prompt, edited for its next Again
   const [pending, start] = useTransition();
   const [starting, startGenerate] = useTransition(); // Generate pressed, the job not on the page yet
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
@@ -93,6 +94,9 @@ export function TurnaroundSections(props: {
   const changed = JSON.stringify(props.options) !== JSON.stringify(options);
   const bodyChanged = !!props.options && (props.options.body ?? "person") !== (options.body ?? "person");
   const chips = [...props.tags].sort((a, b) => Number(HELD.test(b)) - Number(HELD.test(a)));
+  // What Again sends for a view: the prompt built from the options the views were painted with.
+  const built = (v: ViewId) => (props.options ? (v === firstView(props.options) ? frontPrompt(props.options) : viewPrompt(v, props.options)) : "");
+  const reset = (v: ViewId) => setEdited(({ [v]: _, ...rest }) => rest);
   const fail = (e: Error) => setError(e.message);
   const blocked = !!props.busy || pending || starting;
 
@@ -241,7 +245,7 @@ export function TurnaroundSections(props: {
                       {stack && stack.versions.length > 1 && <span className="font-mono text-[11px] text-muted-foreground">v{stack.current + 1}/{stack.versions.length}</span>}
                     </span>
                     <span className="-ml-2 flex flex-wrap items-center">
-                      <Button variant="ghost" size="sm" disabled={props.locked || blocked || busy || fixing || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id, props.cid).catch(fail))}>
+                      <Button variant="ghost" size="sm" disabled={props.locked || blocked || busy || fixing || !props.options || (v.id !== "front" && !image("front"))} onClick={() => start(() => generateView(props.projectId, v.id, props.cid, edited[v.id] === built(v.id) ? undefined : edited[v.id]).then(() => reset(v.id)).catch(fail))}>
                         <RefreshCw data-icon="inline-start" />
                         Again
                       </Button>
@@ -251,6 +255,25 @@ export function TurnaroundSections(props: {
                       </Button>
                     </span>
                   </div>
+                  {props.options && (
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Prompt</summary>
+                      <div className="mt-2 flex flex-col gap-2">
+                        <textarea
+                          aria-label={`Prompt for the ${v.label.toLowerCase()} view`}
+                          rows={6}
+                          value={edited[v.id] ?? built(v.id)}
+                          onChange={(e) => setEdited((m) => ({ ...m, [v.id]: e.target.value }))}
+                          className="w-full resize-y rounded-md border bg-background px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                        {edited[v.id] !== undefined && edited[v.id] !== built(v.id) && (
+                          <Button variant="ghost" size="sm" className="self-start" onClick={() => reset(v.id)}>
+                            Reset
+                          </Button>
+                        )}
+                      </div>
+                    </details>
+                  )}
                   {j?.status === "error" && <p className="text-xs text-destructive">{j.error}</p>}
                 </li>
               );

@@ -21,6 +21,7 @@ import { chip } from "@/features/scene/components/chip";
 import { ShotTabs, type ShotTab } from "./shot-tabs";
 import { changes } from "../setup";
 import { ShotFrameContext } from "./shot-camera";
+import { SentLine } from "./sent-line";
 
 // Actions that only use what is in the keyframes: a prop the keys do not show makes LTX conjure it
 // mid-take (04_shot ACCEPT proof 6). Props go into the keyframes through the In the frame note.
@@ -59,6 +60,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
   const kind = props.shot?.kind ?? props.suggested;
   const [expression, setExpression] = useState(props.shot?.expression ?? "");
   const [fromKey, setFromKey] = useState(false);
+  const [line, setLine] = useState<string | undefined>(); // the Generated video line, edited for the next take only
   const own = props.shot?.sheet;
   const [pick, setPick] = useState<{ expression?: string; pose?: string; props: string[] }>({ expression: own?.expression, pose: own?.pose, props: own?.props ?? [] });
   const toggleProp = (id: string) => setPick((x) => ({ ...x, props: x.props.includes(id) ? x.props.filter((p) => p !== id) : x.props.length < 2 ? [...x.props, id] : x.props }));
@@ -111,7 +113,8 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
           frames.forEach((b, i) => form.set(`f${i}`, new File([b], `${i}.jpg`, { type: "image/jpeg" })));
         }
         setPhase("Sending");
-        await oneShootAction(props.projectId, form, { beats, tries, expression: expression || undefined, fromKey: character && fromKey, seed, keysOnly: keysFirst && needsKeys && !props.ready });
+        await oneShootAction(props.projectId, form, { beats, tries, expression: expression || undefined, fromKey: character && fromKey, seed, line: character ? line : undefined, keysOnly: keysFirst && needsKeys && !props.ready });
+        setLine(undefined);
       } finally {
         setPhase(null);
       }
@@ -317,6 +320,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                         </Button>
                       </div>
                     )}
+                    <SentLine projectId={props.projectId} beats={beats} expression={expression} edited={line} onEdit={setLine} />
                     <label className="flex items-center gap-2 text-xs text-muted-foreground">
                       <input type="checkbox" checked={fromKey} onChange={(e) => setFromKey(e.target.checked)} className="accent-primary" />
                       Start from the first keyframe (only when it shows this same character; otherwise its face wins)

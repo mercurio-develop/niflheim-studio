@@ -144,10 +144,10 @@ const capital = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 // effect (04_shot ACCEPT proof 3: take D = take B frame for frame). The graph keeps a default.
 const Beat = z.string().trim().max(300);
 const Input = z
-  .object({ action: z.string().trim().max(500).optional(), beats: z.object({ start: Beat, then: Beat.optional(), end: Beat.optional() }).optional(), tries: z.number().int().min(1).max(4).optional(), expression: z.string().trim().max(60).optional(), fromKey: z.boolean().optional(), seed: z.number().int().min(0).max(2 ** 31).optional(), keysOnly: z.boolean().optional() })
+  .object({ line: z.string().trim().min(1).max(4000).optional(), action: z.string().trim().max(500).optional(), beats: z.object({ start: Beat, then: Beat.optional(), end: Beat.optional() }).optional(), tries: z.number().int().min(1).max(4).optional(), expression: z.string().trim().max(60).optional(), fromKey: z.boolean().optional(), seed: z.number().int().min(0).max(2 ** 31).optional(), keysOnly: z.boolean().optional() })
   .transform((x) => {
     const beats: Beats = x.beats ?? { start: x.action ?? "" };
-    return { beats, action: [beats.start, beats.then, beats.end].map((s) => s?.trim()).filter(Boolean).join(", then "), tries: x.tries ?? 1, expression: x.expression || undefined, fromKey: x.fromKey ?? false, seed: x.seed, keysOnly: x.keysOnly ?? false };
+    return { line: x.line, beats, action: [beats.start, beats.then, beats.end].map((s) => s?.trim()).filter(Boolean).join(", then "), tries: x.tries ?? 1, expression: x.expression || undefined, fromKey: x.fromKey ?? false, seed: x.seed, keysOnly: x.keysOnly ?? false };
   })
   .refine((x) => x.beats.start.length >= 3, "Say what happens first, in a few words.");
 
@@ -186,6 +186,16 @@ function sheetFor(p: Project, video: string, expression?: string) {
   const props = (own?.props ?? []).map((aid) => p.sceneAssets?.find((a) => a.id === aid)).filter(Boolean).map((a) => ({ name: a!.name, description: a!.prompt, kind: a!.kind }));
   const said = expression ? `${video} Their expression: ${expression}.` : video;
   return { file: own?.drawn ?? sheet.drawn, prompt: withSheet(sheetPrompt(own?.rows ?? sheet.rows, who, props, p.set?.prompt, items), said) };
+}
+
+// The Generated video line a Character take will send for these beats and expression.
+export async function videoLine(id: string, rawBeats: unknown, rawExpression?: unknown) {
+  const beats = BeatSet.parse(rawBeats);
+  const expression = z.string().trim().max(60).optional().parse(rawExpression) || undefined;
+  const p = await getProject(id);
+  if (!p) throw new Error("Project not found.");
+  const line = shotPrompt(asShot(p), beats);
+  return expression ? `${line} Their expression: ${expression}.` : line;
 }
 
 export async function renderTake(id: string, raw: unknown) {
@@ -254,7 +264,7 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
   // 05_submit take mvu4qdjl); a camera take follows every key over the move.
   const v = asShot(p);
   const said = (x: string) => (expression ? `${x} Their expression: ${expression}.` : x);
-  const sheet = kind === "character" ? sheetFor(v, shotPrompt(v, beats), expression) : null;
+  const sheet = kind === "character" ? (input.line ? sheetFor(v, input.line) : sheetFor(v, shotPrompt(v, beats), expression)) : null;
   // A camera take with an up-to-date clay clip runs Layout-to-Render (03_shot_layout): the clip
   // guides every frame and only the first key is painted (the take follows the move and the
   // blocking; 05_submit proof: camera travel 33 px and no pop-ins against 1.2 px and 41 keys-only).

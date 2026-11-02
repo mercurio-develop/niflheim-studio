@@ -215,8 +215,9 @@ export async function generateTurnaround(id: string, rawOptions: z.input<typeof 
 
 // Again for one view: the first view (the front; an animal's side) again from the character, any
 // other view from the current first view.
-export async function generateView(id: string, rawView: string, rawCid?: unknown) {
+export async function generateView(id: string, rawView: string, rawCid?: unknown, rawPrompt?: unknown) {
   const view = View.parse(rawView);
+  const sent = z.string().trim().min(1).max(4000).optional().parse(rawPrompt); // an edited prompt, for this run only
   const cid = Cid.parse(rawCid) ?? "c1";
   const p = await getProject(id);
   const source = p && characterImage(p, cid);
@@ -231,7 +232,7 @@ export async function generateView(id: string, rawView: string, rawCid?: unknown
     charKey(cid, `view:${view}`),
     (ctx) =>
       // The sheet shows the views, so it is drawn again with the new one.
-      makeView(id, view, view === first ? (t.clean ?? source) : anchor!, view === first ? frontPrompt(t.options) : viewPrompt(view, t.options), ctx, `${label(view)} · again`, cid).then(async (made) => {
+      makeView(id, view, view === first ? (t.clean ?? source) : anchor!, sent ?? (view === first ? frontPrompt(t.options) : viewPrompt(view, t.options)), ctx, `${label(view)} · again`, cid).then(async (made) => {
         if (made && charOf(p, cid).sheet) await drawSheet(id, cid);
       }),
     `Making the ${label(view).toLowerCase()} view again`,
