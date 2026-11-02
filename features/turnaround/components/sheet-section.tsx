@@ -9,7 +9,7 @@ import { LoadingDots } from "@/components/loading-dots";
 import { Textarea } from "@/components/ui/textarea";
 import { Section, SectionFire } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
-import { JobStatus } from "@/features/wizard/components/job-status";
+import { JobStatus, RecordLine } from "@/features/wizard/components/job-status";
 import type { CharacterSheet, Job, SheetCell } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { cancelSheet, makeSheet, removeCell, rerollCell } from "../actions/sheet";
@@ -162,6 +162,7 @@ export function SheetSection(props: {
         </Button>
       </SectionFire>
       {running && job && <JobStatus message={job.detail ?? "Painting the sheet"} startedAt={job.startedAt} expected={90} onCancel={() => cancelSheet(props.projectId, props.cid)} />}
+      <RecordLine projectId={props.projectId} cid={props.cid} again={`${job?.status}${props.sheet?.drawn}`} />
 
       {cells.length > 0 && (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-6">

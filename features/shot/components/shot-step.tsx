@@ -9,6 +9,7 @@ import { FadeImage } from "@/components/fade-image";
 import { Section } from "@/components/section";
 import { FogLoader } from "@/features/wizard/components/fog-loader";
 import { JobPoller } from "@/features/wizard/components/job-poller";
+import { RecordLine } from "@/features/wizard/components/job-status";
 import type { Job, Keyframes, Shot, ShotKind, TakeSetup } from "@/lib/store";
 import { goodTake } from "@/lib/score";
 import { cn } from "@/lib/utils";
@@ -291,6 +292,7 @@ export function ShotStep(props: { projectId: string; keyframes: Keyframes | null
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                   <FadeImage src={file(own?.drawn ?? props.sheet)} alt={own ? "This shot's sheet" : "The character's sheet"} className="aspect-[768/448] w-full max-w-64 shrink-0 rounded border bg-black object-contain" />
                   <div className="flex min-w-0 flex-col gap-1.5">
+                    <RecordLine projectId={props.projectId} again={`${props.job?.status}${own?.drawn}${props.sheet}`} />
                     {(props.choices.expressions.length > 0 || props.choices.poses.length > 0 || props.choices.props.length > 0) && (
                       <div className="flex flex-col gap-1.5 border-b pb-2">
                         <span className="text-xs text-muted-foreground">This shot&apos;s sheet: {own ? "drawn" : "the character's, unless you draw one"}</span>
