@@ -1,9 +1,35 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FadeImage } from "@/components/fade-image";
 import { LoadingDots } from "@/components/loading-dots";
+import { sheetLine } from "@/features/shot/actions/sheet";
 
-const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+// The sheet step's job record as one line and its picture: the description and the output at the
+// path expect() returns (sheetLine). The sheet page and the shot page both show this, so they agree.
+// `again` changes when a job ends, so the line reads the record anew.
+export function RecordLine(props: { projectId: string; cid?: string; again?: string }) {
+  const [line, setLine] = useState<Awaited<ReturnType<typeof sheetLine>> | null>(null);
+  useEffect(() => {
+    let live = true;
+    sheetLine(props.projectId, props.cid).then((l) => live && setLine(l), () => {});
+    return () => {
+      live = false;
+    };
+  }, [props.projectId, props.cid, props.again]);
+  if (!line) return null;
+  return (
+    <div className="flex items-start gap-3 text-xs text-muted-foreground" aria-label="The sheet job">
+      {line.output && <FadeImage src={`/api/files/${props.projectId}/${line.output}`} alt="The sheet at the record's path" className="aspect-[768/448] w-32 shrink-0 rounded border bg-muted object-contain" />}
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-foreground">{line.description}</span>
+        <span className="truncate font-mono text-[11px]">{line.output ?? "No sheet on disk yet"}</span>
+      </div>
+    </div>
+  );
+}
+
+const clock =(s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
 // A GPU wait as one line in the page: what is happening, honest time, and Cancel.
 export function JobStatus(props: { message: string; startedAt: string; expected: number; onCancel?: () => unknown }) {
