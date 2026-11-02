@@ -103,3 +103,18 @@ export async function takeProblem(p: Project, kind: "character" | "camera", cid 
 export async function finishOutputs(p: Project, step: JobStep, cid = "c1") {
   return present(p.id, (step === "sheet" ? sheetRecord(p, cid) : stageRecord(p)).outputs);
 }
+
+export type FlowBox = { step: JobStep; description: string; workflow: string; blocked: boolean; missing: string[]; output: string | null };
+
+// One box per expect() step for the support view: its state, what it is, and the first output
+// picture on disk (null when none). Reads only; nothing here writes the project.
+export async function flowBoxes(p: Project, cid = "c1"): Promise<FlowBox[]> {
+  const steps: JobStep[] = ["sheet", "stage"];
+  return Promise.all(
+    steps.map(async (step) => {
+      const r = await expect(p, step, cid);
+      const [output] = (await finishOutputs(p, step, cid))[step === "sheet" ? "sheet" : "keyframes"] ?? [];
+      return { step, description: r.description, workflow: r.workflow, blocked: r.blocked, missing: r.missing, output: output ?? null };
+    }),
+  );
+}
