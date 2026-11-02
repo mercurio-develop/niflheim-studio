@@ -7,6 +7,7 @@ import { FadeImage } from "@/components/fade-image";
 import { More, Section } from "@/components/section";
 import { JobStatus } from "@/features/wizard/components/job-status";
 import type { Block, Job, SceneAsset, SetData, StageData } from "@/lib/store";
+import { inside, poses, type CameraMove } from "@/lib/camera";
 import { cn } from "@/lib/utils";
 import { cancelSet, cancelStage, cutOutCharacter, placeCharacter, rebuildStage, refillStage, saveBlocks } from "../actions/scene";
 import { placeAsset } from "../actions/assets";
@@ -17,6 +18,9 @@ import { urlsOf } from "@/lib/stage-context";
 import { chip } from "./chip";
 import type { CastOption } from "./cast-picker";
 import { StageViewer, type StageLook, type StagePoint } from "./stage-viewer";
+
+// A shot of the project, by id and name, with the camera move it keeps (null: none chosen yet).
+export type ShotCam = { id: string; name: string; move: CameraMove | null };
 
 const SIZES: Record<Block["kind"], Block["size"]> = { box: [1, 1, 1], cylinder: [0.6, 1.2, 0.6], ramp: [1.5, 0.6, 2] };
 
@@ -39,6 +43,7 @@ export function StageSection(props: {
   moved: boolean; // the set was rebuilt or refilled since the character was placed
   setJob?: Job;
   stageJob?: Job;
+  shots?: ShotCam[]; // every shot, for the Cameras row
 }) {
   const s = props.set;
   const file = (f: string) => `/api/files/${props.projectId}/${f}`;
@@ -150,6 +155,16 @@ export function StageSection(props: {
   }, [blocksJson]);
 
   const cam = filled?.camera;
+  // Looking through a shot's camera: its first frame, fixed (no free fly). A shot whose camera
+  // starts outside the fill's orbit is not offered, as the filled stage has nothing painted there.
+  const [lens, setLens] = useState<string | null>(null);
+  const lensOf = (sh: ShotCam) => {
+    if (!cam?.floor || !at || !sh.move) return null;
+    const first = poses(cam, { at, height, turn }, sh.move, assets)[0];
+    return first && inside(cam, first.position) ? { position: first.position, target: first.target, n: 0 } : null;
+  };
+  const through = props.shots?.find((x) => x.id === lens);
+  const lensPose = (through && lensOf(through)) || undefined;
   const distance = at && cam ? Math.hypot(at[0] - cam.c2w[0][3], at[2] - cam.c2w[2][3]) : null;
   const line = ready
     ? "They stand a long shot from the camera; click the floor to move them. Drag to look around: the card turns to you and shows the matching view of the turnaround."
@@ -196,6 +211,7 @@ export function StageSection(props: {
             camera={filled?.camera}
             filled={!!filled}
             look={look}
+            pose={lensPose}
             onFloor={placing && floor ? put : placingAsset && floor ? putAsset : ready ? setAt : undefined}
             className="absolute inset-0"
           >
@@ -251,6 +267,33 @@ export function StageSection(props: {
           </div>
         )}
       </div>
+
+      {floor && (
+        <nav aria-label="On the stage" className="flex flex-col gap-1.5 text-sm sm:max-w-xl">
+          {(
+            [
+              { name: "Character", rows: ready ? [{ id: "main", label: "The character", on: pickedCharacter, pick: () => (pickedCharacter ? setPickedCharacter(false) : pickCharacter()) }] : [] },
+              { name: "Cast", rows: assets.filter((a) => a.kind === "character").map((a) => ({ id: a.id, label: a.name, on: pickedAsset === a.id, pick: () => pickAsset(pickedAsset === a.id ? null : a.id) })) },
+              { name: "Objects", rows: assets.filter((a) => a.kind !== "character").map((a) => ({ id: a.id, label: a.name, on: pickedAsset === a.id, pick: () => pickAsset(pickedAsset === a.id ? null : a.id) })) },
+              { name: "Blocks", rows: blocks.map((b) => ({ id: b.id, label: b.label || b.kind, on: picked === b.id, pick: () => pickBlock(picked === b.id ? null : b.id) })) },
+              { name: "Cameras", rows: cam ? [{ id: "painting", label: "The painting's camera", on: !lensPose, pick: () => setLens(null), title: undefined }, ...(props.shots ?? []).map((sh) => ({ id: sh.id, label: sh.name, on: lens === sh.id && !!lensPose, pick: lensOf(sh) ? () => setLens(lens === sh.id ? null : sh.id) : undefined, title: lensOf(sh) ? undefined : "This shot has no camera inside the stage's fill yet" }))] : [] },
+            ] as const
+          ).map((g) => (
+            <div key={g.name} className="flex flex-wrap items-center gap-1.5">
+              <span className="w-16 shrink-0 text-xs text-muted-foreground">{g.name}</span>
+              {g.rows.length ? (
+                g.rows.map((r) => (
+                  <button key={r.id} type="button" aria-pressed={r.on} disabled={!r.pick} title={"title" in r ? r.title : undefined} className={chip(r.on)} onClick={r.pick}>
+                    {r.label}
+                  </button>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">none</span>
+              )}
+            </div>
+          ))}
+        </nav>
+      )}
 
       {fresh && (
         <More label="Stage tools" summary="look, height, facing, fill again, rebuild">
