@@ -10,6 +10,7 @@ import { focusPhrase, frameCount, keyFrames, momentsOf, poses, sees } from "@/li
 import { characterImage, currentFill, sceneKey } from "@/lib/progress";
 import { runWorkflow } from "@/lib/comfy";
 import { cancelJob, startJob } from "@/lib/jobs";
+import { takeProblem } from "@/lib/job-sheet";
 import { allShots, getProject, projectDir, updateProject, type Project, type Take, type TakeScore, type TakeSetup } from "@/lib/store";
 import { styleById } from "@/lib/styles";
 import { DEFAULT_NEGATIVE, END_NEW_POSE_STRENGTH, END_STRENGTH, middleImageNode, shapeShot } from "../graph";
@@ -243,6 +244,8 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
   const kind = p.shot?.kind ?? suggestedKind(p);
   const late = keysProblem(p);
   if (late && (kind === "camera" || fromKey)) throw new Error(late);
+  const lacking = await takeProblem(asShot(p), kind);
+  if (lacking) throw new Error(lacking);
   // Keys cut short end the take on their last frame.
   const length = k?.full !== undefined ? k.frames.at(-1)! + 1 : frameCount(p.camera.seconds);
   const keys = (k?.keys ?? []) as string[];

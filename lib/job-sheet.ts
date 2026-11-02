@@ -88,6 +88,17 @@ export async function startRecord(p: Project, step: JobStep, cid = "c1"): Promis
   };
 }
 
+// Why a take of this kind cannot start, or null: a character take needs the drawn sheet on disk, a
+// camera take needs the stage keyframes on disk. Read from the project, before any Comfy call.
+export async function takeProblem(p: Project, kind: "character" | "camera", cid = "c1"): Promise<string | null> {
+  if (kind === "character") {
+    const drawn = p.shot?.sheet?.drawn ?? charOf(p, cid).sheet?.drawn;
+    return drawn && (await exists(p.id, drawn)) ? null : "Make the character's sheet first (sheet.drawn is missing).";
+  }
+  const { missing } = await expect(p, "stage", cid);
+  return missing.length ? `Make the keyframes first (missing: ${missing.join(", ")}).` : null;
+}
+
 // The output paths once the job is done: the files that exist, by role.
 export async function finishOutputs(p: Project, step: JobStep, cid = "c1") {
   return present(p.id, (step === "sheet" ? sheetRecord(p, cid) : stageRecord(p)).outputs);
