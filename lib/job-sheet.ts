@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { sheetInputs } from "@/features/turnaround/sheet";
-import { charOf, projectDir, type JobRecord, type Project } from "./store";
+import { allShots, charOf, projectDir, type JobRecord, type Project } from "./store";
 
 // One job record per step, read from the project before anyone clicks and before any Comfy call:
 // what the step is, which workflow or script runs it, the pictures it reads and makes by role
@@ -102,4 +102,72 @@ export async function takeProblem(p: Project, kind: "character" | "camera", cid 
 // The output paths once the job is done: the files that exist, by role.
 export async function finishOutputs(p: Project, step: JobStep, cid = "c1") {
   return present(p.id, (step === "sheet" ? sheetRecord(p, cid) : stageRecord(p)).outputs);
+}
+
+export type FlowBox = { step: JobStep; description: string; workflow: string; blocked: boolean; missing: string[]; output: string | null };
+
+export type FlowLine = { shot: string; from: string; frame: string | null; missing: string | null };
+
+// One line per shot after the first: it takes the previous shot's last frame as key 1
+// (seededFrom.frame). `missing` names the frame path when it is gone, or says it was not taken yet.
+export async function flowLines(p: Project): Promise<FlowLine[]> {
+  const shots = allShots(p);
+  return Promise.all(
+    shots.slice(1).map(async (s, i) => {
+      const frame = s.seededFrom?.frame ?? null;
+      const there = frame ? await exists(p.id, frame) : false;
+      return { shot: s.name, from: shots[i].name, frame: there ? frame : null, missing: frame ? (there ? null : frame) : "not taken yet" };
+    }),
+  );
+}
+
+// One box per expect() step for the support view: its state, what it is, and the first output
+// picture on disk (null when none). Reads only; nothing here writes the project.
+export async function flowBoxes(p: Project, cid = "c1"): Promise<FlowBox[]> {
+  const steps: JobStep[] = ["sheet", "stage"];
+  return Promise.all(
+    steps.map(async (step) => {
+      const r = await expect(p, step, cid);
+      const [output] = (await finishOutputs(p, step, cid))[step === "sheet" ? "sheet" : "keyframes"] ?? [];
+      return { step, description: r.description, workflow: r.workflow, blocked: r.blocked, missing: r.missing, output: output ?? null };
+    }),
+  );
+}
+
+export type FlowPicture = { id: string; label: string; feeds: string | null; workflow: string | null; file: string | null; image: string | null; missing: string | null };
+
+// The picture chain for the support view, in order: turnaround views, the character sheet, a face
+// expression, pose views, the stage card, the shot sheet, the clay clip, the LTX take. `feeds` names
+// the box a picture goes into: a character take is fed by the shot sheet, a camera take by the clay
+// clip; the stage card feeds the clay clip and never the take. A path that is unset or gone is
+// missing. Reads only.
+export async function flowChain(p: Project, cid = "c1"): Promise<FlowPicture[]> {
+  const c = charOf(p, cid);
+  const kind = p.shot?.kind ?? "camera";
+  const choice = p.shot?.sheet;
+  const cells = c.sheet?.cells ?? [];
+  const pose = choice?.pose ? c.poses?.find((x) => x.id === choice.pose) : undefined;
+  const expr = choice?.expression ? cells.find((x) => x.id === choice.expression) : undefined;
+  const take = p.shot?.takes?.[p.shot.picked ?? p.shot.takes.length - 1];
+  const stageCard = p.stage ? (p.stage.cutouts.front ?? Object.values(p.stage.cutouts)[0]) : undefined;
+  type Item = { id: string; label: string; feeds: string | null; workflow: string | null; file: string | null | undefined; video?: boolean };
+  const items: Item[] = [
+    ...VIEWS.map((v) => {
+      const s = c.turnaround?.views[v];
+      return { id: `view:${v}`, label: `Turnaround ${v}`, feeds: "Character sheet", workflow: null, file: s?.versions[s.current]?.image };
+    }),
+    { id: "sheet", label: "Character sheet", feeds: kind === "character" ? "Shot sheet" : null, workflow: "scripts/make_sheet.py", file: c.sheet?.drawn },
+    ...(choice?.expression ? [{ id: "expression", label: `Face expression${expr ? `: ${expr.label}` : ""}`, feeds: "Shot sheet", workflow: null, file: expr?.image }] : []),
+    ...(pose ? VIEWS.map((v) => ({ id: `pose:${v}`, label: `Pose ${pose.label} ${v}`, feeds: "Shot sheet", workflow: null, file: pose.views[v] })) : []),
+    { id: "stage", label: "Stage card", feeds: kind === "camera" ? "Clay clip" : null, workflow: null, file: stageCard },
+    ...(kind === "character" ? [{ id: "shot-sheet", label: "Shot sheet", feeds: "LTX take", workflow: "features/shot/actions/sheet.ts", file: choice?.drawn }] : []),
+    ...(kind === "camera" ? [{ id: "clay", label: "Clay clip", feeds: "LTX take", workflow: null, file: p.layout?.clip, video: true }] : []),
+    { id: "take", label: "LTX take", feeds: null, workflow: null, file: take?.video, video: true },
+  ];
+  return Promise.all(
+    items.map(async (i) => {
+      const there = i.file ? await exists(p.id, i.file) : false;
+      return { id: i.id, label: i.label, feeds: i.feeds, workflow: i.workflow, file: there ? i.file! : null, image: there && !i.video ? i.file! : null, missing: there ? null : i.file || i.label };
+    }),
+  );
 }
