@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
-import { PivotControls, useGLTF } from "@react-three/drei";
+import { Suspense, useCallback, useMemo, useRef, useState } from "react";
+import { TransformControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import type { SceneAsset } from "@/lib/store";
 import { CharacterCard } from "./character-card";
@@ -59,24 +59,29 @@ function Card(props: { projectId: string; asset: SceneAsset; picked?: boolean; o
 // the ring turns it about y. lift: an up arrow too, for an object off the ground (a butterfly, a
 // lamp hung in the air). turn in degrees, as SceneAsset and Placement keep it.
 export function FloorGizmo(props: { at: [number, number, number]; turn: number; lift?: boolean; onMove: (at: [number, number, number], turn: number) => void }) {
-  const matrix = new THREE.Matrix4().compose(new THREE.Vector3(...props.at), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (props.turn * Math.PI) / 180), new THREE.Vector3(1, 1, 1));
+  // drei TransformControls on an anchor that sits where the pick is: one for the floor move, one
+  // for the turn ring. The anchor follows props, so a slider or a saved value moves the gizmo too.
+  const anchor = useRef<THREE.Group>(null);
+  const [obj, setObj] = useState<THREE.Group | null>(null);
+  const set = useCallback((g: THREE.Group | null) => {
+    anchor.current = g;
+    setObj(g);
+  }, []);
+  const read = () => {
+    const g = anchor.current;
+    if (!g) return;
+    props.onMove([g.position.x, props.lift ? g.position.y : props.at[1], g.position.z], Math.round((g.rotation.y * 180) / Math.PI));
+  };
   return (
-    <PivotControls
-      matrix={matrix}
-      autoTransform={false}
-      disableScaling
-      disableSliders
-      activeAxes={[true, !!props.lift, true]}
-      depthTest={false}
-      fixed
-      scale={80}
-      lineWidth={3}
-      onDrag={(_l, _dl, w) => {
-        const p = new THREE.Vector3().setFromMatrixPosition(w);
-        const y = new THREE.Euler().setFromRotationMatrix(w, "YXZ").y;
-        props.onMove([p.x, props.lift ? p.y : props.at[1], p.z], Math.round((y * 180) / Math.PI));
-      }}
-    />
+    <>
+      <group ref={set} position={props.at} rotation={[0, (props.turn * Math.PI) / 180, 0]} />
+      {obj && (
+        <>
+          <TransformControls object={obj} mode="translate" space="world" showY={!!props.lift} onObjectChange={read} />
+          <TransformControls object={obj} mode="rotate" space="local" showX={false} showZ={false} size={0.6} onObjectChange={read} />
+        </>
+      )}
+    </>
   );
 }
 
