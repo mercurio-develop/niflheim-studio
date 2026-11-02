@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { sheetInputs } from "@/features/turnaround/sheet";
-import { charOf, projectDir, type JobRecord, type Project } from "./store";
+import { allShots, charOf, projectDir, type JobRecord, type Project } from "./store";
 
 // One job record per step, read from the project before anyone clicks and before any Comfy call:
 // what the step is, which workflow or script runs it, the pictures it reads and makes by role
@@ -105,6 +105,21 @@ export async function finishOutputs(p: Project, step: JobStep, cid = "c1") {
 }
 
 export type FlowBox = { step: JobStep; description: string; workflow: string; blocked: boolean; missing: string[]; output: string | null };
+
+export type FlowLine = { shot: string; from: string; frame: string | null; missing: string | null };
+
+// One line per shot after the first: it takes the previous shot's last frame as key 1
+// (seededFrom.frame). `missing` names the frame path when it is gone, or says it was not taken yet.
+export async function flowLines(p: Project): Promise<FlowLine[]> {
+  const shots = allShots(p);
+  return Promise.all(
+    shots.slice(1).map(async (s, i) => {
+      const frame = s.seededFrom?.frame ?? null;
+      const there = frame ? await exists(p.id, frame) : false;
+      return { shot: s.name, from: shots[i].name, frame: there ? frame : null, missing: frame ? (there ? null : frame) : "not taken yet" };
+    }),
+  );
+}
 
 // One box per expect() step for the support view: its state, what it is, and the first output
 // picture on disk (null when none). Reads only; nothing here writes the project.
