@@ -262,6 +262,33 @@ export function StageSection(props: {
         )}
       </div>
 
+      {floor && (
+        <nav aria-label="On the stage" className="flex flex-col gap-1.5 text-sm sm:max-w-xl">
+          {(
+            [
+              { name: "Character", rows: ready ? [{ id: "main", label: "The character", on: pickedCharacter, pick: () => (pickedCharacter ? setPickedCharacter(false) : pickCharacter()) }] : [] },
+              { name: "Cast", rows: assets.filter((a) => a.kind === "character").map((a) => ({ id: a.id, label: a.name, on: pickedAsset === a.id, pick: () => pickAsset(pickedAsset === a.id ? null : a.id) })) },
+              { name: "Objects", rows: assets.filter((a) => a.kind !== "character").map((a) => ({ id: a.id, label: a.name, on: pickedAsset === a.id, pick: () => pickAsset(pickedAsset === a.id ? null : a.id) })) },
+              { name: "Blocks", rows: blocks.map((b) => ({ id: b.id, label: b.label || b.kind, on: picked === b.id, pick: () => pickBlock(picked === b.id ? null : b.id) })) },
+              { name: "Cameras", rows: cam ? [{ id: "painting", label: "The painting's camera", on: false, pick: undefined }] : [] },
+            ] as const
+          ).map((g) => (
+            <div key={g.name} className="flex flex-wrap items-center gap-1.5">
+              <span className="w-16 shrink-0 text-xs text-muted-foreground">{g.name}</span>
+              {g.rows.length ? (
+                g.rows.map((r) => (
+                  <button key={r.id} type="button" aria-pressed={r.on} disabled={!r.pick} className={chip(r.on)} onClick={r.pick}>
+                    {r.label}
+                  </button>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">none</span>
+              )}
+            </div>
+          ))}
+        </nav>
+      )}
+
       {fresh && (
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 pt-1 sm:max-w-xl">
           {filled && (

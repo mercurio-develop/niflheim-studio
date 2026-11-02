@@ -12,6 +12,7 @@ import { finishedPoses, fileUrl, urlsOf } from "@/lib/stage-context";
 import { ViewSwitch } from "@/features/scene/components/view-switch";
 import { DEFAULT_MOVE, cardAt, clampWalk, presetMove, frameCount, inside, momentsOf, placeAt, poses, tooClose, type CameraMove, type Moment, type Vec } from "@/lib/camera";
 import { saveMoments } from "../actions/moments";
+import { shootPair } from "../actions/layout";
 import { Clapperboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingDots } from "@/components/loading-dots";
@@ -212,6 +213,19 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
 
   const frameCtx = useContext(ShotFrameContext);
   const inFrame = !!frameCtx;
+  // The layout pair (actions/layout.ts shootPair): this sentence once with the keys and the clay
+  // clip, once with the move in words only. The server says what is missing; it needs today's clip.
+  const [pairing, setPairing] = useState(false);
+  const [pairError, setPairError] = useState<string | null>(null);
+  const pair = () => {
+    if (!frameCtx) return;
+    setPairing(true);
+    setPairError(null);
+    const { start, then, end } = frameCtx.beats;
+    shootPair(props.projectId, { beats: { start, then: then || undefined, end: end || undefined } })
+      .catch((e: Error) => setPairError(e.message))
+      .finally(() => setPairing(false));
+  };
   // The pose each end wears (moments, when blocked, set it on the first and last one).
   const endPose = (e: 0 | 1): string | undefined => {
     if (ms.length) return ms[e ? ms.length - 1 : 0].marks.main?.pose || undefined;
@@ -282,10 +296,19 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
         onMore={(on) => (setMore(on), on || (setFree(false), setSel(null)))}
         extra={
           frameCtx && (
-            <Button size="sm" disabled={frameCtx.shoot.disabled} onClick={frameCtx.shoot.onShoot} title={frameCtx.shoot.title}>
-              {frameCtx.shoot.busy ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
-              {frameCtx.shoot.label}
-            </Button>
+            <>
+              <Button size="sm" disabled={frameCtx.shoot.disabled} onClick={frameCtx.shoot.onShoot} title={frameCtx.shoot.title}>
+                {frameCtx.shoot.busy ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
+                {frameCtx.shoot.label}
+              </Button>
+              {more && (
+                <Button variant="ghost" size="sm" disabled={pairing || frameCtx.shoot.busy || frameCtx.beats.start.trim().length < 3} onClick={pair} title="Shoot this sentence twice with one seed: with the keys and the clay clip, and with the move in words only">
+                  {pairing ? <LoadingDots /> : <Clapperboard data-icon="inline-start" />}
+                  Shoot the pair
+                </Button>
+              )}
+              {pairError && <span className="text-xs text-destructive">{pairError}</span>}
+            </>
           )
         }
       />
