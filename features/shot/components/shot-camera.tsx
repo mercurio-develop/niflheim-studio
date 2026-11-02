@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingDots } from "@/components/loading-dots";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { HandleInput } from "./handle-input";
 import { MomentsBar } from "./moments-bar";
 import { SHOT_TYPES } from "../state";
 import type { Block, CharacterPose, SceneAsset, SetData, StageData } from "@/lib/store";
@@ -47,7 +48,7 @@ export const ShotFrameContext = createContext<{ beats: Record<BeatId, string>; s
 // The strip on the picture: start pose, the three lines, end pose. A line edits in place and frames
 // the end it belongs to (the first line the start, the last the end; the middle keeps the end shown).
 type PoseChoice = { id: string; label: string; src?: string };
-function Strip(props: { end: 0 | 1; onEnd: (e: 0 | 1) => void; start: string; finish: string; choices: PoseChoice[]; current: [string, string]; onPose: (e: 0 | 1, id: string) => void }) {
+function Strip(props: { assets: SceneAsset[]; fileUrl: (f: string) => string; end: 0 | 1; onEnd: (e: 0 | 1) => void; start: string; finish: string; choices: PoseChoice[]; current: [string, string]; onPose: (e: 0 | 1, id: string) => void }) {
   const frame = useContext(ShotFrameContext)!;
   const [editing, setEditing] = useState<BeatId | null>(null);
   const [picking, setPicking] = useState<0 | 1 | null>(null);
@@ -91,7 +92,7 @@ function Strip(props: { end: 0 | 1; onEnd: (e: 0 | 1) => void; start: string; fi
         <div key={b.id} className="min-w-0 flex-1 rounded-md border bg-background/80 px-2 py-1 text-xs backdrop-blur">
           <span className="block text-[10px] text-muted-foreground">{b.label}</span>
           {editing === b.id ? (
-            <Input autoFocus aria-label={b.label} value={frame.beats[b.id]} maxLength={300} placeholder={b.placeholder} onChange={(e) => frame.setBeat(b.id, e.target.value)} onBlur={() => setEditing(null)} onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && setEditing(null)} className="h-6 px-1 text-xs" />
+            <HandleInput autoFocus aria-label={b.label} value={frame.beats[b.id]} maxLength={300} placeholder={b.placeholder} assets={props.assets} fileUrl={props.fileUrl} onValue={(v) => frame.setBeat(b.id, v)} onBlur={() => setEditing(null)} onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && setEditing(null)} className="h-6 px-1 text-xs" />
           ) : (
             <button
               type="button"
@@ -273,7 +274,7 @@ export function ShotCamera(props: { projectId: string; set: SetData | null; plac
       >
         Fly the camera
       </button>}
-      {inFrame && <Strip end={end} onEnd={(e) => (setSel(null), setEnd(e))} start={poseName(endPose(0))} finish={poseName(endPose(1))} choices={ready4.map((p) => ({ id: p.id, label: p.label, src: urls(p.views).front }))} current={[endPose(0) ?? "", endPose(1) ?? ""]} onPose={setPose} />}
+      {inFrame && <Strip assets={props.assets} fileUrl={(f) => fileUrl(props.projectId, f)} end={end} onEnd={(e) => (setSel(null), setEnd(e))} start={poseName(endPose(0))} finish={poseName(endPose(1))} choices={ready4.map((p) => ({ id: p.id, label: p.label, src: urls(p.views).front }))} current={[endPose(0) ?? "", endPose(1) ?? ""]} onPose={setPose} />}
       {edits.error && <p className="absolute bottom-20 left-2 z-20 rounded bg-background/80 px-2 py-1 text-xs text-destructive">{edits.error}</p>}
       <CameraSection
         projectId={props.projectId}

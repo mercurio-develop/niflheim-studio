@@ -15,7 +15,7 @@ import { allShots, getProject, projectDir, updateProject, type Project, type Tak
 import { styleById } from "@/lib/styles";
 import { DEFAULT_NEGATIVE, END_NEW_POSE_STRENGTH, END_STRENGTH, middleImageNode, shapeShot } from "../graph";
 import { asShot, beatsStale, keysProblem, subjectOf, suggestedKind } from "../state";
-import { addIngredients, firstKeyOnly, namedCaptions, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, whoOf, withSheet } from "../ingredients";
+import { addHandleImages, addIngredients, HANDLE_NODE, resolveHandles, firstKeyOnly, namedCaptions, sheetOnly, SHEET_FRAMES, SHEET_NODE, sheetPrompt, whoOf, withSheet } from "../ingredients";
 import { PYTHON } from "@/lib/python";
 import { repaintKeys, saveKeys } from "./keyframes";
 import { saveClay } from "./layout";
@@ -237,7 +237,7 @@ async function settled(id: string, ctx: { alive: () => Promise<boolean>; progres
 }
 
 async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: boolean) {
-  const { beats, action, tries, expression, fromKey } = input;
+  const { beats: rawBeats, action, tries, expression, fromKey } = input;
   const negative = DEFAULT_NEGATIVE;
   const first = await getProject(id);
   if (!first) throw new Error("Project not found.");
@@ -245,7 +245,7 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
   // Keys guide every take but a character take from the sheet alone; they must be today's.
   const problem = keysProblem(first);
   if (!wait && problem && ((first.shot?.kind ?? suggestedKind(first)) === "camera" || fromKey)) throw new Error(problem);
-  await updateProject(id, (q) => void (q.shot = { takes: [], ...q.shot, action, beats, negative, expression }));
+  await updateProject(id, (q) => void (q.shot = { takes: [], ...q.shot, action, beats: rawBeats, negative, expression }));
   await startJob(id, "shot", async (ctx) => {
   if (wait && !(await settled(id, ctx))) return;
   const p = await getProject(id);
@@ -263,6 +263,19 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
   // (only when that key shows the same character: a key painted with someone else wins the face,
   // 05_submit take mvu4qdjl); a camera take follows every key over the move.
   const v = asShot(p);
+  // @handles in the beats: their pictures join the take's inputs and the prompt names them.
+  const found = new Map<string, { name: string; file: string }>();
+  const unknown = new Set<string>();
+  const say = (x?: string) => {
+    if (!x) return x;
+    const r = resolveHandles(x, p.sceneAssets ?? []);
+    r.refs.forEach((f) => found.set(f.file, f));
+    r.unknown.forEach((u) => unknown.add(u));
+    return r.text;
+  };
+  const beats: Beats = { start: say(rawBeats.start)!, then: say(rawBeats.then), end: say(rawBeats.end) };
+  const refs = [...found.values()];
+  if (unknown.size) await ctx.progress(`No asset named ${[...unknown].map((u) => `@${u}`).join(", ")}; sent as plain words`);
   const said = (x: string) => (expression ? `${x} Their expression: ${expression}.` : x);
   const sheet = kind === "character" ? (input.line ? sheetFor(v, input.line) : sheetFor(v, shotPrompt(v, beats), expression)) : null;
   // A camera take with an up-to-date clay clip runs Layout-to-Render (03_shot_layout): the clip
@@ -285,6 +298,7 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
         workflow: clip ? "03_shot_layout.api.json" : "03_shot.api.json",
         onSubmit: ctx.track,
         edit: (g) => {
+          addHandleImages(g, refs.map((r) => r.name));
           if (clip) {
             g["30"].inputs.length = frames;
             g["33"].inputs.frames_number = frames;
@@ -298,11 +312,11 @@ async function shoot(id: string, input: ReturnType<typeof Input.parse>, wait: bo
         },
         set: [["20", "text", prompt], ["21", "text", negative], ["40", "noise_seed", seed]],
         videos: clipFile ? [["401", clipFile]] : undefined,
-        images: clip
+        images: [...refs.map((r, i) => [HANDLE_NODE(i), abs(id, r.file)] as [string, string]), ...(clip
           ? [["1", abs(id, keys[0])]]
           : sheet
           ? [...(fromKey ? [["1", abs(id, keys[0])] as [string, string]] : []), [SHEET_NODE, abs(id, sheet.file)]]
-          : [["1", abs(id, keys[0])], ["2", abs(id, keys.at(-1)!)], ...keys.slice(1, -1).map((f, i) => [middleImageNode(i), abs(id, f)] as [string, string])],
+          : [["1", abs(id, keys[0])], ["2", abs(id, keys.at(-1)!)], ...keys.slice(1, -1).map((f, i) => [middleImageNode(i), abs(id, f)] as [string, string])])],
         output: "55",
         ext: "mp4",
         outDir: abs(id, `shot/takes/${Date.now().toString(36)}`),
