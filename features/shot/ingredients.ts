@@ -5,7 +5,7 @@
 // who and what they are. On Comfy Cloud only the 2.3 file exists; Lightricks' 2.5 graph runs it
 // on the 2.5 distilled model too.
 
-import type { Project, SheetRow } from "@/lib/store";
+import type { Project, SceneAsset, SheetRow } from "@/lib/store";
 
 type Graph = Record<string, { class_type: string; inputs: Record<string, unknown>; _meta?: { title: string } }>;
 
@@ -126,4 +126,30 @@ export function sheetOnly(g: Graph) {
   for (const n of ["41", "51"]) g[n].inputs = { ...g[n].inputs, positive: ["305", 0], negative: ["305", 1] };
 }
 
-export const withSheet = (sheet: string, video: string) => `${sheet}\n\nGenerated video: ${video}`;
+// @lantern in the action names a scene asset: its picture goes with the take (reference images) and
+// the prompt says its name. A handle is the name lowercased, with spaces as dashes or none.
+const slug = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "");
+export function resolveHandles(text: string, assets: SceneAsset[]) {
+  const refs: { name: string; file: string }[] = [];
+  const unknown: string[] = [];
+  const out = text.replace(/@([\w-]+)/g, (_m, h: string) => {
+    const a = assets.find((x) => slug(x.name) === slug(h));
+    if (!a?.image) {
+      unknown.push(h);
+      return h;
+    }
+    if (!refs.some((r) => r.file === a.image)) refs.push({ name: a.name, file: a.image });
+    return a.name;
+  });
+  return { text: out, refs, unknown: [...new Set(unknown)] };
+}
+
+// The handles' pictures as LoadImage nodes of their own (500+), one per asset.
+export const HANDLE_NODE = (i: number) => String(500 + i);
+export function addHandleImages(g: Graph, names: string[]) {
+  names.forEach((name, i) => {
+    g[HANDLE_NODE(i)] = { class_type: "LoadImage", inputs: { image: "handle.png" }, _meta: { title: `Reference: ${name}` } };
+  });
+}
+
+export const withSheet =(sheet: string, video: string) => `${sheet}\n\nGenerated video: ${video}`;
