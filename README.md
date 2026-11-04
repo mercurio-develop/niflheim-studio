@@ -121,8 +121,7 @@ data/         your projects (gitignored)
 Open-weight models only, no partner (API) nodes or closed APIs: Z-Image Turbo,
 Qwen-Image-Edit-2511 (+ Lightning LoRA), Florence-2, SAM 3, BiRefNet, MoGe-2, Hunyuan3D-2 MV
 and LTX-2.5 with its Gemma 4 text encoder. Files, folders and licences:
-[`build/model-files.md`](build/model-files.md). Third-party assets:
-[`THIRD_PARTY_NOTICES/`](THIRD_PARTY_NOTICES/README.md).
+[`build/model-files.md`](build/model-files.md). 
 
 Two licences to know: LTX-2.5 and its Layout-to-Render and Ingredients IC-LoRAs (LTX-2.x Community
 License) are free under USD 10M yearly revenue,
